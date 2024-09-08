@@ -26,7 +26,6 @@ function App() {
 
   // Fetch the README.md file from Github and convert it to HTML
   useEffect(() => {
-
     const storedConfig = localStorage.getItem('cgratesConfig');
     if (storedConfig) {
       setCgratesConfig(JSON.parse(storedConfig));
@@ -52,6 +51,16 @@ function App() {
     fetchReadme();
   }, []);
 
+  // Fetch config on initial load and handle errors
+  useEffect(() => {
+    const fetchInitialConfig = async () => {
+      if (cgratesConfig.url) {
+        await fetchConfig(cgratesConfig.url);
+      }
+    };
+
+    fetchInitialConfig();
+  }, [cgratesConfig.url]);
 
   // Update the CGrateS configuration in local storage whenever it changes
   useEffect(() => {
@@ -143,14 +152,18 @@ function App() {
             ...prevConfig,
             json_config: parsedJSON
           }));
+          setTestResult('Connection successful');
         } else {
           setConfigError('No configuration found.');
+          setTestResult('Connection failed: No config found.');
         }
       } else {
         setConfigError('Failed to fetch configuration: ' + response.statusText);
+        setTestResult('Connection failed: ' + response.statusText);
       }
     } catch (error) {
       setConfigError('Error fetching configuration: ' + error.message);
+      setTestResult('Connection error: ' + error.message);
     }
   };
 
@@ -170,7 +183,15 @@ function App() {
               <Nav.Link as={Link} to="/routes">Routes</Nav.Link>
               <Nav.Link as={Link} to="/config">Config</Nav.Link>
             </Nav>
-            <Button variant="outline-info" onClick={handleOpenModal}>Connection to CGrateS</Button>
+            <Button variant="outline-info" onClick={handleOpenModal}>Connection to CGrateS: {testResult ? (testResult.includes('successful') ? 'Connected' : 'Disconnected') : 'Unknown'}          <span
+            style={{
+              backgroundColor: testResult.includes('successful') ? 'green' : 'red',
+              color: 'white',
+              padding: '5px 10px',
+              borderRadius: '10px',
+              marginLeft: '10px',
+            }}
+          ></span></Button>
           </Navbar.Collapse>
         </Container>
       </Navbar>
@@ -206,7 +227,7 @@ function App() {
                 onChange={(e) => handleConfigChange('url', e.target.value)}
               />
               <Form.Text className="text-muted">
-                URL of CGrateS instance (default is <pre>http://localhost:2080</pre>
+                URL of CGrateS instance (default is <pre>http://localhost:2080</pre>)
               </Form.Text>
             </Form.Group>
             <Form.Group>
@@ -262,6 +283,20 @@ function App() {
       <small>
         Currently using CGrateS URL: <pre>{cgratesConfig.url}</pre>
         Tenants: <pre>{splitTenants.join(', ')}</pre>
+        <div>
+          Status: 
+          <span
+            style={{
+              backgroundColor: testResult.includes('successful') ? 'green' : 'red',
+              color: 'white',
+              padding: '5px 10px',
+              borderRadius: '10px',
+              marginLeft: '10px',
+            }}
+          >
+            {testResult ? (testResult.includes('successful') ? 'Connected' : 'Disconnected') : 'Unknown'}
+          </span>
+        </div>
       </small>
     </Router>
   );
