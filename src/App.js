@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import { Modal, Button, Navbar, Nav, Container, Form } from 'react-bootstrap';
+import { Modal, Button, Navbar, Nav, Container, Form, Alert } from 'react-bootstrap';
 import CDRs from './CDRs';
 import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
 
@@ -12,6 +12,8 @@ function App() {
     password: ''
   });
   const [showModal, setShowModal] = useState(false);
+  const [testResult, setTestResult] = useState('');
+  const [isTesting, setIsTesting] = useState(false); // For showing loading state
 
   // Check for the CGrateS configuration in local storage
   useEffect(() => {
@@ -45,6 +47,39 @@ function App() {
 
   // Split tenants by ';' and give hint in the UI
   const splitTenants = cgratesConfig.tenants.split(';');
+
+  // Function to test the connection
+  const handleTestConnection = async () => {
+    const cgratesURL = cgratesConfig.url;
+    const newQuery = {
+      method: 'ApierV2.GetAccount',
+      params: [{ Tenant: 'cgrates.org', Account: 'Nick_Test_123' }]
+    };
+
+    setIsTesting(true); // Show loading state
+    setTestResult('');  // Clear previous result
+
+    try {
+      const response = await fetch(cgratesURL + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newQuery),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setTestResult('Connection successful: ' + JSON.stringify(data));
+      } else {
+        setTestResult('Connection failed: ' + response.statusText);
+      }
+    } catch (error) {
+      setTestResult('Connection error: ' + error.message);
+    }
+
+    setIsTesting(false); // Hide loading state
+  };
 
   return (
     <Router basename="/">
@@ -120,6 +155,14 @@ function App() {
               </Form.Text>
             </Form.Group>
           </Form>
+          <Button variant="secondary" onClick={handleTestConnection} disabled={isTesting}>
+            {isTesting ? 'Testing...' : 'Test Connection'}
+          </Button>
+          {testResult && (
+            <Alert variant={testResult.includes('successful') ? 'success' : 'danger'}>
+              {testResult}
+            </Alert>
+          )}
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowModal(false)}>Close</Button>
