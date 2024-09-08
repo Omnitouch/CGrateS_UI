@@ -31,7 +31,6 @@ const GetRoutes = ({ cgratesConfig }) => {
     const startTime = Date.now();
 
     const today = moment().format('YYYY-MM-DD HH:mm:ss');
-
     const newQuery = {
       method: 'RouteSv1.GetRoutes',
       params: [{
@@ -125,10 +124,15 @@ const GetRoutes = ({ cgratesConfig }) => {
       <Container>
         <Form onSubmit={handleSubmit} className="mt-4">
           <Row>
-            <Col md={4}>
+          <Col md={4}>
               <Form.Group controlId="formTenant">
                 <Form.Label>Tenant</Form.Label>
-                <Form.Control type="text" name="tenant" value={searchParams.tenant} onChange={handleInputChange} />
+                <Form.Control as="select" name="tenant" value={searchParams.tenant} onChange={handleInputChange}>
+                  <option value="">Select Tenant</option>
+                  {cgratesConfig.tenants.split(';').map((tenant, index) => (
+                    <option key={index} value={tenant}>{tenant}</option>
+                  ))}
+                </Form.Control>
               </Form.Group>
             </Col>
             <Col md={4}>
