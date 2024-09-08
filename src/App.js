@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { Modal, Button, Navbar, Nav, Container, Form, Alert } from 'react-bootstrap';
 import CDRs from './CDRs';
+import Accounts from './Accounts';
 import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
 
 function App() {
@@ -90,6 +91,8 @@ function App() {
           <Navbar.Collapse id="basic-navbar-nav">
             <Nav className="me-auto">
               <Nav.Link as={Link} to="/cdrs">View CDRs</Nav.Link>
+              <Nav.Link as={Link} to="/accounts">View Accounts</Nav.Link>
+              <Nav.Link as={Link} to="/routes">View Routes</Nav.Link>
             </Nav>
             <Button variant="outline-info" onClick={handleOpenModal}>Link to CGrateS</Button>
           </Navbar.Collapse>
@@ -99,6 +102,8 @@ function App() {
       <Container>
         <Routes>
           <Route path="/cdrs" element={<CDRs cgratesConfig={cgratesConfig} />} />
+          <Route path="/accounts" element={<Accounts cgratesConfig={cgratesConfig} />} />
+          <Route path="/routes" element={<Routes cgratesConfig={cgratesConfig} />} />
         </Routes>
       </Container>
 
