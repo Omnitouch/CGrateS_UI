@@ -212,33 +212,48 @@ const GetRoutes = ({ cgratesConfig }) => {
 
       {/* Modal for Row Details */}
       <Modal show={showModal} onHide={handleCloseModal}>
-        <Modal.Header closeButton>
-          <Modal.Title>Route Details</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {selectedRowData ? (
-            <div>
-              <p><strong>Profile ID:</strong> {selectedRowData.ProfileID}</p>
-              <p><strong>Sorting:</strong> {selectedRowData.Sorting}</p>
-              {selectedRowData.Routes.map((route, routeIndex) => (
-                <div key={routeIndex}>
-                  <p><strong>Route ID:</strong> {route.RouteID}</p>
-                  <p><strong>Route Parameters:</strong> {route.RouteParameters}</p>
-                  <p><strong>Cost:</strong> {route.SortingData.Cost}</p>
-                  <p><strong>Rating Plan ID:</strong> {route.SortingData.RatingPlanID}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p>No data available</p>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={handleCloseModal}>
-            Close
-          </Button>
-        </Modal.Footer>
-      </Modal>
+  <Modal.Header closeButton>
+    <Modal.Title>
+      Route Details{selectedRowData ? `: ${selectedRowData.ProfileID}` : ''}
+    </Modal.Title>
+  </Modal.Header>
+  <Modal.Body>
+    {selectedRowData ? (
+      <div>
+        <p><strong>Profile ID:</strong> {selectedRowData.ProfileID}</p>
+        <p><strong>Sorting:</strong> {selectedRowData.Sorting}</p>
+        <table className="table table-bordered mt-3">
+          <thead>
+            <tr>
+              <th>Route ID</th>
+              <th>Route Parameters</th>
+              <th>Cost</th>
+              <th>Rating Plan ID</th>
+            </tr>
+          </thead>
+          <tbody>
+            {selectedRowData.Routes.map((route, routeIndex) => (
+              <tr key={routeIndex}>
+                <td>{route.RouteID}</td>
+                <td><pre>{route.RouteParameters}</pre></td>
+                <td>{route.SortingData.Cost}</td>
+                <td>{route.SortingData.RatingPlanID}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <p>No data available</p>
+    )}
+  </Modal.Body>
+  <Modal.Footer>
+    <Button variant="secondary" onClick={handleCloseModal}>
+      Close
+    </Button>
+  </Modal.Footer>
+</Modal>
+
     </div>
   );
 }
