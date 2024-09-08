@@ -13,7 +13,9 @@ const GetAccounts = ({ cgratesConfig }) => {
   const [totalItems, setTotalItems] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [balanceModal, setBalanceModal] = useState(false); // New modal for balance details
   const [selectedRowData, setSelectedRowData] = useState(null);
+  const [selectedBalance, setSelectedBalance] = useState(null); // Store clicked balance data
   const [accountDetails, setAccountDetails] = useState(null); // State to store detailed account data
   const [modalLoading, setModalLoading] = useState(false); // Loading state for modal API call
 
@@ -129,10 +131,20 @@ const GetAccounts = ({ cgratesConfig }) => {
     fetchAccountDetails(tenant, account); // Fetch additional account details
   };
 
+  const handleBalanceClick = (balance) => {
+    setSelectedBalance(balance);
+    setBalanceModal(true); // Show balance modal with clicked balance details
+  };
+
   const handleCloseModal = () => {
     setShowModal(false);
     setSelectedRowData(null);
     setAccountDetails(null); // Clear account details when modal is closed
+  };
+
+  const handleCloseBalanceModal = () => {
+    setBalanceModal(false);
+    setSelectedBalance(null); // Clear balance details when modal is closed
   };
 
   const handlePageChange = (pageNumber) => {
@@ -157,12 +169,34 @@ const GetAccounts = ({ cgratesConfig }) => {
         </thead>
         <tbody>
           {balanceMap[category].map((balance, index) => (
-            <tr key={index}>
+            <tr key={index} onClick={() => handleBalanceClick(balance)} style={{ cursor: 'pointer' }}>
               <td>{balance.ID}</td>
               <td>{balance.Value}</td>
               <td>{balance.ExpirationDate}</td>
               <td>{balance.Weight}</td>
               <td>{balance.Blocker ? 'Yes' : 'No'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    );
+  };
+
+  // Function to render all properties of a selected balance
+  const renderBalanceDetails = (balance) => {
+    return (
+      <Table striped bordered hover>
+        <thead>
+          <tr>
+            <th>Property</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(balance).map(([key, value], index) => (
+            <tr key={index}>
+              <td>{key}</td>
+              <td>{typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : String(value)}</td>
             </tr>
           ))}
         </tbody>
@@ -247,7 +281,7 @@ const GetAccounts = ({ cgratesConfig }) => {
         )}
       </Container>
 
-      {/* Modal for Row Details */}
+      {/* Modal for Account Details */}
       <Modal show={showModal} onHide={handleCloseModal} size="lg">
         <Modal.Header closeButton>
           <Modal.Title>Account Details</Modal.Title>
@@ -283,6 +317,25 @@ const GetAccounts = ({ cgratesConfig }) => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={handleCloseModal}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal for Balance Details */}
+      <Modal show={balanceModal} onHide={handleCloseBalanceModal} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Balance Details</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {selectedBalance ? (
+            renderBalanceDetails(selectedBalance)
+          ) : (
+            <p>No balance details available.</p>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleCloseBalanceModal}>
             Close
           </Button>
         </Modal.Footer>
