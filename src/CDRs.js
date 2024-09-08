@@ -36,7 +36,7 @@ const exporterOptions = [
   { label: 'virtual_exporter', value: 'virtual_exporter' },
 ];
 
-const CDRs = ({ cgrates_URL }) => {
+const CDRs = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
     setupTimeStart: '',
     setupTimeEnd: '',
@@ -126,10 +126,10 @@ const CDRs = ({ cgrates_URL }) => {
     setApiQuery(JSON.stringify(newQuery, null, 2));
 
 
-    console.log(`Fetching data from: ${cgrates_URL}`);
+    console.log(`Fetching data from: ${cgratesConfig}`);
 
     try {
-      const response = await fetch(cgrates_URL + '/jsonrpc', {
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -199,7 +199,7 @@ const CDRs = ({ cgrates_URL }) => {
     seconds %= 3600;
     const minutes = Math.floor(seconds / 60);
     seconds %= 60;
-    
+
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   };
   const handleExport = async () => {
@@ -319,11 +319,9 @@ const CDRs = ({ cgrates_URL }) => {
               <Form.Group controlId="formTenant">
                 <Form.Label>Tenant</Form.Label>
                 <Form.Control as="select" name="tenant" value={searchParams.tenant} onChange={handleInputChange}>
-                  <option value="">Select Tenant</option>
-                  <option value="cgrates.org">Test</option>
-                  {/* {tenants.map((tenant, index) => (
+                  {cgratesConfig.tenants.split(';').map((tenant, index) => (
                     <option key={index} value={tenant}>{tenant}</option>
-                  ))} */}
+                  ))}
                 </Form.Control>
               </Form.Group>
             </Col>
@@ -368,12 +366,12 @@ const CDRs = ({ cgrates_URL }) => {
             {apiQuery}
           </pre>
         )}
-        
+
         <p>
-          Response from CGrateS at <b>{cgrates_URL}</b>
+          Response from CGrateS at <b>{cgratesConfig.url}</b>
           {responseTime && !isLoading && ` in ${responseTime} seconds`}
         </p>
-        
+
         <Table striped bordered hover className="mt-4">
           <thead>
             <tr>
@@ -410,7 +408,7 @@ const CDRs = ({ cgrates_URL }) => {
             )}
           </tbody>
         </Table>
-        
+
         <Pagination className="justify-content-center mt-4">
           <Pagination.Prev disabled={offset === 0} onClick={handlePreviousPage} />
           <Pagination.Next onClick={handleNextPage} />
@@ -470,7 +468,7 @@ const CDRs = ({ cgrates_URL }) => {
               ))}
             </Form.Control>
           </Form.Group>
-          
+
           {exportApiQuery && (
             <pre className="mt-3">API Call: {exportApiQuery}</pre>
           )}
