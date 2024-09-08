@@ -1,6 +1,6 @@
 # Omnitouch CGrateS React UI
 
-This is a simple UI to access the CGrateS API, created by Omnitouch Network Services.
+This is a simple UI to access the CGrateS API, created by [Omnitouch Network Services](https://omnitouchns.com).
 
 This page is runs in the browser and connects to any CGrateS instance the computer you're reading this on can see, including localhost.
 
