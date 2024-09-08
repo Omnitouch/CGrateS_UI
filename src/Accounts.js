@@ -34,9 +34,9 @@ const GetAccounts = ({ cgratesConfig }) => {
       params: [{
         Tenant: searchParams.tenant || 'cgrates.org',
         AccountIDs: null,
-        Offset:0,
-        Limit:0,
-        Filter:null
+        Offset: 0,
+        Limit: 0,
+        Filter: null
       }],
       id: 1
     };
@@ -156,12 +156,42 @@ const GetAccounts = ({ cgratesConfig }) => {
     setAccountDetails(null); // Clear account details when modal is closed
   };
 
+  // Function to render the balance map by category
+  const renderBalanceTable = (balanceMap, category) => {
+    if (!balanceMap || !balanceMap[category]) return null;
+
+    return (
+      <Table striped bordered hover>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Value</th>
+            <th>Expiration Date</th>
+            <th>Weight</th>
+            <th>Blocker</th>
+          </tr>
+        </thead>
+        <tbody>
+          {balanceMap[category].map((balance, index) => (
+            <tr key={index}>
+              <td>{balance.ID}</td>
+              <td>{balance.Value}</td>
+              <td>{balance.ExpirationDate}</td>
+              <td>{balance.Weight}</td>
+              <td>{balance.Blocker ? 'Yes' : 'No'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    );
+  };
+
   return (
     <div className="App">
       <Container>
         <Form onSubmit={handleSubmit} className="mt-4">
           <Row>
-          <Col md={3}>
+            <Col md={3}>
               <Form.Group controlId="formTenant">
                 <Form.Label>Tenant</Form.Label>
                 <Form.Control as="select" name="tenant" value={searchParams.tenant} onChange={handleInputChange}>
@@ -234,7 +264,7 @@ const GetAccounts = ({ cgratesConfig }) => {
       </Container>
 
       {/* Modal for Row Details */}
-      <Modal show={showModal} onHide={handleCloseModal}>
+      <Modal show={showModal} onHide={handleCloseModal} size="lg">
         <Modal.Header closeButton>
           <Modal.Title>Account Details</Modal.Title>
         </Modal.Header>
@@ -250,9 +280,18 @@ const GetAccounts = ({ cgratesConfig }) => {
             <div>
               <p><strong>Tenant:</strong> {accountDetails.Tenant}</p>
               <p><strong>Account:</strong> {accountDetails.Account}</p>
-              <p><strong>Balance:</strong> {accountDetails.Balance}</p>
-              <p><strong>Additional Data:</strong></p>
-              <pre>{JSON.stringify(accountDetails, null, 2)}</pre>
+
+              <h5>Data Balances</h5>
+              {renderBalanceTable(accountDetails.BalanceMap, '*data')}
+
+              <h5>Monetary Balances</h5>
+              {renderBalanceTable(accountDetails.BalanceMap, '*monetary')}
+
+              <h5>SMS Balances</h5>
+              {renderBalanceTable(accountDetails.BalanceMap, '*sms')}
+
+              <h5>Voice Balances</h5>
+              {renderBalanceTable(accountDetails.BalanceMap, '*voice')}
             </div>
           ) : (
             <p>No detailed data available for this account.</p>
