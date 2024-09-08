@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Button, Container, Row, Col, Table, Modal, Spinner, Accordion, ListGroup } from 'react-bootstrap';
+import { Form, Button, Container, Row, Col, Table, Modal, Spinner, ListGroup } from 'react-bootstrap';
 
 const Filters = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
@@ -177,11 +177,25 @@ const Filters = ({ cgratesConfig }) => {
                 <ListGroup className="mb-3">
                   <ListGroup.Item><strong>Tenant:</strong> {selectedFilter.Tenant}</ListGroup.Item>
                   <ListGroup.Item><strong>ID:</strong> {selectedFilter.ID}</ListGroup.Item>
-                  <ListGroup.Item><strong>Activation Interval:</strong> {selectedFilter.ActivationInterval || 'N/A'}</ListGroup.Item>
-                  <ListGroup.Item><strong>Blocker:</strong> {selectedFilter.Blocker ? 'Yes' : 'No'}</ListGroup.Item>
-                  <ListGroup.Item><strong>Weight:</strong> {selectedFilter.Weight}</ListGroup.Item>
+                  <ListGroup.Item><strong>Activation Interval:</strong> 
+                    {selectedFilter.ActivationInterval
+                      ? `${selectedFilter.ActivationInterval.ActivationTime} to ${selectedFilter.ActivationInterval.ExpiryTime}`
+                      : 'N/A'}
+                  </ListGroup.Item>
                 </ListGroup>
 
+                <h5>Rules</h5>
+                <ListGroup>
+                  {selectedFilter.Rules.length > 0 ? selectedFilter.Rules.map((rule, index) => (
+                    <ListGroup.Item key={index}>
+                      <strong>Type:</strong> {rule.Type}<br />
+                      <strong>Element:</strong> {rule.Element}<br />
+                      <strong>Values:</strong> {rule.Values.join(', ')}
+                    </ListGroup.Item>
+                  )) : (
+                    <ListGroup.Item>No rules defined</ListGroup.Item>
+                  )}
+                </ListGroup>
               </>
             ) : (
               <p>No details available</p>

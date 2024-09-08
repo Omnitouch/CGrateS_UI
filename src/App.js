@@ -4,6 +4,7 @@ import { Modal, Button, Navbar, Nav, Container, Form, Alert } from 'react-bootst
 import CDRs from './CDRs';
 import Accounts from './Accounts';
 import Attributes from './Attributes';
+import Filters from './Filters';
 import Config from './Config';
 import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
 import { marked } from 'marked';
@@ -11,7 +12,7 @@ import { marked } from 'marked';
 function App() {
   const [cgratesConfig, setCgratesConfig] = useState({
     url: 'http://localhost:2080',
-    tenants: 'cgrates.org;test',
+    tenants: 'mnc380.mcc313.3gppnetwork.org;cgrates.org;test',
     username: '',
     password: '',
     json_config: null
@@ -164,6 +165,7 @@ function App() {
               <Nav.Link as={Link} to="/accounts">View Accounts</Nav.Link>
               <Nav.Link as={Link} to="/routes">View Routes</Nav.Link>
               <Nav.Link as={Link} to="/attributes">View Attributes</Nav.Link>
+              <Nav.Link as={Link} to="/filters">View Filters</Nav.Link>
               <Nav.Link as={Link} to="/config">Config</Nav.Link>
             </Nav>
             <Button variant="outline-info" onClick={handleOpenModal}>Connection to CGrateS</Button>
@@ -182,6 +184,7 @@ function App() {
           <Route path="/accounts" element={<Accounts cgratesConfig={cgratesConfig} />} />
           <Route path="/routes" element={<Routes cgratesConfig={cgratesConfig} />} />
           <Route path="/attributes" element={<Attributes cgratesConfig={cgratesConfig} />} />
+          <Route path="/filters" element={<Filters cgratesConfig={cgratesConfig} />} />
           <Route path="/config" element={<Config cgratesConfig={cgratesConfig} />} />
         </Routes>
       </Container>
