@@ -29,6 +29,8 @@ So far what has been include is limited support for:
  * Searching and exporting CDRs
  * Viewing Rates / Least Cost Routes
  * Viewing AttributeS / Testing AttributeS
+ * Viewing Accounts / Balances
+ * Viewing Config
 
 
 ## Contributions

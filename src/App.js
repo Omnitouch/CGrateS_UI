@@ -4,6 +4,7 @@ import { Modal, Button, Navbar, Nav, Container, Form, Alert } from 'react-bootst
 import CDRs from './CDRs';
 import Accounts from './Accounts';
 import Attributes from './Attributes';
+import Config from './Config';
 import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
 import { marked } from 'marked';
 
@@ -73,16 +74,17 @@ function App() {
   // Split tenants by ';' and give hint in the UI
   const splitTenants = cgratesConfig.tenants.split(';');
 
-  // Function to test the connection
+  // Function to test the connection and get the JSON config
   const handleTestConnection = async () => {
     const cgratesURL = cgratesConfig.url;
     const newQuery = {
-      method: 'ApierV2.GetAccount',
-      params: [{ Tenant: 'cgrates.org', Account: 'Nick_Test_123' }]
+      method: 'ConfigSv1.GetConfigAsJSON',
+      params: [{}]
     };
 
     setIsTesting(true); // Show loading state
     setTestResult('');  // Clear previous result
+    setConfigError(''); // Clear previous error
 
     try {
       const response = await fetch(cgratesURL + '/jsonrpc', {
@@ -95,7 +97,16 @@ function App() {
 
       if (response.ok) {
         const data = await response.json();
-        setTestResult('Connection successful: ' + JSON.stringify(data));
+        if (data.result) {
+          const parsedJSON = JSON.parse(data.result); // Parse the returned JSON string
+          setCgratesConfig((prevConfig) => ({
+            ...prevConfig,
+            json_config: parsedJSON
+          }));
+          setTestResult('Connection successful and config loaded.');
+        } else {
+          setTestResult('Connection successful, but no config found.');
+        }
       } else {
         setTestResult('Connection failed: ' + response.statusText);
       }
@@ -104,6 +115,41 @@ function App() {
     }
 
     setIsTesting(false); // Hide loading state
+  };
+
+  // Fetch config on initial load and handle errors
+  const fetchConfig = async (url) => {
+    const query = {
+      method: 'ConfigSv1.GetConfigAsJSON',
+      params: [{}]
+    };
+
+    try {
+      const response = await fetch(url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(query),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.result) {
+          const parsedJSON = JSON.parse(data.result); // Parse the returned JSON string
+          setCgratesConfig((prevConfig) => ({
+            ...prevConfig,
+            json_config: parsedJSON
+          }));
+        } else {
+          setConfigError('No configuration found.');
+        }
+      } else {
+        setConfigError('Failed to fetch configuration: ' + response.statusText);
+      }
+    } catch (error) {
+      setConfigError('Error fetching configuration: ' + error.message);
+    }
   };
 
   return (
@@ -118,6 +164,7 @@ function App() {
               <Nav.Link as={Link} to="/accounts">View Accounts</Nav.Link>
               <Nav.Link as={Link} to="/routes">View Routes</Nav.Link>
               <Nav.Link as={Link} to="/attributes">View Attributes</Nav.Link>
+              <Nav.Link as={Link} to="/config">Config</Nav.Link>
             </Nav>
             <Button variant="outline-info" onClick={handleOpenModal}>Connection to CGrateS</Button>
           </Navbar.Collapse>
@@ -135,6 +182,7 @@ function App() {
           <Route path="/accounts" element={<Accounts cgratesConfig={cgratesConfig} />} />
           <Route path="/routes" element={<Routes cgratesConfig={cgratesConfig} />} />
           <Route path="/attributes" element={<Attributes cgratesConfig={cgratesConfig} />} />
+          <Route path="/config" element={<Config cgratesConfig={cgratesConfig} />} />
         </Routes>
       </Container>
 

@@ -29,10 +29,8 @@ const categoryOptions = [
   { label: 'Data', value: 'data' }
 ];
 
-// Options for the "ExporterID" dropdown
+// Options for the "ExporterID" dropdown - ToDo - Populate from json_config
 const exporterOptions = [
-  { label: 'CSVExporter_Digicel', value: 'CSVExporter_Digicel' },
-  { label: 'CSVExporter_GTT', value: 'CSVExporter_GTT' },
   { label: 'virtual_exporter', value: 'virtual_exporter' },
 ];
 

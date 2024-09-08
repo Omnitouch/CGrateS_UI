@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Button, Container, Row, Col, Table, Modal, Spinner } from 'react-bootstrap';
+import { Form, Button, Container, Row, Col, Table, Modal, Spinner, Accordion, ListGroup } from 'react-bootstrap';
 
 const Attributes = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
@@ -166,18 +166,51 @@ const Attributes = ({ cgratesConfig }) => {
         )}
 
         {/* Modal for displaying attribute details */}
-        <Modal show={showModal} onHide={handleCloseModal}>
+        <Modal show={showModal} onHide={handleCloseModal} size="lg">
           <Modal.Header closeButton>
             <Modal.Title>Attribute Profile Details</Modal.Title>
           </Modal.Header>
           <Modal.Body>
             {selectedAttribute ? (
-              <div>
-                <p><strong>TPid:</strong> {selectedAttribute.TPid}</p>
-                <p><strong>Id:</strong> {selectedAttribute.Id}</p>
-                <p><strong>Details:</strong></p>
-                <pre>{JSON.stringify(selectedAttribute, null, 2)}</pre>
-              </div>
+              <>
+                <h5>General Information</h5>
+                <ListGroup className="mb-3">
+                  <ListGroup.Item><strong>Tenant:</strong> {selectedAttribute.Tenant}</ListGroup.Item>
+                  <ListGroup.Item><strong>ID:</strong> {selectedAttribute.ID}</ListGroup.Item>
+                  <ListGroup.Item><strong>Contexts:</strong> {selectedAttribute.Contexts.join(', ')}</ListGroup.Item>
+                  <ListGroup.Item><strong>Filter IDs:</strong> {selectedAttribute.FilterIDs.join(', ')}</ListGroup.Item>
+                  <ListGroup.Item><strong>Activation Interval:</strong> {selectedAttribute.ActivationInterval || 'N/A'}</ListGroup.Item>
+                  <ListGroup.Item><strong>Blocker:</strong> {selectedAttribute.Blocker ? 'Yes' : 'No'}</ListGroup.Item>
+                  <ListGroup.Item><strong>Weight:</strong> {selectedAttribute.Weight}</ListGroup.Item>
+                </ListGroup>
+
+                <h5>Attributes</h5>
+                <Accordion defaultActiveKey="0">
+                  {selectedAttribute.Attributes.map((attr, index) => (
+                    <Accordion.Item eventKey={index.toString()} key={index}>
+                      <Accordion.Header><strong>Path:</strong> {attr.Path}</Accordion.Header>
+                      <Accordion.Body>
+                        <ListGroup variant="flush">
+                          <ListGroup.Item><strong>Type:</strong> {attr.Type}</ListGroup.Item>
+                          <ListGroup.Item>
+                            <strong>Values:</strong>
+                            {attr.Value.map((valueObj, idx) => (
+                              <div key={idx}>
+                                {Object.keys(valueObj).map((key) => (
+                                  <p key={key}><strong>{key}:</strong> {valueObj[key]}</p>
+                                ))}
+                              </div>
+                            ))}
+                          </ListGroup.Item>
+                          {attr.FilterIDs && (
+                            <ListGroup.Item><strong>Filter IDs:</strong> {attr.FilterIDs.join(', ')}</ListGroup.Item>
+                          )}
+                        </ListGroup>
+                      </Accordion.Body>
+                    </Accordion.Item>
+                  ))}
+                </Accordion>
+              </>
             ) : (
               <p>No details available</p>
             )}
