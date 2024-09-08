@@ -29,11 +29,6 @@ const categoryOptions = [
   { label: 'Data', value: 'data' }
 ];
 
-// Options for the "ExporterID" dropdown - ToDo - Populate from json_config
-const exporterOptions = [
-  { label: 'virtual_exporter', value: 'virtual_exporter' },
-];
-
 const CDRs = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
     setupTimeStart: '',
@@ -50,7 +45,7 @@ const CDRs = ({ cgratesConfig }) => {
   const [apiQuery, setApiQuery] = useState('');
   const [results, setResults] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [offset, setOffset] = useState(0);;
+  const [offset, setOffset] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedRowData, setSelectedRowData] = useState(null);
@@ -60,6 +55,7 @@ const CDRs = ({ cgratesConfig }) => {
   const [selectedExporter, setSelectedExporter] = useState('');
   const [isExporting, setIsExporting] = useState(false); // New state for handling export loading
   const [exportApiQuery, setExportApiQuery] = useState(''); // State to store the export API query
+  const [exporterOptions, setExporterOptions] = useState([]); // Dynamically populated exporter list
 
 
 
@@ -69,6 +65,18 @@ const CDRs = ({ cgratesConfig }) => {
       [type]: moment.format('YYYY-MM-DD HH:mm:ss')
     });
   };
+
+  useEffect(() => {
+    // Populate exporter options dynamically from cgratesConfig.json_config
+    if (cgratesConfig.json_config && cgratesConfig.json_config.ees && cgratesConfig.json_config.ees.exporters) {
+      const exporters = cgratesConfig.json_config.ees.exporters;
+      const options = exporters.map(exporter => ({
+        label: exporter.id,
+        value: exporter.id
+      }));
+      setExporterOptions(options); // Set dynamic exporter options
+    }
+  }, [cgratesConfig]);
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
@@ -214,7 +222,7 @@ const CDRs = ({ cgratesConfig }) => {
       method: 'APIerSv1.ExportCDRs', // Change the method for export
       params: [{
         ...query.params[0], // Keep the same parameters
-        //Remove Limit and Offset from the query
+        // Remove Limit and Offset from the query
         Limit: undefined,
         Offset: undefined,
         ExporterIDs: [selectedExporter], // Add the ExporterIDs
@@ -225,15 +233,8 @@ const CDRs = ({ cgratesConfig }) => {
 
     setExportApiQuery(JSON.stringify(exportQuery, null, 2));
 
-    // const selectedInstance = cgratesInstances.find(instance => instance.name === searchParams.cgratesInstance);
-    // if (!selectedInstance) {
-    //   console.error('No CGrateS instance selected');
-    //   setIsExporting(false);
-    //   return;
-    // }
-
     try {
-      const selectedInstance = "test"
+      const selectedInstance = "test"; // Simulating instance retrieval
       const response = await fetch(selectedInstance.url + '/jsonrpc', {
         method: 'POST',
         headers: {
@@ -278,7 +279,7 @@ const CDRs = ({ cgratesConfig }) => {
   return (
     <div className="App">
       <Container>
-        <Form onSubmit={handleSubmit} className="mt-4">
+      <Form onSubmit={handleSubmit} className="mt-4">
           <Row>
             <Col md={3}>
               <Form.Group controlId="formSetupTimeStart">
@@ -496,6 +497,6 @@ const CDRs = ({ cgratesConfig }) => {
       </Modal>
     </div>
   );
-}
+};
 
 export default CDRs;

@@ -162,11 +162,11 @@ function App() {
           <Navbar.Toggle aria-controls="basic-navbar-nav" />
           <Navbar.Collapse id="basic-navbar-nav">
             <Nav className="me-auto">
-              <Nav.Link as={Link} to="/cdrs">View CDRs</Nav.Link>
-              <Nav.Link as={Link} to="/accounts">View Accounts</Nav.Link>
-              <Nav.Link as={Link} to="/routes">View Routes</Nav.Link>
-              <Nav.Link as={Link} to="/attributes">View Attributes</Nav.Link>
-              <Nav.Link as={Link} to="/filters">View Filters</Nav.Link>
+              <Nav.Link as={Link} to="/cdrs">CDRs</Nav.Link>
+              <Nav.Link as={Link} to="/accounts">Accounts</Nav.Link>
+              <Nav.Link as={Link} to="/routes">Routes</Nav.Link>
+              <Nav.Link as={Link} to="/attributes">Attributes</Nav.Link>
+              <Nav.Link as={Link} to="/filters">Filters</Nav.Link>
               <Nav.Link as={Link} to="/routes">Routes</Nav.Link>
               <Nav.Link as={Link} to="/config">Config</Nav.Link>
             </Nav>

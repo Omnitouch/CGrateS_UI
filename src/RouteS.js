@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Button, Container, Row, Col, Table, Pagination, Modal, Spinner } from 'react-bootstrap';
-import Datetime from 'react-datetime';
 import moment from 'moment';
 
 const GetRoutes = ({ cgratesConfig }) => {
@@ -124,7 +123,7 @@ const GetRoutes = ({ cgratesConfig }) => {
       <Container>
         <Form onSubmit={handleSubmit} className="mt-4">
           <Row>
-          <Col md={4}>
+            <Col md={4}>
               <Form.Group controlId="formTenant">
                 <Form.Label>Tenant</Form.Label>
                 <Form.Control as="select" name="tenant" value={searchParams.tenant} onChange={handleInputChange}>
@@ -175,9 +174,8 @@ const GetRoutes = ({ cgratesConfig }) => {
           <thead>
             <tr>
               <th>#</th>
-              <th>Tenant</th>
-              <th>Account</th>
-              <th>Destination</th>
+              <th>Profile ID</th>
+              <th>Sorting</th>
               <th>Routes</th>
             </tr>
           </thead>
@@ -185,14 +183,22 @@ const GetRoutes = ({ cgratesConfig }) => {
             {results && results.length > 0 ? results.map((result, index) => (
               <tr key={index} onClick={() => handleRowClick(result)} style={{ cursor: 'pointer' }}>
                 <td>{index + 1 + (currentPage - 1) * 50}</td>
-                <td>{result.Tenant}</td>
-                <td>{result.Account}</td>
-                <td>{result.Destination}</td>
-                <td>{JSON.stringify(result.Routes)}</td>
+                <td>{result.ProfileID}</td>
+                <td>{result.Sorting}</td>
+                <td>
+                  {result.Routes.map((route, routeIndex) => (
+                    <div key={routeIndex}>
+                      <strong>RouteID:</strong> {route.RouteID} <br />
+                      <strong>RouteParameters:</strong> {route.RouteParameters} <br />
+                      <strong>Cost:</strong> {route.SortingData.Cost} <br />
+                      <strong>RatingPlanID:</strong> {route.SortingData.RatingPlanID}
+                    </div>
+                  ))}
+                </td>
               </tr>
             )) : (
               <tr>
-                <td colSpan="5" className="text-center">No results available</td>
+                <td colSpan="4" className="text-center">No results available</td>
               </tr>
             )}
           </tbody>
@@ -212,10 +218,16 @@ const GetRoutes = ({ cgratesConfig }) => {
         <Modal.Body>
           {selectedRowData ? (
             <div>
-              <p><strong>Tenant:</strong> {selectedRowData.Tenant}</p>
-              <p><strong>Account:</strong> {selectedRowData.Account}</p>
-              <p><strong>Destination:</strong> {selectedRowData.Destination}</p>
-              <p><strong>Routes:</strong> {JSON.stringify(selectedRowData.Routes, null, 2)}</p>
+              <p><strong>Profile ID:</strong> {selectedRowData.ProfileID}</p>
+              <p><strong>Sorting:</strong> {selectedRowData.Sorting}</p>
+              {selectedRowData.Routes.map((route, routeIndex) => (
+                <div key={routeIndex}>
+                  <p><strong>Route ID:</strong> {route.RouteID}</p>
+                  <p><strong>Route Parameters:</strong> {route.RouteParameters}</p>
+                  <p><strong>Cost:</strong> {route.SortingData.Cost}</p>
+                  <p><strong>Rating Plan ID:</strong> {route.SortingData.RatingPlanID}</p>
+                </div>
+              ))}
             </div>
           ) : (
             <p>No data available</p>
