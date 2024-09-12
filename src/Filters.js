@@ -107,43 +107,76 @@ const Filters = ({ cgratesConfig }) => {
     setEditFilter({ ...editFilter, Rules: updatedRules }); // Update the entire filter with modified rules
   };
 
-// Handle saving the updated filter
-const saveFilter = async () => {
-  setIsLoading(true);
-  try {
-    const { Tenant, ...filterToSend } = editFilter; // Remove the Tenant key from the filter object
+  // Handle value input change within a rule
+  const handleValueChange = (ruleIndex, valueIndex, newValue) => {
+    const updatedRules = [...editFilter.Rules];
+    updatedRules[ruleIndex].Values[valueIndex] = newValue; // Update specific value in the rule
+    setEditFilter({ ...editFilter, Rules: updatedRules });
+  };
 
-    const query = {
-      method: 'ApierV1.SetFilter', // Correct method name
-      params: [filterToSend] // Send the filtered data without the Tenant key
-    };
+  // Add a new rule
+  const addRule = () => {
+    const newRule = { Type: '', Element: '', Values: [''] }; // New rule template
+    setEditFilter({ ...editFilter, Rules: [...editFilter.Rules, newRule] });
+  };
 
-    const response = await fetch(cgratesConfig.url + '/jsonrpc', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(query),
-    });
+  // Remove an existing rule
+  const removeRule = (index) => {
+    const updatedRules = [...editFilter.Rules];
+    updatedRules.splice(index, 1); // Remove the rule at the given index
+    setEditFilter({ ...editFilter, Rules: updatedRules });
+  };
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+  // Add a new value to a rule
+  const addValue = (ruleIndex) => {
+    const updatedRules = [...editFilter.Rules];
+    updatedRules[ruleIndex].Values.push(''); // Add empty value
+    setEditFilter({ ...editFilter, Rules: updatedRules });
+  };
+
+  // Remove an existing value from a rule
+  const removeValue = (ruleIndex, valueIndex) => {
+    const updatedRules = [...editFilter.Rules];
+    updatedRules[ruleIndex].Values.splice(valueIndex, 1); // Remove the value at the given index
+    setEditFilter({ ...editFilter, Rules: updatedRules });
+  };
+
+  // Handle saving the updated filter
+  const saveFilter = async () => {
+    setIsLoading(true);
+    try {
+      const { Tenant, ...filterToSend } = editFilter; // Remove the Tenant key from the filter object
+
+      const query = {
+        method: 'ApierV1.SetFilter', // Correct method name
+        params: [filterToSend] // Send the filtered data without the Tenant key
+      };
+
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(query),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.result) {
+        console.log('Filter updated successfully');
+        setIsEditing(false); // Exit edit mode
+        fetchFilters(); // Refresh the filter list
+        handleCloseModal();
+      }
+    } catch (error) {
+      console.error('Error updating filter:', error);
+    } finally {
+      setIsLoading(false);
     }
-
-    const data = await response.json();
-    if (data.result) {
-      console.log('Filter updated successfully');
-      setIsEditing(false); // Exit edit mode
-      fetchFilters(); // Refresh the filter list
-      handleCloseModal();
-    }
-  } catch (error) {
-    console.error('Error updating filter:', error);
-  } finally {
-    setIsLoading(false);
-  }
-};
-
+  };
 
   const handleRowClick = (filterId) => {
     fetchFilterDetails(filterId); // Fetch the details when a filter is clicked
@@ -237,7 +270,7 @@ const saveFilter = async () => {
                     </Form.Group>
                     <Form.Group>
                       <Form.Label>ID</Form.Label>
-                      <Form.Control type="text" name="ID" value={editFilter.Id} onChange={handleEditChange} />
+                      <Form.Control type="text" name="ID" value={editFilter.ID} onChange={handleEditChange} />
                     </Form.Group>
                     <Form.Group>
                       <Form.Label>Activation Interval</Form.Label>
@@ -245,14 +278,14 @@ const saveFilter = async () => {
                     </Form.Group>
 
                     <h5>Edit Rules</h5>
-                    {editFilter.Rules.map((rule, index) => (
-                      <div key={index}>
+                    {editFilter.Rules.map((rule, ruleIndex) => (
+                      <div key={ruleIndex} style={{ border: '1px solid #ddd', padding: '10px', marginBottom: '10px' }}>
                         <Form.Group>
                           <Form.Label>Type</Form.Label>
                           <Form.Control 
                             type="text" 
                             value={rule.Type} 
-                            onChange={(e) => handleRuleChange(index, 'Type', e.target.value)} 
+                            onChange={(e) => handleRuleChange(ruleIndex, 'Type', e.target.value)} 
                           />
                         </Form.Group>
                         <Form.Group>
@@ -260,19 +293,27 @@ const saveFilter = async () => {
                           <Form.Control 
                             type="text" 
                             value={rule.Element} 
-                            onChange={(e) => handleRuleChange(index, 'Element', e.target.value)} 
+                            onChange={(e) => handleRuleChange(ruleIndex, 'Element', e.target.value)} 
                           />
                         </Form.Group>
-                        <Form.Group>
-                          <Form.Label>Values</Form.Label>
-                          <Form.Control 
-                            type="text" 
-                            value={rule.Values.join(', ')} 
-                            onChange={(e) => handleRuleChange(index, 'Values', e.target.value.split(', '))} 
-                          />
-                        </Form.Group>
+                        <Form.Label>Values</Form.Label>
+                        {rule.Values.map((value, valueIndex) => (
+                          <div key={valueIndex} style={{ display: 'flex', marginBottom: '5px' }}>
+                            <Form.Control
+                              type="text"
+                              value={value}
+                              onChange={(e) => handleValueChange(ruleIndex, valueIndex, e.target.value)}
+                              style={{ marginRight: '10px' }}
+                            />
+                            <Button variant="danger" onClick={() => removeValue(ruleIndex, valueIndex)}>Remove</Button>
+                          </div>
+                        ))}
+                        <Button onClick={() => addValue(ruleIndex)}>Add Value</Button>
+                        <hr />
+                        <Button variant="danger" onClick={() => removeRule(ruleIndex)}>Remove Rule</Button>
                       </div>
                     ))}
+                    <Button onClick={addRule}>Add Rule</Button>
                   </>
                 ) : (
                   <>
