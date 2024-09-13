@@ -12,6 +12,7 @@ const Attributes = ({ cgratesConfig }) => {
   const [isLoading, setIsLoading] = useState(false); // Handle loading state
   const [responseTime, setResponseTime] = useState(null); // API response time
   const [isEditing, setIsEditing] = useState(false); // Toggle editing mode
+  const [isNew, setIsNew] = useState(false); // Flag to track if creating a new attribute
 
   // Handle input change for tenant selection
   const handleInputChange = (event) => {
@@ -85,6 +86,7 @@ const Attributes = ({ cgratesConfig }) => {
       if (data.result) {
         setSelectedAttribute(data.result); // Set the fetched attribute details
         setEditAttribute(data.result); // Prepare the attribute for editing
+        setIsNew(false); // Ensure this is treated as an edit
         setShowModal(true); // Show the modal with details
       }
     } catch (error) {
@@ -92,6 +94,24 @@ const Attributes = ({ cgratesConfig }) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Open modal to create a new attribute
+  const openCreateNewAttributeModal = () => {
+    const newAttribute = {
+      Tenant: searchParams.tenant, // Use the selected tenant
+      ID: '',
+      Contexts: [],
+      FilterIDs: [],
+      ActivationInterval: null,
+      Attributes: [],
+      Blocker: false,
+      Weight: 0,
+    };
+    setEditAttribute(newAttribute);
+    setIsNew(true); // Mark this as a new attribute creation
+    setIsEditing(true); // Automatically start in edit mode
+    setShowModal(true); // Show modal
   };
 
   // Toggle editing mode
@@ -127,10 +147,31 @@ const Attributes = ({ cgratesConfig }) => {
     setEditAttribute({ ...editAttribute, Attributes: updatedAttributes });
   };
 
-  // Add a new attribute
-  const addAttribute = () => {
-    const newAttribute = { Path: '', Type: '', Value: [{ Rules: '' }], FilterIDs: [] };
+  // Add a new rule to an attribute when "Add Rule to Attribute" is clicked
+  const addRuleToAttribute = () => {
+    const newAttribute = { Path: '', Type: '', Value: [{ Rules: '' }], FilterIDs: [] }; // Template for a new rule
     setEditAttribute({ ...editAttribute, Attributes: [...editAttribute.Attributes, newAttribute] });
+  };
+
+  // Handle changes to FilterIDs
+  const handleFilterIDChange = (attrIndex, filterIndex, newValue) => {
+    const updatedAttributes = [...editAttribute.Attributes];
+    updatedAttributes[attrIndex].FilterIDs[filterIndex] = newValue;
+    setEditAttribute({ ...editAttribute, Attributes: updatedAttributes });
+  };
+
+  // Add new FilterID to an attribute
+  const addFilterID = (attrIndex) => {
+    const updatedAttributes = [...editAttribute.Attributes];
+    updatedAttributes[attrIndex].FilterIDs.push(''); // Add empty FilterID
+    setEditAttribute({ ...editAttribute, Attributes: updatedAttributes });
+  };
+
+  // Remove a FilterID from an attribute
+  const removeFilterID = (attrIndex, filterIndex) => {
+    const updatedAttributes = [...editAttribute.Attributes];
+    updatedAttributes[attrIndex].FilterIDs.splice(filterIndex, 1);
+    setEditAttribute({ ...editAttribute, Attributes: updatedAttributes });
   };
 
   // Remove an attribute
@@ -140,13 +181,13 @@ const Attributes = ({ cgratesConfig }) => {
     setEditAttribute({ ...editAttribute, Attributes: updatedAttributes });
   };
 
-  // Save the edited attribute
+  // Save the edited or newly created attribute
   const saveChanges = async () => {
     setIsLoading(true);
     try {
       const query = {
         method: 'APIerSv1.SetAttributeProfile',
-        params: [editAttribute] // Send the edited attribute back to the API
+        params: [editAttribute] // Send the edited or new attribute back to the API
       };
 
       const response = await fetch(cgratesConfig.url + '/jsonrpc', {
@@ -246,13 +287,15 @@ const Attributes = ({ cgratesConfig }) => {
                 )}
               </tbody>
             </Table>
+            {/* Button to create new attribute */}
+            <Button variant="success" className="mt-4" onClick={openCreateNewAttributeModal}>Create New Attribute</Button>
           </>
         )}
 
         {/* Modal for displaying attribute details */}
         <Modal show={showModal} onHide={handleCloseModal} size="lg">
           <Modal.Header closeButton>
-            <Modal.Title>Attribute Profile Details</Modal.Title>
+            <Modal.Title>{isNew ? "Create New Attribute" : "Attribute Profile Details"}</Modal.Title>
           </Modal.Header>
           <Modal.Body>
             {editAttribute ? (
@@ -266,7 +309,11 @@ const Attributes = ({ cgratesConfig }) => {
                     </Form.Group>
                     <Form.Group>
                       <Form.Label>ID</Form.Label>
-                      <Form.Control type="text" value={editAttribute.ID} readOnly />
+                      <Form.Control 
+                        type="text" 
+                        value={editAttribute.ID} 
+                        onChange={(e) => setEditAttribute({ ...editAttribute, ID: e.target.value })} 
+                      />
                     </Form.Group>
 
                     <h5>Edit Attributes</h5>
@@ -288,7 +335,8 @@ const Attributes = ({ cgratesConfig }) => {
                             onChange={(e) => handleEditChange(index, 'Type', e.target.value)} 
                           />
                         </Form.Group>
-                        <Form.Label>Values (Rules)</Form.Label>
+
+                        <Form.Label>Rules</Form.Label>
                         {attr.Value.map((value, valueIndex) => (
                           <div key={valueIndex} style={{ display: 'flex', marginBottom: '5px' }}>
                             <Form.Control
@@ -300,12 +348,28 @@ const Attributes = ({ cgratesConfig }) => {
                             <Button variant="danger" onClick={() => removeValue(index, valueIndex)}>Remove</Button>
                           </div>
                         ))}
-                        <Button onClick={() => addValue(index)}>Add Value</Button>
+                        <Button onClick={() => addValue(index)}>Add Rule</Button>
+
+                        <h5>FilterIDs</h5>
+                        {attr.FilterIDs.map((filterID, filterIndex) => (
+                          <div key={filterIndex} style={{ display: 'flex', marginBottom: '5px' }}>
+                            <Form.Control
+                              type="text"
+                              value={filterID}
+                              onChange={(e) => handleFilterIDChange(index, filterIndex, e.target.value)}
+                              style={{ marginRight: '10px' }}
+                            />
+                            <Button variant="danger" onClick={() => removeFilterID(index, filterIndex)}>Remove</Button>
+                          </div>
+                        ))}
+                        <Button onClick={() => addFilterID(index)}>Add FilterID</Button>
+
                         <hr />
                         <Button variant="danger" onClick={() => removeAttribute(index)}>Remove Attribute</Button>
                       </div>
                     ))}
-                    <Button onClick={addAttribute}>Add Attribute</Button>
+                    {/* Add Rule to Attribute Button */}
+                    <Button variant="primary" onClick={addRuleToAttribute} className="mt-3">Add Rule to Attribute</Button>
                   </>
                 ) : (
                   <>
@@ -324,14 +388,14 @@ const Attributes = ({ cgratesConfig }) => {
                             <ListGroup variant="flush">
                               <ListGroup.Item><strong>Type:</strong> {attr.Type}</ListGroup.Item>
                               <ListGroup.Item>
-                                <strong>Values:</strong>
+                                <strong>Rules:</strong>
                                 {attr.Value.map((valueObj, idx) => (
                                   <div key={idx}>
                                     <p><strong>Rules:</strong> {valueObj.Rules}</p>
                                   </div>
                                 ))}
                               </ListGroup.Item>
-                              {attr.FilterIDs && (
+                              {attr.FilterIDs.length > 0 && (
                                 <ListGroup.Item><strong>Filter IDs:</strong> {attr.FilterIDs.join(', ')}</ListGroup.Item>
                               )}
                             </ListGroup>
@@ -349,7 +413,7 @@ const Attributes = ({ cgratesConfig }) => {
           <Modal.Footer>
             {isEditing ? (
               <Button variant="primary" onClick={saveChanges}>
-                Save Changes
+                {isNew ? "Create Attribute" : "Save Changes"}
               </Button>
             ) : (
               <Button variant="secondary" onClick={toggleEdit}>
