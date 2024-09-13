@@ -7,13 +7,13 @@ import Attributes from './Attributes';
 import Filters from './Filters';
 import RouteS from './RouteS';
 import Config from './Config';
-import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Link, useLocation } from 'react-router-dom';
 import { marked } from 'marked';
 
 function App() {
   const [cgratesConfig, setCgratesConfig] = useState({
     url: 'http://localhost:2080',
-    tenants: 'mnc380.mcc313.3gppnetwork.org;cgrates.org;test',
+    tenants: 'cgrates.org;test',
     username: '',
     password: '',
     json_config: null
@@ -167,8 +167,30 @@ function App() {
     }
   };
 
+  // Component to handle updating document title
+  const TitleUpdater = () => {
+    const location = useLocation(); // Detect the current route
+
+    useEffect(() => {
+      const pageTitles = {
+        '/': 'Home - Omnitouch CGrateS UI',
+        '/cdrs': 'CDRs - Omnitouch CGrateS UI',
+        '/accounts': 'Accounts - Omnitouch CGrateS UI',
+        '/routes': 'Routes - Omnitouch CGrateS UI',
+        '/attributes': 'Attributes - Omnitouch CGrateS UI',
+        '/filters': 'Filters - Omnitouch CGrateS UI',
+        '/config': 'Config - Omnitouch CGrateS UI',
+      };
+      const defaultTitle = 'Omnitouch CGrateS UI';
+      document.title = pageTitles[location.pathname] || defaultTitle;
+    }, [location]);
+
+    return null; // No visual output, only side effects
+  };
+
   return (
     <Router basename="/">
+      <TitleUpdater /> {/* Updates the document title whenever the route changes */}
       <Navbar bg="dark" variant="dark" expand="lg">
         <Container>
           <Navbar.Brand as={Link} to="/">Omnitouch CGrateS UI</Navbar.Brand>
