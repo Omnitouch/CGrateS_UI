@@ -7,9 +7,11 @@ const Attributes = ({ cgratesConfig }) => {
   });
   const [attributes, setAttributes] = useState([]); // Store the list of attributes
   const [selectedAttribute, setSelectedAttribute] = useState(null); // Store the selected attribute's details
+  const [editAttribute, setEditAttribute] = useState(null); // Store the editable attribute details
   const [showModal, setShowModal] = useState(false); // Control the modal display
   const [isLoading, setIsLoading] = useState(false); // Handle loading state
   const [responseTime, setResponseTime] = useState(null); // API response time
+  const [isEditing, setIsEditing] = useState(false); // Toggle editing mode
 
   // Handle input change for tenant selection
   const handleInputChange = (event) => {
@@ -82,10 +84,91 @@ const Attributes = ({ cgratesConfig }) => {
       const data = await response.json();
       if (data.result) {
         setSelectedAttribute(data.result); // Set the fetched attribute details
+        setEditAttribute(data.result); // Prepare the attribute for editing
         setShowModal(true); // Show the modal with details
       }
     } catch (error) {
       console.error('Error fetching attribute details:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Toggle editing mode
+  const toggleEdit = () => {
+    setIsEditing(!isEditing);
+  };
+
+  // Handle changes to editable attribute data
+  const handleEditChange = (index, field, value) => {
+    const updatedAttributes = [...editAttribute.Attributes];
+    updatedAttributes[index][field] = value;
+    setEditAttribute({ ...editAttribute, Attributes: updatedAttributes });
+  };
+
+  // Handle rules changes in the Value array
+  const handleRuleChange = (attrIndex, valueIndex, newValue) => {
+    const updatedAttributes = [...editAttribute.Attributes];
+    updatedAttributes[attrIndex].Value[valueIndex].Rules = newValue;
+    setEditAttribute({ ...editAttribute, Attributes: updatedAttributes });
+  };
+
+  // Add new value to an attribute
+  const addValue = (attrIndex) => {
+    const updatedAttributes = [...editAttribute.Attributes];
+    updatedAttributes[attrIndex].Value.push({ Rules: '' }); // Add empty Rules object
+    setEditAttribute({ ...editAttribute, Attributes: updatedAttributes });
+  };
+
+  // Remove value from an attribute
+  const removeValue = (attrIndex, valueIndex) => {
+    const updatedAttributes = [...editAttribute.Attributes];
+    updatedAttributes[attrIndex].Value.splice(valueIndex, 1);
+    setEditAttribute({ ...editAttribute, Attributes: updatedAttributes });
+  };
+
+  // Add a new attribute
+  const addAttribute = () => {
+    const newAttribute = { Path: '', Type: '', Value: [{ Rules: '' }], FilterIDs: [] };
+    setEditAttribute({ ...editAttribute, Attributes: [...editAttribute.Attributes, newAttribute] });
+  };
+
+  // Remove an attribute
+  const removeAttribute = (index) => {
+    const updatedAttributes = [...editAttribute.Attributes];
+    updatedAttributes.splice(index, 1);
+    setEditAttribute({ ...editAttribute, Attributes: updatedAttributes });
+  };
+
+  // Save the edited attribute
+  const saveChanges = async () => {
+    setIsLoading(true);
+    try {
+      const query = {
+        method: 'APIerSv1.SetAttributeProfile',
+        params: [editAttribute] // Send the edited attribute back to the API
+      };
+
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(query),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.result) {
+        console.log('Attribute profile updated successfully');
+        setIsEditing(false);
+        setShowModal(false);
+      }
+    } catch (error) {
+      console.error('Error saving attribute profile:', error);
     } finally {
       setIsLoading(false);
     }
@@ -98,6 +181,7 @@ const Attributes = ({ cgratesConfig }) => {
   const handleCloseModal = () => {
     setShowModal(false);
     setSelectedAttribute(null);
+    setIsEditing(false);
   };
 
   const handleSubmit = (event) => {
@@ -171,51 +255,107 @@ const Attributes = ({ cgratesConfig }) => {
             <Modal.Title>Attribute Profile Details</Modal.Title>
           </Modal.Header>
           <Modal.Body>
-            {selectedAttribute ? (
+            {editAttribute ? (
               <>
-                <h5>General Information</h5>
-                <ListGroup className="mb-3">
-                  <ListGroup.Item><strong>Tenant:</strong> {selectedAttribute.Tenant}</ListGroup.Item>
-                  <ListGroup.Item><strong>ID:</strong> {selectedAttribute.ID}</ListGroup.Item>
-                  <ListGroup.Item><strong>Contexts:</strong> {selectedAttribute.Contexts.join(', ')}</ListGroup.Item>
-                  <ListGroup.Item><strong>Filter IDs:</strong> {selectedAttribute.FilterIDs.join(', ')}</ListGroup.Item>
-                  <ListGroup.Item><strong>Activation Interval:</strong> {selectedAttribute.ActivationInterval || 'N/A'}</ListGroup.Item>
-                  <ListGroup.Item><strong>Blocker:</strong> {selectedAttribute.Blocker ? 'Yes' : 'No'}</ListGroup.Item>
-                  <ListGroup.Item><strong>Weight:</strong> {selectedAttribute.Weight}</ListGroup.Item>
-                </ListGroup>
+                {isEditing ? (
+                  <>
+                    <h5>Edit General Information</h5>
+                    <Form.Group>
+                      <Form.Label>Tenant</Form.Label>
+                      <Form.Control type="text" value={editAttribute.Tenant} readOnly />
+                    </Form.Group>
+                    <Form.Group>
+                      <Form.Label>ID</Form.Label>
+                      <Form.Control type="text" value={editAttribute.ID} readOnly />
+                    </Form.Group>
 
-                <h5>Attributes</h5>
-                <Accordion defaultActiveKey="0">
-                  {selectedAttribute.Attributes.map((attr, index) => (
-                    <Accordion.Item eventKey={index.toString()} key={index}>
-                      <Accordion.Header><strong>Path:</strong> {attr.Path}</Accordion.Header>
-                      <Accordion.Body>
-                        <ListGroup variant="flush">
-                          <ListGroup.Item><strong>Type:</strong> {attr.Type}</ListGroup.Item>
-                          <ListGroup.Item>
-                            <strong>Values:</strong>
-                            {attr.Value.map((valueObj, idx) => (
-                              <div key={idx}>
-                                {Object.keys(valueObj).map((key) => (
-                                  <p key={key}><strong>{key}:</strong> {valueObj[key]}</p>
+                    <h5>Edit Attributes</h5>
+                    {editAttribute.Attributes.map((attr, index) => (
+                      <div key={index} style={{ border: '1px solid #ddd', padding: '10px', marginBottom: '10px' }}>
+                        <Form.Group>
+                          <Form.Label>Path</Form.Label>
+                          <Form.Control 
+                            type="text" 
+                            value={attr.Path} 
+                            onChange={(e) => handleEditChange(index, 'Path', e.target.value)} 
+                          />
+                        </Form.Group>
+                        <Form.Group>
+                          <Form.Label>Type</Form.Label>
+                          <Form.Control 
+                            type="text" 
+                            value={attr.Type} 
+                            onChange={(e) => handleEditChange(index, 'Type', e.target.value)} 
+                          />
+                        </Form.Group>
+                        <Form.Label>Values (Rules)</Form.Label>
+                        {attr.Value.map((value, valueIndex) => (
+                          <div key={valueIndex} style={{ display: 'flex', marginBottom: '5px' }}>
+                            <Form.Control
+                              type="text"
+                              value={value.Rules}
+                              onChange={(e) => handleRuleChange(index, valueIndex, e.target.value)}
+                              style={{ marginRight: '10px' }}
+                            />
+                            <Button variant="danger" onClick={() => removeValue(index, valueIndex)}>Remove</Button>
+                          </div>
+                        ))}
+                        <Button onClick={() => addValue(index)}>Add Value</Button>
+                        <hr />
+                        <Button variant="danger" onClick={() => removeAttribute(index)}>Remove Attribute</Button>
+                      </div>
+                    ))}
+                    <Button onClick={addAttribute}>Add Attribute</Button>
+                  </>
+                ) : (
+                  <>
+                    <h5>General Information</h5>
+                    <ListGroup className="mb-3">
+                      <ListGroup.Item><strong>Tenant:</strong> {editAttribute.Tenant}</ListGroup.Item>
+                      <ListGroup.Item><strong>ID:</strong> {editAttribute.ID}</ListGroup.Item>
+                    </ListGroup>
+
+                    <h5>Attributes</h5>
+                    <Accordion defaultActiveKey="0">
+                      {editAttribute.Attributes.map((attr, index) => (
+                        <Accordion.Item eventKey={index.toString()} key={index}>
+                          <Accordion.Header><strong>Path:</strong> {attr.Path}</Accordion.Header>
+                          <Accordion.Body>
+                            <ListGroup variant="flush">
+                              <ListGroup.Item><strong>Type:</strong> {attr.Type}</ListGroup.Item>
+                              <ListGroup.Item>
+                                <strong>Values:</strong>
+                                {attr.Value.map((valueObj, idx) => (
+                                  <div key={idx}>
+                                    <p><strong>Rules:</strong> {valueObj.Rules}</p>
+                                  </div>
                                 ))}
-                              </div>
-                            ))}
-                          </ListGroup.Item>
-                          {attr.FilterIDs && (
-                            <ListGroup.Item><strong>Filter IDs:</strong> {attr.FilterIDs.join(', ')}</ListGroup.Item>
-                          )}
-                        </ListGroup>
-                      </Accordion.Body>
-                    </Accordion.Item>
-                  ))}
-                </Accordion>
+                              </ListGroup.Item>
+                              {attr.FilterIDs && (
+                                <ListGroup.Item><strong>Filter IDs:</strong> {attr.FilterIDs.join(', ')}</ListGroup.Item>
+                              )}
+                            </ListGroup>
+                          </Accordion.Body>
+                        </Accordion.Item>
+                      ))}
+                    </Accordion>
+                  </>
+                )}
               </>
             ) : (
               <p>No details available</p>
             )}
           </Modal.Body>
           <Modal.Footer>
+            {isEditing ? (
+              <Button variant="primary" onClick={saveChanges}>
+                Save Changes
+              </Button>
+            ) : (
+              <Button variant="secondary" onClick={toggleEdit}>
+                Edit
+              </Button>
+            )}
             <Button variant="secondary" onClick={handleCloseModal}>
               Close
             </Button>
