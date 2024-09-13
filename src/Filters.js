@@ -13,6 +13,35 @@ const Filters = ({ cgratesConfig }) => {
   const [isEditing, setIsEditing] = useState(false); // Manage edit state
   const [editFilter, setEditFilter] = useState({}); // Store edited filter
 
+  const filterTypes = [
+    '*string*', '*notstring', '*prefix', '*notprefix', '*suffix', '*notsuffix*', '*empty', '*notempty', '*exists', '*notexists',
+    '*timings', '*nottimings', '*destinations', '*notdestinations', '*rsr', '*notrsr*',
+    '*lt', '*lte', '*gt', '*gte'
+  ];
+
+  const filterTypeHints = {
+    '*string*': 'Matches in full the Element with at least one value in Values.',
+    '*notstring': 'Negation of *string*.',
+    '*prefix': 'Matches the beginning of the Element with one of the values in Values.',
+    '*notprefix': 'Negation of *prefix*.',
+    '*suffix': 'Matches the end of the Element with one of the values in Values.',
+    '*notsuffix*': 'Negation of *suffix*.',
+    '*empty': 'Ensures that the Element is empty or does not exist.',
+    '*notempty': 'Negation of *empty*.',
+    '*exists': 'Ensures that the Element exists.',
+    '*notexists': 'Negation of *exists*.',
+    '*timings': 'Compares the time in Element with a TimingID in Values.',
+    '*nottimings': 'Negation of *timings*.',
+    '*destinations': 'Ensures that the Element is a prefix of one of the destination IDs in Values.',
+    '*notdestinations': 'Negation of *destinations*.',
+    '*rsr': 'Matches the RSRFilters in Values on the Element.',
+    '*notrsr*': 'Negation of *rsr*.',
+    '*lt': 'Compares if the Element is less than one of the Values.',
+    '*lte': 'Compares if the Element is less than or equal to one of the Values.',
+    '*gt': 'Compares if the Element is greater than one of the Values.',
+    '*gte': 'Compares if the Element is greater than or equal to one of the Values.',
+  };
+
   // Handle input change for tenant selection
   const handleInputChange = (event) => {
     const { name, value } = event.target;
@@ -193,6 +222,13 @@ const Filters = ({ cgratesConfig }) => {
     fetchFilters(); // Fetch filters based on the selected tenant
   };
 
+  // Handle creating a new filter
+  const handleNewFilter = () => {
+    setEditFilter({ Tenant: searchParams.tenant, ID: '', ActivationInterval: {}, Rules: [] }); // Empty filter
+    setIsEditing(true);
+    setShowModal(true); // Open modal for the new filter
+  };
+
   return (
     <div className="App">
       <Container>
@@ -215,6 +251,10 @@ const Filters = ({ cgratesConfig }) => {
             </Col>
           </Row>
         </Form>
+
+        <Button variant="success" className="mt-3" onClick={handleNewFilter}>
+          Add New Filter
+        </Button>
 
         {isLoading ? (
           <div className="text-center mt-4">
@@ -283,10 +323,18 @@ const Filters = ({ cgratesConfig }) => {
                         <Form.Group>
                           <Form.Label>Type</Form.Label>
                           <Form.Control 
-                            type="text" 
+                            as="select" 
                             value={rule.Type} 
                             onChange={(e) => handleRuleChange(ruleIndex, 'Type', e.target.value)} 
-                          />
+                          >
+                            <option value="">Select Type</option>
+                            {filterTypes.map((type, index) => (
+                              <option key={index} value={type}>{type}</option>
+                            ))}
+                          </Form.Control>
+                          <Form.Text className="text-muted">
+                            {filterTypeHints[rule.Type]}
+                          </Form.Text>
                         </Form.Group>
                         <Form.Group>
                           <Form.Label>Element</Form.Label>
