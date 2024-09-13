@@ -13,6 +13,17 @@ const Attributes = ({ cgratesConfig }) => {
   const [responseTime, setResponseTime] = useState(null); // API response time
   const [isEditing, setIsEditing] = useState(false); // Toggle editing mode
   const [isNew, setIsNew] = useState(false); // Flag to track if creating a new attribute
+  const [typeExplainer, setTypeExplainer] = useState(''); // Explainer for Type
+
+  // Explainers for each type
+  const typeExplainers = {
+    "*constant": "The Value is a constant value, it will just set the FieldName to this value as it is.",
+    "*variable": "The Value is a RSRParser which will capture the value from one or more fields in the event (can combine with constants) and write it to Path.",
+    "*composed": "Same as *variable but instead of overwriting Path, it will append to it.",
+    "*usage_difference": "Will calculate the duration difference between two field names defined in the Value. If the number of fields in the Value is not 2, it will throw an error.",
+    "*sum": "Will sum up the values in the Value.",
+    "*value_exponent": "Will compute the exponent of the first field in the Value."
+  };
 
   // Handle input change for tenant selection
   const handleInputChange = (event) => {
@@ -124,6 +135,16 @@ const Attributes = ({ cgratesConfig }) => {
     const updatedAttributes = [...editAttribute.Attributes];
     updatedAttributes[index][field] = value;
     setEditAttribute({ ...editAttribute, Attributes: updatedAttributes });
+  };
+
+  // Handle Type dropdown change and set the explainer
+  const handleTypeChange = (index, newValue) => {
+    const updatedAttributes = [...editAttribute.Attributes];
+    updatedAttributes[index].Type = newValue;
+    setEditAttribute({ ...editAttribute, Attributes: updatedAttributes });
+
+    // Update the explainer for the selected type
+    setTypeExplainer(typeExplainers[newValue]);
   };
 
   // Handle rules changes in the Value array
@@ -365,10 +386,19 @@ const Attributes = ({ cgratesConfig }) => {
                         <Form.Group>
                           <Form.Label>Type</Form.Label>
                           <Form.Control 
-                            type="text" 
-                            value={attr.Type} 
-                            onChange={(e) => handleEditChange(index, 'Type', e.target.value)} 
-                          />
+                            as="select" 
+                            value={attr.Type}
+                            onChange={(e) => handleTypeChange(index, e.target.value)}
+                          >
+                            <option value="">Select Type</option>
+                            <option value="*constant">*constant</option>
+                            <option value="*variable">*variable</option>
+                            <option value="*composed">*composed</option>
+                            <option value="*usage_difference">*usage_difference</option>
+                            <option value="*sum">*sum</option>
+                            <option value="*value_exponent">*value_exponent</option>
+                          </Form.Control>
+                          {typeExplainer && <p className="text-muted">{typeExplainer}</p>}
                         </Form.Group>
 
                         <Form.Label>Rules</Form.Label>
@@ -430,9 +460,9 @@ const Attributes = ({ cgratesConfig }) => {
                           <Accordion.Header><strong>Path:</strong> {attr.Path}</Accordion.Header>
                           <Accordion.Body>
                             <ListGroup variant="flush">
+                              <ListGroup.Item><strong>Path:</strong> {attr.Path}</ListGroup.Item>
                               <ListGroup.Item><strong>Type:</strong> {attr.Type}</ListGroup.Item>
                               <ListGroup.Item>
-                                <strong>Rules:</strong>
                                 {attr.Value.map((valueObj, idx) => (
                                   <div key={idx}>
                                     <p><strong>Rules:</strong> {valueObj.Rules}</p>
