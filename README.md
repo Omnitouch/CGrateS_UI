@@ -14,6 +14,8 @@ By default this tool tries to connect to a CGrateS instance running on `localhos
 
 In order to use this tool your version of CGrateS must be later than [this commit](https://github.com/cgrates/cgrates/pull/4430/commits/1b6942397ee7e7211d0d597dba65b2e9721782f1) which adds support for CORS to React can talk to CGrateS.
 
+If you are talking to a CGrateS instance other than `localhost`, the remote host must have HTTP TLS enabled, as if this page is rendered via HTTPS, all resources it accesses must be via HTTPS also.
+
 ## Usage
 
 Only certain functions / endpoints are exposed via this tool, it's in no way comprehensive.
@@ -32,7 +34,8 @@ Not all API endpoints are exposed here.
 So far what has been include is limited support for:
  * Searching and exporting CDRs
  * Viewing Rates / Least Cost Routes
- * Viewing AttributeS / Testing AttributeS
+ * Managing AttributeS
+ * Managing FilterS
  * Viewing Accounts / Balances
  * Viewing Config
 

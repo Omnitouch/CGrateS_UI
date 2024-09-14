@@ -12,6 +12,7 @@ const Filters = ({ cgratesConfig }) => {
   const [responseTime, setResponseTime] = useState(null); // API response time
   const [isEditing, setIsEditing] = useState(false); // Manage edit state
   const [editFilter, setEditFilter] = useState({}); // Store edited filter
+  const [error, setError] = useState(''); // Handle error messages
 
   const filterTypes = [
     '*string*', '*notstring', '*prefix', '*notprefix', '*suffix', '*notsuffix*', '*empty', '*notempty', '*exists', '*notexists',
@@ -115,6 +116,7 @@ const Filters = ({ cgratesConfig }) => {
         setSelectedFilter(data.result); // Set the fetched filter details
         setEditFilter(data.result); // Set the filter for editing
         setShowModal(true); // Show the modal with details
+        setIsEditing(false); // Ensure it starts in view mode
       }
     } catch (error) {
       console.error('Error fetching filter details:', error);
@@ -172,7 +174,14 @@ const Filters = ({ cgratesConfig }) => {
 
   // Handle saving the updated filter
   const saveFilter = async () => {
+    // Validation: Ensure mandatory fields are filled
+    if (!editFilter.ID || !editFilter.Tenant || editFilter.Rules.length === 0) {
+      setError('ID, Tenant, and at least one rule are mandatory.');
+      return;
+    }
+
     setIsLoading(true);
+    setError(''); // Clear previous error
     try {
       const { Tenant, ...filterToSend } = editFilter; // Remove the Tenant key from the filter object
 
@@ -224,8 +233,14 @@ const Filters = ({ cgratesConfig }) => {
 
   // Handle creating a new filter
   const handleNewFilter = () => {
-    setEditFilter({ Tenant: searchParams.tenant, ID: '', ActivationInterval: {}, Rules: [] }); // Empty filter
-    setIsEditing(true);
+    setEditFilter({
+      Tenant: searchParams.tenant || '',
+      ID: '',
+      ActivationInterval: {},
+      Rules: [{ Type: '', Element: '', Values: [''] }], // Prepopulate with one rule
+    });
+    setSelectedFilter(null); // Clear selectedFilter so it doesn't render view mode
+    setIsEditing(true); // Set to edit mode
     setShowModal(true); // Open modal for the new filter
   };
 
@@ -299,71 +314,77 @@ const Filters = ({ cgratesConfig }) => {
             <Modal.Title>Filter Profile Details</Modal.Title>
           </Modal.Header>
           <Modal.Body>
-            {selectedFilter ? (
+            {isEditing ? (
               <>
-                {isEditing ? (
-                  <>
-                    <h5>Edit General Information</h5>
-                    <Form.Group>
-                      <Form.Label>Tenant</Form.Label>
-                      <Form.Control type="text" name="Tenant" value={editFilter.Tenant} onChange={handleEditChange} readOnly />
-                    </Form.Group>
-                    <Form.Group>
-                      <Form.Label>ID</Form.Label>
-                      <Form.Control type="text" name="ID" value={editFilter.ID} onChange={handleEditChange} />
-                    </Form.Group>
-                    <Form.Group>
-                      <Form.Label>Activation Interval</Form.Label>
-                      <Form.Control type="text" name="ActivationInterval" value={editFilter.ActivationInterval ? editFilter.ActivationInterval.ActivationTime : 'N/A'} onChange={handleEditChange} />
-                    </Form.Group>
+                <h5>Edit General Information</h5>
+                <Form.Group>
+                  <Form.Label>Tenant</Form.Label>
+                  <Form.Control type="text" name="Tenant" value={editFilter.Tenant} onChange={handleEditChange} readOnly />
+                </Form.Group>
+                <Form.Group>
+                  <Form.Label>ID</Form.Label>
+                  <Form.Control type="text" name="ID" value={editFilter.ID} onChange={handleEditChange} />
+                </Form.Group>
+                <Form.Group>
+                  <Form.Label>Activation Interval</Form.Label>
+                  <Form.Control type="text" name="ActivationInterval" value={editFilter.ActivationInterval ? editFilter.ActivationInterval.ActivationTime : 'N/A'} onChange={handleEditChange} />
+                </Form.Group>
 
-                    <h5>Edit Rules</h5>
-                    {editFilter.Rules.map((rule, ruleIndex) => (
-                      <div key={ruleIndex} style={{ border: '1px solid #ddd', padding: '10px', marginBottom: '10px' }}>
-                        <Form.Group>
-                          <Form.Label>Type</Form.Label>
-                          <Form.Control 
-                            as="select" 
-                            value={rule.Type} 
-                            onChange={(e) => handleRuleChange(ruleIndex, 'Type', e.target.value)} 
-                          >
-                            <option value="">Select Type</option>
-                            {filterTypes.map((type, index) => (
-                              <option key={index} value={type}>{type}</option>
-                            ))}
-                          </Form.Control>
-                          <Form.Text className="text-muted">
-                            {filterTypeHints[rule.Type]}
-                          </Form.Text>
-                        </Form.Group>
-                        <Form.Group>
-                          <Form.Label>Element</Form.Label>
-                          <Form.Control 
-                            type="text" 
-                            value={rule.Element} 
-                            onChange={(e) => handleRuleChange(ruleIndex, 'Element', e.target.value)} 
-                          />
-                        </Form.Group>
-                        <Form.Label>Values</Form.Label>
-                        {rule.Values.map((value, valueIndex) => (
-                          <div key={valueIndex} style={{ display: 'flex', marginBottom: '5px' }}>
-                            <Form.Control
-                              type="text"
-                              value={value}
-                              onChange={(e) => handleValueChange(ruleIndex, valueIndex, e.target.value)}
-                              style={{ marginRight: '10px' }}
-                            />
-                            <Button variant="danger" onClick={() => removeValue(ruleIndex, valueIndex)}>Remove</Button>
-                          </div>
+                <h5>Edit Rules</h5>
+                {editFilter.Rules.map((rule, ruleIndex) => (
+                  <div key={ruleIndex} style={{ border: '1px solid #ddd', padding: '10px', marginBottom: '10px' }}>
+                    <Form.Group>
+                      <Form.Label>Type</Form.Label>
+                      <Form.Control 
+                        as="select" 
+                        value={rule.Type} 
+                        onChange={(e) => handleRuleChange(ruleIndex, 'Type', e.target.value)} 
+                      >
+                        <option value="">Select Type</option>
+                        {filterTypes.map((type, index) => (
+                          <option key={index} value={type}>{type}</option>
                         ))}
-                        <Button onClick={() => addValue(ruleIndex)}>Add Value</Button>
-                        <hr />
-                        <Button variant="danger" onClick={() => removeRule(ruleIndex)}>Remove Rule</Button>
+                      </Form.Control>
+                      <Form.Text className="text-muted">
+                        {filterTypeHints[rule.Type]}
+                      </Form.Text>
+                    </Form.Group>
+                    <Form.Group>
+                      <Form.Label>Element</Form.Label>
+                      <Form.Control 
+                        type="text" 
+                        value={rule.Element} 
+                        onChange={(e) => handleRuleChange(ruleIndex, 'Element', e.target.value)} 
+                      />
+                    </Form.Group>
+                    <Form.Label>Values</Form.Label>
+                    {rule.Values.map((value, valueIndex) => (
+                      <div key={valueIndex} style={{ display: 'flex', marginBottom: '5px' }}>
+                        <Form.Control
+                          type="text"
+                          value={value}
+                          onChange={(e) => handleValueChange(ruleIndex, valueIndex, e.target.value)}
+                          style={{ marginRight: '10px' }}
+                        />
+                        <Button variant="danger" onClick={() => removeValue(ruleIndex, valueIndex)}>Remove</Button>
                       </div>
                     ))}
-                    <Button onClick={addRule}>Add Rule</Button>
-                  </>
-                ) : (
+                    <Button onClick={() => addValue(ruleIndex)}>Add Value</Button>
+                    <hr />
+                    <Button variant="danger" onClick={() => removeRule(ruleIndex)}>Remove Rule</Button>
+                  </div>
+                ))}
+                <Button onClick={addRule}>Add Rule</Button>
+
+                {error && (
+                  <div className="mt-3 text-danger">
+                    {error}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {selectedFilter && (
                   <>
                     <h5>General Information</h5>
                     <ListGroup className="mb-3">
@@ -391,8 +412,6 @@ const Filters = ({ cgratesConfig }) => {
                   </>
                 )}
               </>
-            ) : (
-              <p>No details available</p>
             )}
           </Modal.Body>
           <Modal.Footer>
