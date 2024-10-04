@@ -1,6 +1,6 @@
 {
   "name": "cgrates-cdr-viewer",
-  "homepage": "https://omnitouch.github.io/CGrateS_UI",
+  "homepage": ".",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
