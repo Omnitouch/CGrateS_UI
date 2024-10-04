@@ -16,7 +16,7 @@ function App() {
     tenants: 'cgrates.org;test',
     username: '',
     password: '',
-    json_config: null
+    json_config: null,
   });
   const [showModal, setShowModal] = useState(false);
   const [testResult, setTestResult] = useState('');
@@ -24,18 +24,33 @@ function App() {
   const [configError, setConfigError] = useState('');
   const [readmeContent, setReadmeContent] = useState(''); // State for storing markdown content
 
-  // Fetch the README.md file from Github and convert it to HTML
-  useEffect(() => {
-    const storedConfig = localStorage.getItem('cgratesConfig');
-    if (storedConfig) {
-      setCgratesConfig(JSON.parse(storedConfig));
-    } else {
-      setShowModal(true); // Show modal if no config is found
-    }
 
+  useEffect(() => {
+    // Function to load the configuration from config.json
+    const loadConfig = async () => {
+      try {
+        const response = await fetch('./config.json');
+        if (!response.ok) {
+          throw new Error(`Failed to load config.json: ${response.statusText}`);
+        }
+        const configData = await response.json();
+        setCgratesConfig((prevConfig) => ({
+          ...prevConfig,
+          url: configData.url || prevConfig.url,
+          tenants: configData.tenants || prevConfig.tenants,
+          username: configData.username || prevConfig.username,
+          password: configData.password || prevConfig.password,
+        }));
+      } catch (error) {
+        console.error('Error loading config file:', error);
+        setShowModal(true); // Show modal on error
+      }
+    };
+  
+    // Function to fetch README.md file from GitHub
     const fetchReadme = async () => {
       try {
-        const response = await fetch('https://raw.githubusercontent.com/Omnitouch/CGrateS_UI/main/README.md'); // Ensure path is correct
+        const response = await fetch('https://raw.githubusercontent.com/Omnitouch/CGrateS_UI/main/README.md');
         if (!response.ok) {
           throw new Error(`Failed to fetch README.md: ${response.statusText}`);
         }
@@ -47,9 +62,12 @@ function App() {
         setReadmeContent('<p>Error loading README content</p>'); // Display error message in case of failure
       }
     };
-    
+  
+    // Call the functions
+    loadConfig();
     fetchReadme();
   }, []);
+  
 
   // Fetch config on initial load and handle errors
   useEffect(() => {
@@ -225,6 +243,11 @@ function App() {
             path="/"
             element={<div dangerouslySetInnerHTML={{ __html: readmeContent }} />}
           />
+          {/* Duplicate home route showing the parsed Readme.md */}
+          <Route
+            path="/CGrateS_UI/"
+            element={<div dangerouslySetInnerHTML={{ __html: readmeContent }} />}
+          />
           <Route path="/cdrs" element={<CDRs cgratesConfig={cgratesConfig} />} />
           <Route path="/accounts" element={<Accounts cgratesConfig={cgratesConfig} />} />
           <Route path="/routes" element={<RouteS cgratesConfig={cgratesConfig} />} />
@@ -236,7 +259,7 @@ function App() {
 
       <Modal show={showModal} onHide={() => setShowModal(false)}>
         <Modal.Header closeButton>
-          <Modal.Title>Enter CGrateS Details</Modal.Title>
+          <Modal.Title>Enter CGrateS Connection Details</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form>
