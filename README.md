@@ -42,3 +42,5 @@ So far what has been include is limited support for:
 
 ## Contributions
 Contributions welcome via the [Github page](https://github.com/Omnitouch/CGrateS_UI).
+
+Changes can be pushed to live with `npm run deploy`
