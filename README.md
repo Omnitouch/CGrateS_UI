@@ -16,6 +16,10 @@ In order to use this tool your version of CGrateS must be later than [this commi
 
 If you are talking to a CGrateS instance other than `localhost`, the remote host must have HTTP TLS enabled, as if this page is rendered via HTTPS, all resources it accesses must be via HTTPS also.
 
+## Saving your CGrateS instances, Tenants and Credentials
+You might want to skip specifying the connection details every time you start the utility, if you're running a copy locally, you can modify [the config.json file in the public directory](https://github.com/Omnitouch/CGrateS_UI/blob/main/public/config.json) to specify what is set when the page is loaded.
+
+
 ## Usage
 
 Only certain functions / endpoints are exposed via this tool, it's in no way comprehensive.
@@ -33,10 +37,10 @@ If you're new to CGrateS, and want to learn more about it:
 Not all API endpoints are exposed here.
 So far what has been include is limited support for:
  * Searching and exporting CDRs
- * Viewing Rates / Least Cost Routes
+ * Viewing Accounts / Balances
+ * Viewing Routes / Least Cost Routes
  * Managing AttributeS
  * Managing FilterS
- * Viewing Accounts / Balances
  * Viewing Config
 
 

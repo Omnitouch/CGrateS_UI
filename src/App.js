@@ -220,7 +220,6 @@ function App() {
               <Nav.Link as={Link} to="/routes">Routes</Nav.Link>
               <Nav.Link as={Link} to="/attributes">Attributes</Nav.Link>
               <Nav.Link as={Link} to="/filters">Filters</Nav.Link>
-              <Nav.Link as={Link} to="/routes">Routes</Nav.Link>
               <Nav.Link as={Link} to="/config">Config</Nav.Link>
             </Nav>
             <Button variant="outline-info" onClick={handleOpenModal}>Connection to CGrateS: {testResult ? (testResult.includes('successful') ? 'Connected' : 'Disconnected') : 'Unknown'}          <span
