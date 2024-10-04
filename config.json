@@ -1,5 +1,5 @@
 {
-    "url": "http://1.2.3.4:2080",
+    "url": "http://localhost:2080",
     "tenants": "cgrates.org;test",
     "username": "admin",
     "password": "password123"
