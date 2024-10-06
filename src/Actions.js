@@ -89,7 +89,10 @@ const ActionsPage = ({ cgratesConfig }) => {
     const updatedAction = [...selectedAction];
     const fieldParts = field.split('.');
   
-    if (fieldParts.length === 2 && fieldParts[0] === 'Balance') {
+    // Check if we're editing the Balance.Value.Static field
+    if (fieldParts[0] === 'Balance' && fieldParts[1] === 'Value' && fieldParts[2] === 'Static') {
+      updatedAction[index].Balance.Value.Static = parseFloat(value) || 0; // Parse back to number
+    } else if (fieldParts.length === 2 && fieldParts[0] === 'Balance') {
       updatedAction[index].Balance = {
         ...updatedAction[index].Balance,
         [fieldParts[1]]: value,
@@ -100,6 +103,7 @@ const ActionsPage = ({ cgratesConfig }) => {
   
     setSelectedAction(updatedAction);
   };
+  
   
 
   const handleAddPart = () => {
@@ -404,16 +408,16 @@ const ActionsPage = ({ cgratesConfig }) => {
                   )}
                 </ListGroup.Item>
                 <ListGroup.Item>
-                  <strong>Balance Value:</strong>
-                  {isEditing ? (
+                <strong>Balance Value:</strong>
+                {isEditing ? (
                     <Form.Control
-                      type="number"
-                      value={part.Balance.Value.Static}
-                      onChange={(e) => handleEditChange(index, 'Balance.Value.Static', e.target.value)}
+                    type="text" // Temporarily switch to "text" for easier debugging
+                    value={part.Balance?.Value?.Static?.toString() || ''} // Convert to string for form input
+                    onChange={(e) => handleEditChange(index, 'Balance.Value.Static', e.target.value)}
                     />
-                  ) : (
-                    part.Balance.Value.Static
-                  )}
+                ) : (
+                    part.Balance?.Value?.Static || 0
+                )}
                 </ListGroup.Item>
                 <ListGroup.Item>
                   <strong>Balance Expiration Date:</strong>
@@ -427,6 +431,20 @@ const ActionsPage = ({ cgratesConfig }) => {
                     part.Balance.ExpirationDate || 'N/A'
                   )}
                 </ListGroup.Item>
+                <ListGroup.Item>
+                <strong>Extra Parameters:</strong>
+                {isEditing ? (
+                    <Form.Control
+                    as="textarea"
+                    rows={3}
+                    value={part.ExtraParameters ? JSON.stringify(JSON.parse(part.ExtraParameters), null, 2) : ''} // Parse JSON and pretty print
+                    onChange={(e) => handleEditChange(index, 'ExtraParameters', e.target.value)}
+                    />
+                ) : (
+                    <pre>{part.ExtraParameters ? JSON.stringify(JSON.parse(part.ExtraParameters), null, 2) : 'N/A'}</pre> // Pretty print JSON
+                )}
+                </ListGroup.Item>
+
             </ListGroup>
             </div>
         ))}
