@@ -85,25 +85,7 @@ const fetchActionDetails = async (actionId) => {
   
       const data = await response.json();
       if (data.result && data.result[0]) {
-        // Ensure ActionTimings and its fields have proper defaults for any null values
-        const actionPlan = data.result[0].ActionTimings.map(timing => ({
-          ...timing,
-          Timing: {
-            ...timing.Timing,
-            Timing: {
-              ...timing.Timing.Timing,
-              Years: timing.Timing.Timing.Years ?? '*any',
-              Months: timing.Timing.Timing.Months ?? '*any',
-              MonthDays: timing.Timing.Timing.MonthDays ?? '*any',
-              WeekDays: timing.Timing.Timing.WeekDays ?? '*any',
-              StartTime: timing.Timing.Timing.StartTime || '*now',
-              EndTime: timing.Timing.Timing.EndTime || '',
-            }
-          },
-          ActionsID: timing.ActionsID || '',
-          Weight: timing.Weight || 0
-        }));
-  
+        const actionPlan = data.result[0].ActionTimings || [];
         setSelectedAction(data.result[0]);
         setEditAction({ ...data.result[0], ActionTimings: actionPlan });
         setIsNew(false);
@@ -115,7 +97,6 @@ const fetchActionDetails = async (actionId) => {
       setIsLoading(false);
     }
   };
-  
 
   // Open modal to create a new action plan
   const openCreateNewActionModal = () => {
@@ -148,25 +129,25 @@ const fetchActionDetails = async (actionId) => {
     setEditAction({ ...editAction, [field]: value });
   };
 
-  // Handle changes to ActionPlan
-  const handlePlanChange = (planIndex, field, value) => {
-    const updatedActionPlan = [...editAction.ActionPlan];
-    updatedActionPlan[planIndex][field] = value;
-    setEditAction({ ...editAction, ActionPlan: updatedActionPlan });
+// Handle changes to editable action plan data
+const handlePlanChange = (index, field, value) => {
+    const updatedActionTimings = [...editAction.ActionTimings];
+    updatedActionTimings[index][field] = value; // Treat as freeform text
+    setEditAction({ ...editAction, ActionTimings: updatedActionTimings });
   };
-
+  
   // Add a new Action to the ActionPlan
   const addActionToPlan = () => {
     const newPlan = {
-      ActionsId: '',
-      Years: '*any',
-      Months: '*any',
-      MonthDays: '*any',
-      WeekDays: '*any',
-      Time: '*asap',
-      Weight: 0
+      ActionsID: '', // freeform text
+      Years: '*any', // freeform text
+      Months: '*any', // freeform text
+      MonthDays: '*any', // freeform text
+      WeekDays: '*any', // freeform text
+      Time: '*asap', // freeform text
+      Weight: '0' // freeform text
     };
-    setEditAction({ ...editAction, ActionPlan: [...editAction.ActionPlan, newPlan] });
+    setEditAction({ ...editAction, ActionTimings: [...editAction.ActionTimings, newPlan] });
   };
 
   // Remove an Action from the ActionPlan
@@ -324,7 +305,7 @@ const fetchActionDetails = async (actionId) => {
               <Form.Label>ID</Form.Label>
               <Form.Control 
                 type="text" 
-                value={editAction.Id} 
+                value={editAction.Id || ''} 
                 onChange={(e) => handleEditChange('Id', e.target.value)} 
               />
             </Form.Group>
@@ -344,63 +325,47 @@ const fetchActionDetails = async (actionId) => {
                   <Form.Label>Years</Form.Label>
                   <Form.Control 
                     type="text" 
-                    value={Array.isArray(timing.Timing.Timing.Years) ? timing.Timing.Timing.Years.join(', ') : '*any'} 
-                    onChange={(e) => handlePlanChange(index, 'Years', e.target.value.split(',').map(Number))} 
+                    value={timing.Years || '*any'} 
+                    onChange={(e) => handlePlanChange(index, 'Years', e.target.value)} 
                   />
                 </Form.Group>
                 <Form.Group>
                   <Form.Label>Months</Form.Label>
                   <Form.Control 
                     type="text" 
-                    value={Array.isArray(timing.Timing.Timing.Months) ? timing.Timing.Timing.Months.join(', ') : '*any'} 
-                    onChange={(e) => handlePlanChange(index, 'Months', e.target.value.split(',').map(Number))} 
+                    value={timing.Months || '*any'} 
+                    onChange={(e) => handlePlanChange(index, 'Months', e.target.value)} 
                   />
                 </Form.Group>
                 <Form.Group>
                   <Form.Label>Month Days</Form.Label>
                   <Form.Control 
                     type="text" 
-                    value={Array.isArray(timing.Timing.Timing.MonthDays) ? timing.Timing.Timing.MonthDays.join(', ') : '*any'} 
-                    onChange={(e) => handlePlanChange(index, 'MonthDays', e.target.value.split(',').map(Number))} 
+                    value={timing.MonthDays || '*any'} 
+                    onChange={(e) => handlePlanChange(index, 'MonthDays', e.target.value)} 
                   />
                 </Form.Group>
                 <Form.Group>
                   <Form.Label>Week Days</Form.Label>
                   <Form.Control 
                     type="text" 
-                    value={Array.isArray(timing.Timing.Timing.WeekDays) ? timing.Timing.Timing.WeekDays.join(', ') : '*any'} 
-                    onChange={(e) => handlePlanChange(index, 'WeekDays', e.target.value.split(',').map(Number))} 
+                    value={timing.WeekDays || '*any'} 
+                    onChange={(e) => handlePlanChange(index, 'WeekDays', e.target.value)} 
                   />
                 </Form.Group>
                 <Form.Group>
                   <Form.Label>Time</Form.Label>
                   <Form.Control 
                     type="text" 
-                    value={timing.Timing.Timing.ID || '*asap'} 
-                    onChange={(e) => handlePlanChange(index, 'ID', e.target.value)} 
-                  />
-                </Form.Group>
-                <Form.Group>
-                  <Form.Label>Start Time</Form.Label>
-                  <Form.Control 
-                    type="text" 
-                    value={timing.Timing.Timing.StartTime || '*now'} 
-                    onChange={(e) => handlePlanChange(index, 'StartTime', e.target.value)} 
-                  />
-                </Form.Group>
-                <Form.Group>
-                  <Form.Label>End Time</Form.Label>
-                  <Form.Control 
-                    type="text" 
-                    value={timing.Timing.Timing.EndTime || ''} 
-                    onChange={(e) => handlePlanChange(index, 'EndTime', e.target.value)} 
+                    value={timing.Time || '*asap'} 
+                    onChange={(e) => handlePlanChange(index, 'Time', e.target.value)} 
                   />
                 </Form.Group>
                 <Form.Group>
                   <Form.Label>Weight</Form.Label>
                   <Form.Control 
                     type="text" 
-                    value={timing.Weight || ''} 
+                    value={timing.Weight || '0'} 
                     onChange={(e) => handlePlanChange(index, 'Weight', e.target.value)} 
                   />
                 </Form.Group>
@@ -426,14 +391,12 @@ const fetchActionDetails = async (actionId) => {
                   <Accordion.Header><strong>ActionsID:</strong> {timing.ActionsID}</Accordion.Header>
                   <Accordion.Body>
                     <ListGroup variant="flush">
-                      <ListGroup.Item><strong>Years:</strong> {Array.isArray(timing.Timing.Timing.Years) ? timing.Timing.Timing.Years.join(', ') : '*any'}</ListGroup.Item>
-                      <ListGroup.Item><strong>Months:</strong> {Array.isArray(timing.Timing.Timing.Months) ? timing.Timing.Timing.Months.join(', ') : '*any'}</ListGroup.Item>
-                      <ListGroup.Item><strong>Month Days:</strong> {Array.isArray(timing.Timing.Timing.MonthDays) ? timing.Timing.Timing.MonthDays.join(', ') : '*any'}</ListGroup.Item>
-                      <ListGroup.Item><strong>Week Days:</strong> {Array.isArray(timing.Timing.Timing.WeekDays) ? timing.Timing.Timing.WeekDays.join(', ') : '*any'}</ListGroup.Item>
-                      <ListGroup.Item><strong>Time:</strong> {timing.Timing.Timing.ID || '*asap'}</ListGroup.Item>
-                      <ListGroup.Item><strong>Start Time:</strong> {timing.Timing.Timing.StartTime || '*now'}</ListGroup.Item>
-                      <ListGroup.Item><strong>End Time:</strong> {timing.Timing.Timing.EndTime || ''}</ListGroup.Item>
-                      <ListGroup.Item><strong>Weight:</strong> {timing.Weight || 0}</ListGroup.Item>
+                      <ListGroup.Item><strong>Years:</strong> {timing.Years || '*any'}</ListGroup.Item>
+                      <ListGroup.Item><strong>Months:</strong> {timing.Months || '*any'}</ListGroup.Item>
+                      <ListGroup.Item><strong>Month Days:</strong> {timing.MonthDays || '*any'}</ListGroup.Item>
+                      <ListGroup.Item><strong>Week Days:</strong> {timing.WeekDays || '*any'}</ListGroup.Item>
+                      <ListGroup.Item><strong>Time:</strong> {timing.Time || '*asap'}</ListGroup.Item>
+                      <ListGroup.Item><strong>Weight:</strong> {timing.Weight || '0'}</ListGroup.Item>
                     </ListGroup>
                   </Accordion.Body>
                 </Accordion.Item>
