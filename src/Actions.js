@@ -444,10 +444,20 @@ const ActionsPage = ({ cgratesConfig }) => {
                     <pre>{part.ExtraParameters ? JSON.stringify(JSON.parse(part.ExtraParameters), null, 2) : 'N/A'}</pre> // Pretty print JSON
                 )}
                 </ListGroup.Item>
-
+        {/* Add a "Remove Part" button */}
+        {isEditing && (
+          <Button variant="danger" onClick={() => handleRemovePart(index)} className="mt-2">
+            Remove Part
+          </Button>
+        )}
             </ListGroup>
             </div>
         ))}
+  {isEditing && (
+    <Button variant="primary" onClick={handleAddPart} className="mt-3">
+      Add New Part
+    </Button>
+  )}        
         </Modal.Body>
         <Modal.Footer>
         {isEditing ? (
