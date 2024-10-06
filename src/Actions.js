@@ -115,11 +115,32 @@ const ActionsPage = ({ cgratesConfig }) => {
     setError('');
 
     try {
-      // Ensure each action part has an Identifier, mapping it from ActionType
+      // Ensure each action part has an Identifier and map Balance fields correctly
       const updatedActions = selectedAction.map(part => {
+        const { Balance } = part;
+
+        // Map Balance.Value.Static to Units and remove null fields
+        const balanceData = Balance
+          ? {
+              BalanceId: Balance.ID || undefined,
+              BalanceType: Balance.Type || undefined,
+              Units: Balance.Value?.Static || undefined,
+              ExpiryTime: part.ExpirationString || undefined,
+              BalanceWeight: Balance.Weight || undefined,
+              // Convert DestinationIDs object to a semicolon-separated string
+              DestinationIDs: Balance.DestinationIDs && Object.keys(Balance.DestinationIDs).length > 0
+                ? Object.keys(Balance.DestinationIDs).join(';')
+                : undefined,
+            }
+          : {};
+
         return {
-          ...part,
-          Identifier: part.Identifier || part.ActionType, // Ensure Identifier is set, using ActionType as a fallback
+          Identifier: part.Identifier || part.ActionType, // Ensure Identifier is set
+          ExtraParameters: part.ExtraParameters || undefined,
+          Filters: part.Filters || undefined,
+          ExpirationString: part.ExpirationString || undefined,
+          Weight: part.Weight || undefined,
+          ...balanceData, // Include the formatted balance data
         };
       });
 
@@ -130,7 +151,7 @@ const ActionsPage = ({ cgratesConfig }) => {
             ActionsId: selectedAction[0].Id, // Set the ActionsId from the first part
             Tenant: searchParams.tenant || 'default_tenant', // Set the tenant
             Overwrite: true, // Set Overwrite to true
-            Actions: updatedActions, // Send the updated action details with Identifiers
+            Actions: updatedActions, // Send the updated action details with Units and formatted DestinationIDs
           },
         ],
       };
@@ -160,6 +181,7 @@ const ActionsPage = ({ cgratesConfig }) => {
       setIsLoading(false);
     }
   };
+
 
 
 
