@@ -4,6 +4,7 @@ import { Modal, Button, Navbar, Nav, Container, Form, Alert } from 'react-bootst
 import CDRs from './CDRs';
 import Accounts from './Accounts';
 import ActionPlans from './ActionPlans';
+import Actions from './Actions';
 import Attributes from './Attributes';
 import Filters from './Filters';
 import RouteS from './RouteS';
@@ -196,6 +197,7 @@ function App() {
         '/cdrs': 'CDRs - Omnitouch CGrateS UI',
         '/accounts': 'Accounts - Omnitouch CGrateS UI',
         '/action-plans': 'Action Plans - Omnitouch CGrateS UI',
+        '/actions': 'Actions - Omnitouch CGrateS UI',
         '/routes': 'Routes - Omnitouch CGrateS UI',
         '/attributes': 'Attributes - Omnitouch CGrateS UI',
         '/filters': 'Filters - Omnitouch CGrateS UI',
@@ -220,6 +222,7 @@ function App() {
               <Nav.Link as={Link} to="/cdrs">CDRs</Nav.Link>
               <Nav.Link as={Link} to="/accounts">Accounts</Nav.Link>
               <Nav.Link as={Link} to="/action-plans">Action Plans</Nav.Link>
+              <Nav.Link as={Link} to="/actions">Actions</Nav.Link>
               <Nav.Link as={Link} to="/routes">Routes</Nav.Link>
               <Nav.Link as={Link} to="/attributes">Attributes</Nav.Link>
               <Nav.Link as={Link} to="/filters">Filters</Nav.Link>
@@ -253,6 +256,7 @@ function App() {
           <Route path="/cdrs" element={<CDRs cgratesConfig={cgratesConfig} />} />
           <Route path="/accounts" element={<Accounts cgratesConfig={cgratesConfig} />} />
           <Route path="/action-plans" element={<ActionPlans cgratesConfig={cgratesConfig} />} />
+          <Route path="/actions" element={<Actions cgratesConfig={cgratesConfig} />} />
           <Route path="/routes" element={<RouteS cgratesConfig={cgratesConfig} />} />
           <Route path="/attributes" element={<Attributes cgratesConfig={cgratesConfig} />} />
           <Route path="/filters" element={<Filters cgratesConfig={cgratesConfig} />} />
