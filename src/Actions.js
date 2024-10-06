@@ -88,10 +88,12 @@ const ActionsPage = ({ cgratesConfig }) => {
     const handleEditChange = (index, field, value) => {
         const updatedAction = [...selectedAction];
         const fieldParts = field.split('.');
-
+    
         // Check if we're editing the Balance.Value.Static field
         if (fieldParts[0] === 'Balance' && fieldParts[1] === 'Value' && fieldParts[2] === 'Static') {
             updatedAction[index].Balance.Value.Static = parseFloat(value) || 0; // Parse back to number
+        } else if (field === 'Weight') {
+            updatedAction[index].Weight = parseFloat(value) || 0; // Ensure Weight is saved as a number
         } else if (fieldParts.length === 2 && fieldParts[0] === 'Balance') {
             updatedAction[index].Balance = {
                 ...updatedAction[index].Balance,
@@ -100,9 +102,10 @@ const ActionsPage = ({ cgratesConfig }) => {
         } else {
             updatedAction[index][field] = value;
         }
-
+    
         setSelectedAction(updatedAction);
     };
+    
 
 
 
