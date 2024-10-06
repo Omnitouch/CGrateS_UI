@@ -176,7 +176,7 @@ const Attributes = ({ cgratesConfig }) => {
 
   // Handle changes to FilterIDs (Attribute level)
   const handleFilterIDChange = (filterIndex, newValue) => {
-    const updatedFilterIDs = [...editAttribute.FilterIDs];
+    const updatedFilterIDs = [...(editAttribute.FilterIDs || [])];
     updatedFilterIDs[filterIndex] = newValue;
     setEditAttribute({ ...editAttribute, FilterIDs: updatedFilterIDs });
   };
@@ -184,13 +184,15 @@ const Attributes = ({ cgratesConfig }) => {
   // Handle changes to FilterIDs (Rule level)
   const handleRuleFilterIDChange = (attrIndex, filterIndex, newValue) => {
     const updatedAttributes = [...editAttribute.Attributes];
-    updatedAttributes[attrIndex].FilterIDs[filterIndex] = newValue;
+    const updatedFilterIDs = [...(updatedAttributes[attrIndex].FilterIDs || [])];
+    updatedFilterIDs[filterIndex] = newValue;
+    updatedAttributes[attrIndex].FilterIDs = updatedFilterIDs;
     setEditAttribute({ ...editAttribute, Attributes: updatedAttributes });
   };
 
   // Add new FilterID at the Attribute level
   const addFilterID = () => {
-    const updatedFilterIDs = [...editAttribute.FilterIDs];
+    const updatedFilterIDs = [...(editAttribute.FilterIDs || [])];
     updatedFilterIDs.push(''); // Add empty FilterID
     setEditAttribute({ ...editAttribute, FilterIDs: updatedFilterIDs });
   };
@@ -198,13 +200,15 @@ const Attributes = ({ cgratesConfig }) => {
   // Add new FilterID at the Rule level
   const addRuleFilterID = (attrIndex) => {
     const updatedAttributes = [...editAttribute.Attributes];
-    updatedAttributes[attrIndex].FilterIDs.push(''); // Add empty FilterID
+    const updatedFilterIDs = [...(updatedAttributes[attrIndex].FilterIDs || [])];
+    updatedFilterIDs.push(''); // Add empty FilterID
+    updatedAttributes[attrIndex].FilterIDs = updatedFilterIDs;
     setEditAttribute({ ...editAttribute, Attributes: updatedAttributes });
   };
 
   // Remove a FilterID from the Attribute level
   const removeFilterID = (filterIndex) => {
-    const updatedFilterIDs = [...editAttribute.FilterIDs];
+    const updatedFilterIDs = [...(editAttribute.FilterIDs || [])];
     updatedFilterIDs.splice(filterIndex, 1);
     setEditAttribute({ ...editAttribute, FilterIDs: updatedFilterIDs });
   };
@@ -212,7 +216,9 @@ const Attributes = ({ cgratesConfig }) => {
   // Remove a FilterID from the Rule level
   const removeRuleFilterID = (attrIndex, filterIndex) => {
     const updatedAttributes = [...editAttribute.Attributes];
-    updatedAttributes[attrIndex].FilterIDs.splice(filterIndex, 1);
+    const updatedFilterIDs = [...(updatedAttributes[attrIndex].FilterIDs || [])];
+    updatedFilterIDs.splice(filterIndex, 1);
+    updatedAttributes[attrIndex].FilterIDs = updatedFilterIDs;
     setEditAttribute({ ...editAttribute, Attributes: updatedAttributes });
   };
 
@@ -359,7 +365,7 @@ const Attributes = ({ cgratesConfig }) => {
                     </Form.Group>
 
                     <h5>Edit Attribute-Level FilterIDs</h5>
-                    {editAttribute.FilterIDs.map((filterID, filterIndex) => (
+                    {(editAttribute.FilterIDs || []).map((filterID, filterIndex) => (
                       <div key={filterIndex} style={{ display: 'flex', marginBottom: '5px' }}>
                         <Form.Control
                           type="text"
@@ -416,7 +422,7 @@ const Attributes = ({ cgratesConfig }) => {
                         <Button onClick={() => addValue(index)}>Add Rule</Button>
 
                         <h5>Rule-Level FilterIDs</h5>
-                        {attr.FilterIDs.map((filterID, filterIndex) => (
+                        {(attr.FilterIDs || []).map((filterID, filterIndex) => (
                           <div key={filterIndex} style={{ display: 'flex', marginBottom: '5px' }}>
                             <Form.Control
                               type="text"
@@ -446,7 +452,7 @@ const Attributes = ({ cgratesConfig }) => {
 
                     <h5>Attribute-Level FilterIDs</h5>
                     <ListGroup className="mb-3">
-                      {editAttribute.FilterIDs.length > 0 ? (
+                      {editAttribute.FilterIDs && editAttribute.FilterIDs.length > 0 ? (
                         <ListGroup.Item><strong>FilterIDs:</strong> {editAttribute.FilterIDs.join(', ')}</ListGroup.Item>
                       ) : (
                         <ListGroup.Item>No FilterIDs</ListGroup.Item>
@@ -469,7 +475,7 @@ const Attributes = ({ cgratesConfig }) => {
                                   </div>
                                 ))}
                               </ListGroup.Item>
-                              {attr.FilterIDs.length > 0 && (
+                              {attr.FilterIDs && attr.FilterIDs.length > 0 && (
                                 <ListGroup.Item><strong>Rule-Level Filter IDs:</strong> {attr.FilterIDs.join(', ')}</ListGroup.Item>
                               )}
                             </ListGroup>
