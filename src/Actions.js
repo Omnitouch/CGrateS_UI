@@ -64,16 +64,43 @@ const ActionsPage = ({ cgratesConfig }) => {
   };
 
   const handleRowClick = (actionDetails) => {
-    setSelectedAction(actionDetails);
+    const updatedActionDetails = actionDetails.map(part => {
+      const { Balance } = part;
+      return {
+        ...part,
+        // Convert DestinationIDs object back into a string for display/editing
+        Balance: Balance
+          ? {
+              ...Balance,
+              DestinationIDs: typeof Balance.DestinationIDs === 'object'
+                ? Object.keys(Balance.DestinationIDs).join(';')
+                : Balance.DestinationIDs,
+            }
+          : part.Balance,
+      };
+    });
+
+    setSelectedAction(updatedActionDetails);
     setShowModal(true);
     setIsEditing(false); // Start in view mode
   };
 
   const handleEditChange = (index, field, value) => {
     const updatedAction = [...selectedAction];
-    updatedAction[index][field] = value;
+    const fieldParts = field.split('.');
+  
+    if (fieldParts.length === 2 && fieldParts[0] === 'Balance') {
+      updatedAction[index].Balance = {
+        ...updatedAction[index].Balance,
+        [fieldParts[1]]: value,
+      };
+    } else {
+      updatedAction[index][field] = value;
+    }
+  
     setSelectedAction(updatedAction);
   };
+  
 
   const handleAddPart = () => {
     const newPart = {
@@ -115,11 +142,10 @@ const ActionsPage = ({ cgratesConfig }) => {
     setError('');
 
     try {
-      // Ensure each action part has an Identifier and map Balance fields correctly
       const updatedActions = selectedAction.map(part => {
         const { Balance } = part;
 
-        // Map Balance.Value.Static to Units and remove null fields
+        // Convert Balance fields for saving
         const balanceData = Balance
           ? {
               BalanceId: Balance.ID || undefined,
@@ -127,10 +153,10 @@ const ActionsPage = ({ cgratesConfig }) => {
               Units: Balance.Value?.Static || undefined,
               ExpiryTime: part.ExpirationString || undefined,
               BalanceWeight: Balance.Weight || undefined,
-              // Convert DestinationIDs object to a semicolon-separated string
-              DestinationIDs: Balance.DestinationIDs && Object.keys(Balance.DestinationIDs).length > 0
+              // Convert DestinationIDs object to semicolon-separated string if not already a string
+              DestinationIDs: typeof Balance.DestinationIDs === 'object'
                 ? Object.keys(Balance.DestinationIDs).join(';')
-                : undefined,
+                : Balance.DestinationIDs || undefined,
             }
           : {};
 
@@ -140,7 +166,7 @@ const ActionsPage = ({ cgratesConfig }) => {
           Filters: part.Filters || undefined,
           ExpirationString: part.ExpirationString || undefined,
           Weight: part.Weight || undefined,
-          ...balanceData, // Include the formatted balance data
+          ...balanceData, // Include formatted balance data
         };
       });
 
@@ -148,10 +174,10 @@ const ActionsPage = ({ cgratesConfig }) => {
         method: 'ApierV1.SetActions',
         params: [
           {
-            ActionsId: selectedAction[0].Id, // Set the ActionsId from the first part
-            Tenant: searchParams.tenant || 'default_tenant', // Set the tenant
-            Overwrite: true, // Set Overwrite to true
-            Actions: updatedActions, // Send the updated action details with Units and formatted DestinationIDs
+            ActionsId: selectedAction[0].Id,
+            Tenant: searchParams.tenant || 'default_tenant',
+            Overwrite: true,
+            Actions: updatedActions,
           },
         ],
       };
@@ -171,8 +197,8 @@ const ActionsPage = ({ cgratesConfig }) => {
       const data = await response.json();
       if (data.result) {
         console.log('Action saved successfully');
-        fetchActions(); // Refresh the list of actions
-        setShowModal(false); // Close modal after saving
+        fetchActions(); // Refresh actions list
+        setShowModal(false); // Close modal
       }
     } catch (error) {
       console.error('Error saving action:', error);
@@ -181,9 +207,6 @@ const ActionsPage = ({ cgratesConfig }) => {
       setIsLoading(false);
     }
   };
-
-
-
 
 
   const handleCreateNewAction = () => {
@@ -280,45 +303,45 @@ const ActionsPage = ({ cgratesConfig }) => {
         </Table>
       )}
 
-      {/* Modal for displaying and editing the selected action details */}
-      <Modal show={showModal} onHide={handleCloseModal} size="lg">
+    <Modal show={showModal} onHide={handleCloseModal} size="lg">
         <Modal.Header closeButton>
-          <Modal.Title>{isEditing ? 'Edit Action' : 'Action Details'}</Modal.Title>
+        <Modal.Title>{isEditing ? 'Edit Action' : 'Action Details'}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          {selectedAction && selectedAction.map((part, index) => (
+        {selectedAction && selectedAction.map((part, index) => (
             <div key={index} className="mb-4">
-              <h5>Part {index + 1}</h5>
-              <ListGroup>
+            <h5>Part {index + 1}</h5>
+            <ListGroup>
                 <ListGroup.Item>
-                  <strong>ActionType:</strong>
-                  {isEditing ? (
+                <strong>ActionType:</strong>
+                {isEditing ? (
                     <Form.Control
-                      as="select"
-                      value={part.ActionType}
-                      onChange={(e) => handleEditChange(index, 'ActionType', e.target.value)}
+                    as="select"
+                    value={part.ActionType}
+                    onChange={(e) => handleEditChange(index, 'ActionType', e.target.value)}
                     >
-                      {actionTypes.map((type, idx) => (
+                    {actionTypes.map((type, idx) => (
                         <option key={idx} value={type}>
-                          {type}
+                        {type}
                         </option>
-                      ))}
+                    ))}
                     </Form.Control>
-                  ) : (
+                ) : (
                     part.ActionType
-                  )}
+                )}
                 </ListGroup.Item>
+
                 <ListGroup.Item>
-                  <strong>ExtraParameters:</strong>
-                  {isEditing ? (
+                <strong>DestinationIDs:</strong>
+                {isEditing ? (
                     <Form.Control
-                      type="text"
-                      value={part.ExtraParameters}
-                      onChange={(e) => handleEditChange(index, 'ExtraParameters', e.target.value)}
+                    type="text"
+                    value={part.Balance?.DestinationIDs || ''}
+                    onChange={(e) => handleEditChange(index, 'Balance.DestinationIDs', e.target.value)}
                     />
-                  ) : (
-                    part.ExtraParameters || 'N/A'
-                  )}
+                ) : (
+                    part.Balance?.DestinationIDs || 'N/A'
+                )}
                 </ListGroup.Item>
                 <ListGroup.Item>
                   <strong>Filters:</strong>
@@ -357,16 +380,16 @@ const ActionsPage = ({ cgratesConfig }) => {
                   )}
                 </ListGroup.Item>
                 <ListGroup.Item>
-                  <strong>Balance ID:</strong>
-                  {isEditing ? (
+                <strong>Balance ID:</strong>
+                {isEditing ? (
                     <Form.Control
-                      type="text"
-                      value={part.Balance.ID}
-                      onChange={(e) => handleEditChange(index, 'Balance.ID', e.target.value)}
+                    type="text"
+                    value={part.Balance?.ID || ''}
+                    onChange={(e) => handleEditChange(index, 'Balance.ID', e.target.value)}
                     />
-                  ) : (
-                    part.Balance.ID || 'N/A'
-                  )}
+                ) : (
+                    part.Balance?.ID || 'N/A'
+                )}
                 </ListGroup.Item>
                 <ListGroup.Item>
                   <strong>Balance Type:</strong>
@@ -404,35 +427,25 @@ const ActionsPage = ({ cgratesConfig }) => {
                     part.Balance.ExpirationDate || 'N/A'
                   )}
                 </ListGroup.Item>
-              </ListGroup>
-              {isEditing && (
-                <Button className="mt-2" variant="danger" onClick={() => handleRemovePart(index)}>
-                  Remove Part
-                </Button>
-              )}
+            </ListGroup>
             </div>
-          ))}
-          {isEditing && (
-            <Button className="mt-3" variant="primary" onClick={handleAddPart}>
-              Add Part
-            </Button>
-          )}
+        ))}
         </Modal.Body>
         <Modal.Footer>
-          {isEditing ? (
+        {isEditing ? (
             <Button variant="primary" onClick={handleSaveAction}>
-              Save Changes
+            Save Changes
             </Button>
-          ) : (
+        ) : (
             <Button variant="secondary" onClick={() => setIsEditing(true)}>
-              Edit
+            Edit
             </Button>
-          )}
-          <Button variant="secondary" onClick={handleCloseModal}>
+        )}
+        <Button variant="secondary" onClick={handleCloseModal}>
             Close
-          </Button>
+        </Button>
         </Modal.Footer>
-      </Modal>
+    </Modal>
     </Container>
   );
 };
