@@ -63,20 +63,40 @@ const ActionsPage = ({ cgratesConfig }) => {
         }
     };
 
+    const isValidJson = (str) => {
+        try {
+            JSON.parse(str);
+        } catch (e) {
+            return false;
+        }
+        return true;
+    };
+
+
     const handleRowClick = (actionDetails) => {
         const updatedActionDetails = actionDetails.map(part => {
-            const { Balance } = part;
+            const { Balance, ExtraParameters } = part;
+
+            // Convert DestinationIDs object back into a string for display/editing
+            const updatedBalance = Balance ? {
+                ...Balance,
+                DestinationIDs: typeof Balance.DestinationIDs === 'object'
+                    ? Object.keys(Balance.DestinationIDs).join(';')
+                    : Balance.DestinationIDs,
+            } : part.Balance;
+
+            // Safely handle ExtraParameters: parse if it's JSON, otherwise keep as a string
+            let parsedExtraParameters = ExtraParameters;
+            if (isValidJson(ExtraParameters)) {
+                parsedExtraParameters = JSON.stringify(JSON.parse(ExtraParameters), null, 2); // Pretty-print JSON
+            } else {
+                parsedExtraParameters = ExtraParameters; // Keep as-is if not valid JSON
+            }
+
             return {
                 ...part,
-                // Convert DestinationIDs object back into a string for display/editing
-                Balance: Balance
-                    ? {
-                        ...Balance,
-                        DestinationIDs: typeof Balance.DestinationIDs === 'object'
-                            ? Object.keys(Balance.DestinationIDs).join(';')
-                            : Balance.DestinationIDs,
-                    }
-                    : part.Balance,
+                Balance: updatedBalance,
+                ExtraParameters: parsedExtraParameters,
             };
         });
 
@@ -85,10 +105,12 @@ const ActionsPage = ({ cgratesConfig }) => {
         setIsEditing(false); // Start in view mode
     };
 
+
+
     const handleEditChange = (index, field, value) => {
         const updatedAction = [...selectedAction];
         const fieldParts = field.split('.');
-    
+
         // Check if we're editing the Balance.Value.Static field
         if (fieldParts[0] === 'Balance' && fieldParts[1] === 'Value' && fieldParts[2] === 'Static') {
             updatedAction[index].Balance.Value.Static = parseFloat(value) || 0; // Parse back to number
@@ -102,10 +124,10 @@ const ActionsPage = ({ cgratesConfig }) => {
         } else {
             updatedAction[index][field] = value;
         }
-    
+
         setSelectedAction(updatedAction);
     };
-    
+
 
 
 
@@ -444,13 +466,14 @@ const ActionsPage = ({ cgratesConfig }) => {
                                         <Form.Control
                                             as="textarea"
                                             rows={3}
-                                            value={part.ExtraParameters ? JSON.stringify(JSON.parse(part.ExtraParameters), null, 2) : ''} // Parse JSON and pretty print
+                                            value={typeof part.ExtraParameters === 'string' ? part.ExtraParameters : JSON.stringify(part.ExtraParameters, null, 2)}
                                             onChange={(e) => handleEditChange(index, 'ExtraParameters', e.target.value)}
                                         />
                                     ) : (
-                                        <pre>{part.ExtraParameters ? JSON.stringify(JSON.parse(part.ExtraParameters), null, 2) : 'N/A'}</pre> // Pretty print JSON
+                                        <pre>{typeof part.ExtraParameters === 'string' ? part.ExtraParameters : JSON.stringify(part.ExtraParameters, null, 2)}</pre>
                                     )}
                                 </ListGroup.Item>
+
                                 {/* Add a "Remove Part" button */}
                                 {isEditing && (
                                     <Button variant="danger" onClick={() => handleRemovePart(index)} className="mt-2">
