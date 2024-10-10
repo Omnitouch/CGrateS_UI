@@ -117,6 +117,44 @@ const GetAccounts = ({ cgratesConfig }) => {
     }
   };
 
+  const removeAccount = async (tenant, account) => {
+
+    const removeQuery = {
+      method: 'ApierV1.RemoveAccount',
+      params: [{
+        Tenant: tenant,
+        Account: account,
+        ReloadScheduler: true
+      }],
+      id: 3
+    };
+
+    console.log(`Removing account: ${account}`);
+
+    try {
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(removeQuery),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Account removed successfully:', data);
+
+      // Refresh results after removing an account
+      fetchResults(currentPage);
+      handleCloseModal(); // Close the modal after deleting the account
+    } catch (error) {
+      console.error('Error removing account:', error);
+    }
+  };
+
   const handleSubmit = (event) => {
     event.preventDefault();
     setCurrentPage(1); // Reset to the first page
@@ -127,9 +165,11 @@ const GetAccounts = ({ cgratesConfig }) => {
     setSelectedRowData(rowData);
     // Split the ID to get tenant and account
     const [tenant, account] = rowData.ID.split(':');
+    setAccountDetails({ Tenant: tenant, Account: account }); // Set the tenant and account details in state
     setShowModal(true);
     fetchAccountDetails(tenant, account); // Fetch additional account details
   };
+  
 
   const handleBalanceClick = (balance) => {
     setSelectedBalance(balance);
@@ -260,7 +300,7 @@ const GetAccounts = ({ cgratesConfig }) => {
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan="5" className="text-center">No results available</td>
+                    <td colSpan="4" className="text-center">No results available</td>
                   </tr>
                 )}
               </tbody>
@@ -316,6 +356,13 @@ const GetAccounts = ({ cgratesConfig }) => {
           )}
         </Modal.Body>
         <Modal.Footer>
+        <Button
+          variant="danger"
+          onClick={() => removeAccount(selectedRowData.ID.split(':')[0], selectedRowData.ID.split(':')[1])}
+        >
+          Delete Account
+        </Button>
+
           <Button variant="secondary" onClick={handleCloseModal}>
             Close
           </Button>
