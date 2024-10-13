@@ -10,6 +10,8 @@ const GetTPIDs = ({ cgratesConfig }) => {
   const [modalData, setModalData] = useState(null); // State to store data for the modal
   const [showDestinationModal, setShowDestinationModal] = useState(false);
   const [destinationData, setDestinationData] = useState(null); // State to store data for the destination modal
+  const [showRateModal, setShowRateModal] = useState(false);
+  const [rateData, setRateData] = useState(null); // State to store data for the rate modal
 
   useEffect(() => {
     // Fetch the TPIDs when the component mounts
@@ -169,12 +171,53 @@ const GetTPIDs = ({ cgratesConfig }) => {
     }
   };
 
+  const fetchRateData = async (tpid, rateId) => {
+    const newQuery = {
+      jsonrpc: '2.0',
+      method: 'ApierV1.GetTPRate',
+      params: [{
+        TPid: tpid,
+        ID: rateId,
+      }],
+    };
+
+    console.log(`Fetching rate data for TPID: ${tpid}, Rate ID: ${rateId}`);
+
+    try {
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newQuery),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Rate data fetched successfully:', data);
+
+      if (data && data.result) {
+        setRateData(data.result); // Store the fetched data in state
+        setShowRateModal(true); // Show the rate modal
+      }
+    } catch (error) {
+      console.error('Error fetching rate data:', error);
+    }
+  };
+
   const handleRowClick = (rateID) => {
     fetchModalData(selectedTPID, rateID);
   };
 
   const handleDestinationClick = (destinationId) => {
     fetchDestinationData(selectedTPID, destinationId);
+  };
+
+  const handleRateClick = (rateId) => {
+    fetchRateData(selectedTPID, rateId);
   };
 
   const handleSubmit = (event) => {
@@ -190,6 +233,11 @@ const GetTPIDs = ({ cgratesConfig }) => {
   const handleCloseDestinationModal = () => {
     setShowDestinationModal(false);
     setDestinationData(null);
+  };
+
+  const handleCloseRateModal = () => {
+    setShowRateModal(false);
+    setRateData(null);
   };
 
   return (
@@ -273,7 +321,7 @@ const GetTPIDs = ({ cgratesConfig }) => {
                   {modalData.DestinationRates.map((rate, index) => (
                     <tr key={index} onClick={() => handleDestinationClick(rate.DestinationId)} style={{ cursor: 'pointer' }}>
                       <td>{rate.DestinationId}</td>
-                      <td>{rate.RateId}</td>
+                      <td onClick={() => handleRateClick(rate.RateId)} style={{ cursor: 'pointer' }}>{rate.RateId}</td>
                       <td>{rate.RoundingMethod}</td>
                       <td>{rate.RoundingDecimals}</td>
                       <td>{rate.MaxCost}</td>
@@ -317,6 +365,30 @@ const GetTPIDs = ({ cgratesConfig }) => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={handleCloseDestinationModal}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal for Rate Data */}
+      <Modal show={showRateModal} onHide={handleCloseRateModal} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Rate Details</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {rateData ? (
+            <div>
+              <p><strong>TPID:</strong> {rateData.TPid}</p>
+              <p><strong>ID:</strong> {rateData.ID}</p>
+              <p><strong>Rate Details:</strong></p>
+              <pre>{JSON.stringify(rateData, null, 2)}</pre>
+            </div>
+          ) : (
+            <p>No data available for this rate.</p>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleCloseRateModal}>
             Close
           </Button>
         </Modal.Footer>
