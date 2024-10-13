@@ -1,20 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Button, Container, Row, Col, Table, Pagination, Modal, Spinner } from 'react-bootstrap';
+import { Form, Button, Container, Row, Col, Table, Spinner, Modal, Accordion } from 'react-bootstrap';
 
 const GetTPIDs = ({ cgratesConfig }) => {
-  const [tpids, setTPIDs] = useState([]); // Store TPIDs fetched from API
+  const [tpids, setTPIDs] = useState([]);
   const [selectedTPID, setSelectedTPID] = useState('');
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [modalData, setModalData] = useState(null); // State to store data for the modal
-  const [showDestinationModal, setShowDestinationModal] = useState(false);
-  const [destinationData, setDestinationData] = useState(null); // State to store data for the destination modal
-  const [showRateModal, setShowRateModal] = useState(false);
-  const [rateData, setRateData] = useState(null); // State to store data for the rate modal
+  const [modalData, setModalData] = useState(null);
+  const [expandedRateId, setExpandedRateId] = useState(null);
+  const [expandedDestinationId, setExpandedDestinationId] = useState(null);
+  const [destinationDetails, setDestinationDetails] = useState(null);
+  const [rateDetails, setRateDetails] = useState(null);
 
   useEffect(() => {
-    // Fetch the TPIDs when the component mounts
     const fetchTPIDs = async () => {
       const newQuery = {
         method: 'APIerSv1.GetTPIds',
@@ -35,10 +34,8 @@ const GetTPIDs = ({ cgratesConfig }) => {
         }
 
         const data = await response.json();
-        console.log('TPIDs fetched successfully:', data);
-
         if (data && data.result) {
-          setTPIDs(data.result); // Store the fetched TPIDs in state
+          setTPIDs(data.result);
         }
       } catch (error) {
         console.error('Error fetching TPIDs:', error);
@@ -56,7 +53,7 @@ const GetTPIDs = ({ cgratesConfig }) => {
   const fetchResults = async () => {
     if (!selectedTPID) return;
     setIsLoading(true);
-    setResults([]); // Clear the current results
+    setResults([]);
 
     const newQuery = {
       jsonrpc: '2.0',
@@ -65,8 +62,6 @@ const GetTPIDs = ({ cgratesConfig }) => {
         TPid: selectedTPID,
       }],
     };
-
-    console.log(`Fetching destination rate IDs for TPID: ${selectedTPID}`);
 
     try {
       const response = await fetch(cgratesConfig.url + '/jsonrpc', {
@@ -82,10 +77,8 @@ const GetTPIDs = ({ cgratesConfig }) => {
       }
 
       const data = await response.json();
-      console.log('Destination rate IDs fetched successfully:', data);
-
       if (data && data.result) {
-        setResults(data.result); // Handle the fetched results
+        setResults(data.result);
       } else {
         setResults([]);
       }
@@ -107,8 +100,6 @@ const GetTPIDs = ({ cgratesConfig }) => {
       }],
     };
 
-    console.log(`Fetching destination rate data for TPID: ${tpid}, ID: ${id}`);
-
     try {
       const response = await fetch(cgratesConfig.url + '/jsonrpc', {
         method: 'POST',
@@ -123,18 +114,16 @@ const GetTPIDs = ({ cgratesConfig }) => {
       }
 
       const data = await response.json();
-      console.log('Destination rate data fetched successfully:', data);
-
       if (data && data.result) {
-        setModalData(data.result); // Store the fetched data in state
-        setShowModal(true); // Show the modal
+        setModalData(data.result);
+        setShowModal(true);
       }
     } catch (error) {
       console.error('Error fetching destination rate data:', error);
     }
   };
 
-  const fetchDestinationData = async (tpid, destinationId) => {
+  const fetchDestinationDetails = async (tpid, destinationId) => {
     const newQuery = {
       jsonrpc: '2.0',
       method: 'ApierV1.GetTPDestination',
@@ -144,8 +133,6 @@ const GetTPIDs = ({ cgratesConfig }) => {
       }],
     };
 
-    console.log(`Fetching destination data for TPID: ${tpid}, Destination ID: ${destinationId}`);
-
     try {
       const response = await fetch(cgratesConfig.url + '/jsonrpc', {
         method: 'POST',
@@ -160,18 +147,15 @@ const GetTPIDs = ({ cgratesConfig }) => {
       }
 
       const data = await response.json();
-      console.log('Destination data fetched successfully:', data);
-
       if (data && data.result) {
-        setDestinationData(data.result); // Store the fetched data in state
-        setShowDestinationModal(true); // Show the destination modal
+        setDestinationDetails(data.result);
       }
     } catch (error) {
-      console.error('Error fetching destination data:', error);
+      console.error('Error fetching destination details:', error);
     }
   };
 
-  const fetchRateData = async (tpid, rateId) => {
+  const fetchRateDetails = async (tpid, rateId) => {
     const newQuery = {
       jsonrpc: '2.0',
       method: 'ApierV1.GetTPRate',
@@ -181,8 +165,6 @@ const GetTPIDs = ({ cgratesConfig }) => {
       }],
     };
 
-    console.log(`Fetching rate data for TPID: ${tpid}, Rate ID: ${rateId}`);
-
     try {
       const response = await fetch(cgratesConfig.url + '/jsonrpc', {
         method: 'POST',
@@ -197,27 +179,36 @@ const GetTPIDs = ({ cgratesConfig }) => {
       }
 
       const data = await response.json();
-      console.log('Rate data fetched successfully:', data);
-
       if (data && data.result) {
-        setRateData(data.result); // Store the fetched data in state
-        setShowRateModal(true); // Show the rate modal
+        setRateDetails(data.result);
       }
     } catch (error) {
-      console.error('Error fetching rate data:', error);
+      console.error('Error fetching rate details:', error);
+    }
+  };
+
+  const toggleRateDetails = (rateId) => {
+    if (rateId === expandedRateId) {
+      setExpandedRateId(null);
+      setRateDetails(null);
+    } else {
+      setExpandedRateId(rateId);
+      fetchRateDetails(selectedTPID, rateId);
+    }
+  };
+
+  const toggleDestinationDetails = (destinationId) => {
+    if (destinationId === expandedDestinationId) {
+      setExpandedDestinationId(null);
+      setDestinationDetails(null);
+    } else {
+      setExpandedDestinationId(destinationId);
+      fetchDestinationDetails(selectedTPID, destinationId);
     }
   };
 
   const handleRowClick = (rateID) => {
     fetchModalData(selectedTPID, rateID);
-  };
-
-  const handleDestinationClick = (destinationId) => {
-    fetchDestinationData(selectedTPID, destinationId);
-  };
-
-  const handleRateClick = (rateId) => {
-    fetchRateData(selectedTPID, rateId);
   };
 
   const handleSubmit = (event) => {
@@ -228,16 +219,6 @@ const GetTPIDs = ({ cgratesConfig }) => {
   const handleCloseModal = () => {
     setShowModal(false);
     setModalData(null);
-  };
-
-  const handleCloseDestinationModal = () => {
-    setShowDestinationModal(false);
-    setDestinationData(null);
-  };
-
-  const handleCloseRateModal = () => {
-    setShowRateModal(false);
-    setRateData(null);
   };
 
   return (
@@ -298,14 +279,12 @@ const GetTPIDs = ({ cgratesConfig }) => {
       {/* Modal for Destination Rate Data */}
       <Modal show={showModal} onHide={handleCloseModal} size="lg">
         <Modal.Header closeButton>
-          <Modal.Title>Destination Rate Details</Modal.Title>
+          <Modal.Title>Destination Rate Details: {modalData?.ID}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {modalData ? (
             <div>
               <p><strong>TPID:</strong> {modalData.TPid}</p>
-              <p><strong>ID:</strong> {modalData.ID}</p>
-              <p><strong>Destination Rates:</strong></p>
               <Table striped bordered hover>
                 <thead>
                   <tr>
@@ -319,9 +298,19 @@ const GetTPIDs = ({ cgratesConfig }) => {
                 </thead>
                 <tbody>
                   {modalData.DestinationRates.map((rate, index) => (
-                    <tr key={index} onClick={() => handleDestinationClick(rate.DestinationId)} style={{ cursor: 'pointer' }}>
-                      <td>{rate.DestinationId}</td>
-                      <td onClick={() => handleRateClick(rate.RateId)} style={{ cursor: 'pointer' }}>{rate.RateId}</td>
+                    <tr key={index}>
+                      <td
+                        onClick={() => toggleDestinationDetails(rate.DestinationId)}
+                        style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                      >
+                        {rate.DestinationId}
+                      </td>
+                      <td
+                        onClick={() => toggleRateDetails(rate.RateId)}
+                        style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                      >
+                        {rate.RateId}
+                      </td>
                       <td>{rate.RoundingMethod}</td>
                       <td>{rate.RoundingDecimals}</td>
                       <td>{rate.MaxCost}</td>
@@ -330,6 +319,44 @@ const GetTPIDs = ({ cgratesConfig }) => {
                   ))}
                 </tbody>
               </Table>
+
+              <Accordion>
+                {expandedDestinationId && (
+                  <Accordion.Item eventKey="0">
+                    <Accordion.Header>
+                      Destination Details (ID: {expandedDestinationId})
+                    </Accordion.Header>
+                    <Accordion.Body>
+                      {destinationDetails ? (
+                        <div>
+                          <p><strong>Destination ID:</strong> {destinationDetails.ID}</p>
+                          <p><strong>Prefixes:</strong> {destinationDetails.Prefixes.join(', ')}</p>
+                        </div>
+                      ) : (
+                        <Spinner animation="border" role="status">
+                          <span className="sr-only">Loading...</span>
+                        </Spinner>
+                      )}
+                    </Accordion.Body>
+                  </Accordion.Item>
+                )}
+                {expandedRateId && (
+                  <Accordion.Item eventKey="1">
+                    <Accordion.Header>
+                      Rate Details (ID: {expandedRateId})
+                    </Accordion.Header>
+                    <Accordion.Body>
+                      {rateDetails ? (
+                        <pre>{JSON.stringify(rateDetails, null, 2)}</pre>
+                      ) : (
+                        <Spinner animation="border" role="status">
+                          <span className="sr-only">Loading...</span>
+                        </Spinner>
+                      )}
+                    </Accordion.Body>
+                  </Accordion.Item>
+                )}
+              </Accordion>
             </div>
           ) : (
             <p>No data available for this destination rate.</p>
@@ -337,58 +364,6 @@ const GetTPIDs = ({ cgratesConfig }) => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={handleCloseModal}>
-            Close
-          </Button>
-        </Modal.Footer>
-      </Modal>
-
-      {/* Modal for Destination Data */}
-      <Modal show={showDestinationModal} onHide={handleCloseDestinationModal} size="lg">
-        <Modal.Header closeButton>
-          <Modal.Title>Destination Details</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {destinationData ? (
-            <div>
-              <p><strong>TPID:</strong> {destinationData.TPid}</p>
-              <p><strong>ID:</strong> {destinationData.ID}</p>
-              <p><strong>Prefixes:</strong></p>
-              <ul>
-                {destinationData.Prefixes.map((prefix, index) => (
-                  <li key={index}>{prefix}</li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <p>No data available for this destination.</p>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={handleCloseDestinationModal}>
-            Close
-          </Button>
-        </Modal.Footer>
-      </Modal>
-
-      {/* Modal for Rate Data */}
-      <Modal show={showRateModal} onHide={handleCloseRateModal} size="lg">
-        <Modal.Header closeButton>
-          <Modal.Title>Rate Details</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {rateData ? (
-            <div>
-              <p><strong>TPID:</strong> {rateData.TPid}</p>
-              <p><strong>ID:</strong> {rateData.ID}</p>
-              <p><strong>Rate Details:</strong></p>
-              <pre>{JSON.stringify(rateData, null, 2)}</pre>
-            </div>
-          ) : (
-            <p>No data available for this rate.</p>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={handleCloseRateModal}>
             Close
           </Button>
         </Modal.Footer>
