@@ -7,6 +7,7 @@ const SessionS = ({ cgratesConfig }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
+  const [terminateLoading, setTerminateLoading] = useState(false);
 
   const handleTenantChange = (event) => {
     setTenant(event.target.value);
@@ -71,6 +72,78 @@ const SessionS = ({ cgratesConfig }) => {
   const handleCloseModal = () => {
     setShowModal(false);
     setSelectedSession(null);
+  };
+
+  const handleTerminateSession = async () => {
+    if (!selectedSession) return;
+
+    setTerminateLoading(true);
+
+    const terminateQuery = {
+      method: 'SessionSv1.TerminateSession',
+      params: [{
+        TerminateSession: true,
+        ForceDuration: false,
+        ReleaseResources: false,
+        ProcessThresholds: false,
+        ProcessStats: false,
+        ThresholdIDs: null,
+        StatIDs: null,
+        Tenant: selectedSession.Tenant,
+        ID: selectedSession.CGRID,
+        Time: selectedSession.SetupTime,
+        Event: {
+          // ACD: selectedSession.ExtraFields?.ACD || 0,
+          Account: selectedSession.Account,
+          // AnswerTime: selectedSession.AnswerTime,
+          Category: selectedSession.Category,
+          // Cost: -1,
+          Destination: selectedSession.Destination,
+          DisconnectCause: selectedSession.ExtraFields?.DisconnectCause || "",
+          FsConnID: selectedSession.ExtraFields?.FsConnID || 0,
+          OriginHost: selectedSession.OriginHost,
+          OriginID: selectedSession.OriginID,
+          // PDD: selectedSession.ExtraFields?.PDD || 0,
+          RequestType: selectedSession.RequestType,
+          // Route: selectedSession.ExtraFields?.Route || "",
+          SetupTime: selectedSession.SetupTime,
+          Source: selectedSession.Source,
+          Subject: selectedSession.Subject,
+          Tenant: selectedSession.Tenant,
+          ToR: selectedSession.ToR,
+          // Usage: selectedSession.Usage
+        },
+        Opts: {}
+      }],
+      id: 4
+    };
+
+    console.log(`Terminating session: ${selectedSession.CGRID}`);
+
+    try {
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(terminateQuery),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Session terminated successfully:', data);
+
+      // Refresh results after terminating a session
+      fetchSessions();
+      handleCloseModal();
+    } catch (error) {
+      console.error('Error terminating session:', error);
+    } finally {
+      setTerminateLoading(false);
+    }
   };
 
   const renderSessionDetails = (session) => {
@@ -149,7 +222,7 @@ const SessionS = ({ cgratesConfig }) => {
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan="6" className="text-center">No results available</td>
+                  <td colSpan="7" className="text-center">No results available</td>
                 </tr>
               )}
             </tbody>
@@ -170,6 +243,9 @@ const SessionS = ({ cgratesConfig }) => {
           )}
         </Modal.Body>
         <Modal.Footer>
+          <Button variant="danger" onClick={handleTerminateSession} disabled={terminateLoading}>
+            {terminateLoading ? 'Terminating...' : 'Terminate Session'}
+          </Button>
           <Button variant="secondary" onClick={handleCloseModal}>
             Close
           </Button>
