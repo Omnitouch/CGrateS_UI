@@ -133,6 +133,24 @@ const Resources = ({ cgratesConfig }) => {
     setEditResource({ ...editResource, [name]: value });
   };
 
+  const handleFilterIDChange = (index, newValue) => {
+    const updatedFilterIDs = [...(editResource.FilterIDs || [])];
+    updatedFilterIDs[index] = newValue;
+    setEditResource({ ...editResource, FilterIDs: updatedFilterIDs });
+  };
+
+  const addFilterID = () => {
+    const updatedFilterIDs = [...(editResource.FilterIDs || [])];
+    updatedFilterIDs.push(''); // Add empty FilterID
+    setEditResource({ ...editResource, FilterIDs: updatedFilterIDs });
+  };
+
+  const removeFilterID = (index) => {
+    const updatedFilterIDs = [...(editResource.FilterIDs || [])];
+    updatedFilterIDs.splice(index, 1);
+    setEditResource({ ...editResource, FilterIDs: updatedFilterIDs });
+  };
+
   const saveResource = async () => {
     setIsLoading(true);
     setError(''); // Clear previous error
@@ -299,6 +317,19 @@ const Resources = ({ cgratesConfig }) => {
                   <Form.Label>Threshold IDs</Form.Label>
                   <Form.Control type="text" name="ThresholdIDs" value={editResource.ThresholdIDs.join(', ')} onChange={handleEditChange} />
                 </Form.Group>
+                <h5>Edit FilterIDs</h5>
+                {(editResource.FilterIDs || []).map((filterID, index) => (
+                  <div key={index} style={{ display: 'flex', marginBottom: '5px' }}>
+                    <Form.Control
+                      type="text"
+                      value={filterID}
+                      onChange={(e) => handleFilterIDChange(index, e.target.value)}
+                      style={{ marginRight: '10px' }}
+                    />
+                    <Button variant="danger" onClick={() => removeFilterID(index)}>Remove</Button>
+                  </div>
+                ))}
+                <Button onClick={addFilterID}>Add FilterID</Button>
               </>
             ) : (
               selectedResource && (
@@ -314,6 +345,7 @@ const Resources = ({ cgratesConfig }) => {
                     <ListGroup.Item><strong>Stored:</strong> {selectedResource.Stored ? 'Yes' : 'No'}</ListGroup.Item>
                     <ListGroup.Item><strong>Weight:</strong> {selectedResource.Weight}</ListGroup.Item>
                     <ListGroup.Item><strong>Threshold IDs:</strong> {selectedResource.ThresholdIDs.join(', ')}</ListGroup.Item>
+                    <ListGroup.Item><strong>Filter IDs:</strong> {selectedResource.FilterIDs && selectedResource.FilterIDs.length > 0 ? selectedResource.FilterIDs.join(', ') : 'None'}</ListGroup.Item>
                   </ListGroup>
 
                   <h5>Usage Information</h5>
