@@ -105,8 +105,6 @@ const ActionsPage = ({ cgratesConfig }) => {
         setIsEditing(false); // Start in view mode
     };
 
-
-
     const handleEditChange = (index, field, value) => {
         const updatedAction = [...selectedAction];
         const fieldParts = field.split('.');
@@ -116,6 +114,8 @@ const ActionsPage = ({ cgratesConfig }) => {
             updatedAction[index].Balance.Value.Static = parseFloat(value) || 0; // Parse back to number
         } else if (field === 'Weight') {
             updatedAction[index].Weight = parseFloat(value) || 0; // Ensure Weight is saved as a number
+        } else if (field === 'BalanceBlocker') {
+            updatedAction[index].BalanceBlocker = value; // Handle checkbox change for BalanceBlocker
         } else if (fieldParts.length === 2 && fieldParts[0] === 'Balance') {
             updatedAction[index].Balance = {
                 ...updatedAction[index].Balance,
@@ -127,9 +127,6 @@ const ActionsPage = ({ cgratesConfig }) => {
 
         setSelectedAction(updatedAction);
     };
-
-
-
 
     const handleAddPart = () => {
         const newPart = {
@@ -154,7 +151,7 @@ const ActionsPage = ({ cgratesConfig }) => {
                 Timings: null,
                 Disabled: null,
                 Factors: null,
-                Blocker: null,
+                BalanceBlocker: false,  // Add BalanceBlocker field here
             },
         };
         setSelectedAction([...selectedAction, newPart]);
@@ -195,6 +192,7 @@ const ActionsPage = ({ cgratesConfig }) => {
                     Filters: part.Filters || undefined,
                     ExpirationString: part.ExpirationString || undefined,
                     Weight: part.Weight || undefined,
+                    BalanceBlocker: part.BalanceBlocker || false, // Save BalanceBlocker field
                     ...balanceData, // Include formatted balance data
                 };
             });
@@ -237,7 +235,6 @@ const ActionsPage = ({ cgratesConfig }) => {
         }
     };
 
-
     const handleCreateNewAction = () => {
         const newAction = [{
             Id: '',
@@ -261,7 +258,7 @@ const ActionsPage = ({ cgratesConfig }) => {
                 Timings: null,
                 Disabled: null,
                 Factors: null,
-                Blocker: null,
+                BalanceBlocker: false,  // Add BalanceBlocker field here
             },
         }];
         setSelectedAction(newAction);
@@ -440,8 +437,8 @@ const ActionsPage = ({ cgratesConfig }) => {
                                     <strong>Balance Value:</strong>
                                     {isEditing ? (
                                         <Form.Control
-                                            type="text" // Temporarily switch to "text" for easier debugging
-                                            value={part.Balance?.Value?.Static?.toString() || ''} // Convert to string for form input
+                                            type="text"
+                                            value={part.Balance?.Value?.Static?.toString() || ''}
                                             onChange={(e) => handleEditChange(index, 'Balance.Value.Static', e.target.value)}
                                         />
                                     ) : (
@@ -471,6 +468,20 @@ const ActionsPage = ({ cgratesConfig }) => {
                                         />
                                     ) : (
                                         <pre>{typeof part.ExtraParameters === 'string' ? part.ExtraParameters : JSON.stringify(part.ExtraParameters, null, 2)}</pre>
+                                    )}
+                                </ListGroup.Item>
+
+                                <ListGroup.Item>
+                                    <strong>BalanceBlocker:</strong>
+                                    {isEditing ? (
+                                        <Form.Check
+                                            type="checkbox"
+                                            checked={part.BalanceBlocker}
+                                            onChange={(e) => handleEditChange(index, 'BalanceBlocker', e.target.checked)}
+                                            label="BalanceBlocker"
+                                        />
+                                    ) : (
+                                        part.BalanceBlocker ? 'Yes' : 'No'
                                     )}
                                 </ListGroup.Item>
 

@@ -9,6 +9,7 @@ import Attributes from './Attributes';
 import Filters from './Filters';
 import RouteS from './RouteS';
 import Config from './Config';
+import SessionS from './SessionS';
 import { BrowserRouter as Router, Route, Routes, Link, useLocation } from 'react-router-dom';
 import { marked } from 'marked';
 
@@ -196,6 +197,7 @@ function App() {
         '/': 'Home - Omnitouch CGrateS UI',
         '/cdrs': 'CDRs - Omnitouch CGrateS UI',
         '/accounts': 'Accounts - Omnitouch CGrateS UI',
+        '/sessions': 'Sessions - Omnitouch CGrateS UI',
         '/action-plans': 'Action Plans - Omnitouch CGrateS UI',
         '/actions': 'Actions - Omnitouch CGrateS UI',
         '/routes': 'Routes - Omnitouch CGrateS UI',
@@ -221,6 +223,7 @@ function App() {
             <Nav className="me-auto">
               <Nav.Link as={Link} to="/cdrs">CDRs</Nav.Link>
               <Nav.Link as={Link} to="/accounts">Accounts</Nav.Link>
+              <Nav.Link as={Link} to="/sessions">Sessions</Nav.Link>
               <Nav.Link as={Link} to="/action-plans">Action Plans</Nav.Link>
               <Nav.Link as={Link} to="/actions">Actions</Nav.Link>
               <Nav.Link as={Link} to="/routes">Routes</Nav.Link>
@@ -255,6 +258,7 @@ function App() {
           />
           <Route path="/cdrs" element={<CDRs cgratesConfig={cgratesConfig} />} />
           <Route path="/accounts" element={<Accounts cgratesConfig={cgratesConfig} />} />
+          <Route path="/sessions" element={<SessionS cgratesConfig={cgratesConfig} />} />
           <Route path="/action-plans" element={<ActionPlans cgratesConfig={cgratesConfig} />} />
           <Route path="/actions" element={<Actions cgratesConfig={cgratesConfig} />} />
           <Route path="/routes" element={<RouteS cgratesConfig={cgratesConfig} />} />
