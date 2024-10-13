@@ -11,6 +11,7 @@ import RouteS from './RouteS';
 import Config from './Config';
 import SessionS from './SessionS';
 import Resources from './Resources';
+import GetTPIDs from './GetTPIDs';
 import { BrowserRouter as Router, Route, Routes, Link, useLocation } from 'react-router-dom';
 import { marked } from 'marked';
 
@@ -205,6 +206,7 @@ function App() {
         '/routes': 'Routes - Omnitouch CGrateS UI',
         '/attributes': 'Attributes - Omnitouch CGrateS UI',
         '/filters': 'Filters - Omnitouch CGrateS UI',
+        '/tpids': 'TPIDs - Omnitouch CGrateS UI',
         '/config': 'Config - Omnitouch CGrateS UI',
       };
       const defaultTitle = 'Omnitouch CGrateS UI';
@@ -232,6 +234,7 @@ function App() {
               <Nav.Link as={Link} to="/routes">Routes</Nav.Link>
               <Nav.Link as={Link} to="/attributes">Attributes</Nav.Link>
               <Nav.Link as={Link} to="/filters">Filters</Nav.Link>
+              <Nav.Link as={Link} to="/tpids">TPIDs</Nav.Link>
               <Nav.Link as={Link} to="/config">Config</Nav.Link>
             </Nav>
             <Button variant="outline-info" onClick={handleOpenModal}>Connection to CGrateS: {testResult ? (testResult.includes('successful') ? 'Connected' : 'Disconnected') : 'Unknown'}          <span
@@ -268,6 +271,7 @@ function App() {
           <Route path="/routes" element={<RouteS cgratesConfig={cgratesConfig} />} />
           <Route path="/attributes" element={<Attributes cgratesConfig={cgratesConfig} />} />
           <Route path="/filters" element={<Filters cgratesConfig={cgratesConfig} />} />
+          <Route path="/tpids" element={<GetTPIDs cgratesConfig={cgratesConfig} />} />
           <Route path="/config" element={<Config cgratesConfig={cgratesConfig} />} />
         </Routes>
       </Container>
