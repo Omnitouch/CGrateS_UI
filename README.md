@@ -45,6 +45,7 @@ So far what has been include is limited support for:
  * Viewing Routes / Least Cost Routes
  * Managing AttributeS
  * Managing FilterS
+ * Viewing DestinationRates & Destinations / Rates
  * Viewing Config
 
 

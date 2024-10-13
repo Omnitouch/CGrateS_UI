@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Button, Container, Row, Col, Table, Spinner, Modal, Accordion } from 'react-bootstrap';
 
-const GetTPIDs = ({ cgratesConfig }) => {
+const DestinationRates = ({ cgratesConfig }) => {
   const [tpids, setTPIDs] = useState([]);
   const [selectedTPID, setSelectedTPID] = useState('');
   const [results, setResults] = useState([]);
@@ -372,4 +372,4 @@ const GetTPIDs = ({ cgratesConfig }) => {
   );
 };
 
-export default GetTPIDs;
+export default DestinationRates;
