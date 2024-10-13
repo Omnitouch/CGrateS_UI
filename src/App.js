@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import { Modal, Button, Navbar, Nav, Container, Form, Alert } from 'react-bootstrap';
+import { Modal, Button, Navbar, Nav, Container, Form, Alert, Accordion } from 'react-bootstrap';
 import CDRs from './CDRs';
 import Accounts from './Accounts';
 import ActionPlans from './ActionPlans';
@@ -12,6 +12,8 @@ import Config from './Config';
 import SessionS from './SessionS';
 import Resources from './Resources';
 import DestinationRates from './DestinationRates';
+import RatingPlans from './RatingPlans';
+import RatingProfiles from './RatingProfile';
 import { BrowserRouter as Router, Route, Routes, Link, useLocation } from 'react-router-dom';
 import { marked } from 'marked';
 
@@ -51,7 +53,7 @@ function App() {
         setShowModal(true); // Show modal on error
       }
     };
-  
+
     // Function to fetch README.md file from GitHub
     const fetchReadme = async () => {
       try {
@@ -67,12 +69,12 @@ function App() {
         setReadmeContent('<p>Error loading README content</p>'); // Display error message in case of failure
       }
     };
-  
+
     // Call the functions
     loadConfig();
     fetchReadme();
   }, []);
-  
+
 
   // Fetch config on initial load and handle errors
   useEffect(() => {
@@ -207,6 +209,8 @@ function App() {
         '/attributes': 'Attributes - Omnitouch CGrateS UI',
         '/filters': 'Filters - Omnitouch CGrateS UI',
         '/destinationrates': 'DestinationRates - Omnitouch CGrateS UI',
+        '/ratingplans': 'RatingPlans - Omnitouch CGrateS UI',
+        '/ratingprofiles': 'RatingProfiles - Omnitouch CGrateS UI',
         '/config': 'Config - Omnitouch CGrateS UI',
       };
       const defaultTitle = 'Omnitouch CGrateS UI';
@@ -235,17 +239,19 @@ function App() {
               <Nav.Link as={Link} to="/attributes">Attributes</Nav.Link>
               <Nav.Link as={Link} to="/filters">Filters</Nav.Link>
               <Nav.Link as={Link} to="/destinationrates">DestinationRates</Nav.Link>
+              <Nav.Link as={Link} to="/ratingplans">RatingPlans</Nav.Link>
+              <Nav.Link as={Link} to="/ratingprofiles">RatingProfiles</Nav.Link>
               <Nav.Link as={Link} to="/config">Config</Nav.Link>
             </Nav>
             <Button variant="outline-info" onClick={handleOpenModal}>Connection to CGrateS: {testResult ? (testResult.includes('successful') ? 'Connected' : 'Disconnected') : 'Unknown'}          <span
-            style={{
-              backgroundColor: testResult.includes('successful') ? 'green' : 'red',
-              color: 'white',
-              padding: '5px 10px',
-              borderRadius: '10px',
-              marginLeft: '10px',
-            }}
-          ></span></Button>
+              style={{
+                backgroundColor: testResult.includes('successful') ? 'green' : 'red',
+                color: 'white',
+                padding: '5px 10px',
+                borderRadius: '10px',
+                marginLeft: '10px',
+              }}
+            ></span></Button>
           </Navbar.Collapse>
         </Container>
       </Navbar>
@@ -272,6 +278,8 @@ function App() {
           <Route path="/attributes" element={<Attributes cgratesConfig={cgratesConfig} />} />
           <Route path="/filters" element={<Filters cgratesConfig={cgratesConfig} />} />
           <Route path="/destinationrates" element={<DestinationRates cgratesConfig={cgratesConfig} />} />
+          <Route path="/ratingplans" element={<RatingPlans cgratesConfig={cgratesConfig} />} />
+          <Route path="/ratingprofiles" element={<RatingProfiles cgratesConfig={cgratesConfig} />} />
           <Route path="/config" element={<Config cgratesConfig={cgratesConfig} />} />
         </Routes>
       </Container>
@@ -348,7 +356,7 @@ function App() {
         Currently using CGrateS URL: <pre>{cgratesConfig.url}</pre>
         Tenants: <pre>{splitTenants.join(', ')}</pre>
         <div>
-          Status: 
+          Status:
           <span
             style={{
               backgroundColor: testResult.includes('successful') ? 'green' : 'red',
