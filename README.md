@@ -46,6 +46,8 @@ So far what has been include is limited support for:
  * Managing AttributeS
  * Managing FilterS
  * Viewing DestinationRates & Destinations / Rates
+ * Managing RatingPlans & RatingProfiles
+ * Simulating Costs
  * Viewing Config
 
 
