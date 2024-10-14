@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import { Modal, Button, Navbar, Nav, Container, Form, Alert, Accordion } from 'react-bootstrap';
+import { Modal, Button, Navbar, Nav, Container, Form, Alert, NavDropdown } from 'react-bootstrap';
 import CDRs from './CDRs';
 import Accounts from './Accounts';
 import ActionPlans from './ActionPlans';
@@ -30,7 +30,6 @@ function App() {
   const [isTesting, setIsTesting] = useState(false);
   const [configError, setConfigError] = useState('');
   const [readmeContent, setReadmeContent] = useState(''); // State for storing markdown content
-
 
   useEffect(() => {
     // Function to load the configuration from config.json
@@ -238,20 +237,27 @@ function App() {
               <Nav.Link as={Link} to="/routes">Routes</Nav.Link>
               <Nav.Link as={Link} to="/attributes">Attributes</Nav.Link>
               <Nav.Link as={Link} to="/filters">Filters</Nav.Link>
-              <Nav.Link as={Link} to="/destinationrates">DestinationRates</Nav.Link>
-              <Nav.Link as={Link} to="/ratingplans">RatingPlans</Nav.Link>
-              <Nav.Link as={Link} to="/ratingprofiles">RatingProfiles</Nav.Link>
+              {/* Dropdown for expanding section */}
+              <NavDropdown title="Rate Plans & Profiles" id="rate-plans-dropdown">
+                <NavDropdown.Item as={Link} to="/destinationrates">DestinationRates</NavDropdown.Item>
+                <NavDropdown.Item as={Link} to="/ratingplans">RatingPlans</NavDropdown.Item>
+                <NavDropdown.Item as={Link} to="/ratingprofiles">RatingProfiles</NavDropdown.Item>
+              </NavDropdown>
+              {/* End of expanding section */}
               <Nav.Link as={Link} to="/config">Config</Nav.Link>
             </Nav>
-            <Button variant="outline-info" onClick={handleOpenModal}>Connection to CGrateS: {testResult ? (testResult.includes('successful') ? 'Connected' : 'Disconnected') : 'Unknown'}          <span
-              style={{
-                backgroundColor: testResult.includes('successful') ? 'green' : 'red',
-                color: 'white',
-                padding: '5px 10px',
-                borderRadius: '10px',
-                marginLeft: '10px',
-              }}
-            ></span></Button>
+            <Button variant="outline-info" onClick={handleOpenModal}>
+              Connection to CGrateS: {testResult ? (testResult.includes('successful') ? 'Connected' : 'Disconnected') : 'Unknown'}
+              <span
+                style={{
+                  backgroundColor: testResult.includes('successful') ? 'green' : 'red',
+                  color: 'white',
+                  padding: '5px 10px',
+                  borderRadius: '10px',
+                  marginLeft: '10px',
+                }}
+              ></span>
+            </Button>
           </Navbar.Collapse>
         </Container>
       </Navbar>
