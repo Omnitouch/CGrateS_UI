@@ -14,6 +14,7 @@ import Resources from './Resources';
 import DestinationRates from './DestinationRates';
 import RatingPlans from './RatingPlans';
 import RatingProfiles from './RatingProfile';
+import GetCostView from './GetCost';
 import { BrowserRouter as Router, Route, Routes, Link, useLocation } from 'react-router-dom';
 import { marked } from 'marked';
 
@@ -210,6 +211,7 @@ function App() {
         '/destinationrates': 'DestinationRates - Omnitouch CGrateS UI',
         '/ratingplans': 'RatingPlans - Omnitouch CGrateS UI',
         '/ratingprofiles': 'RatingProfiles - Omnitouch CGrateS UI',
+        '/getcost': 'GetCost - Omnitouch CGrateS UI',
         '/config': 'Config - Omnitouch CGrateS UI',
       };
       const defaultTitle = 'Omnitouch CGrateS UI';
@@ -232,18 +234,19 @@ function App() {
               <Nav.Link as={Link} to="/accounts">Accounts</Nav.Link>
               <Nav.Link as={Link} to="/sessions">Sessions</Nav.Link>
               <Nav.Link as={Link} to="/resources">Resources</Nav.Link>
-              <Nav.Link as={Link} to="/action-plans">Action Plans</Nav.Link>
-              <Nav.Link as={Link} to="/actions">Actions</Nav.Link>
-              <Nav.Link as={Link} to="/routes">Routes</Nav.Link>
-              <Nav.Link as={Link} to="/attributes">Attributes</Nav.Link>
               <Nav.Link as={Link} to="/filters">Filters</Nav.Link>
-              {/* Dropdown for expanding section */}
+              <NavDropdown title="Actions & ActionPlans" id="rate-plans-dropdown">
+                <Nav.Link as={Link} to="/action-plans">Action Plans</Nav.Link>
+                <Nav.Link as={Link} to="/actions">Actions</Nav.Link>
+              </NavDropdown>              
+              <Nav.Link as={Link} to="/attributes">Attributes</Nav.Link>
               <NavDropdown title="Rate Plans & Profiles" id="rate-plans-dropdown">
                 <NavDropdown.Item as={Link} to="/destinationrates">DestinationRates</NavDropdown.Item>
                 <NavDropdown.Item as={Link} to="/ratingplans">RatingPlans</NavDropdown.Item>
                 <NavDropdown.Item as={Link} to="/ratingprofiles">RatingProfiles</NavDropdown.Item>
+                <NavDropdown.Item as={Link} to="/getcost">GetCost</NavDropdown.Item>
+                <Nav.Link as={Link} to="/routes">Routes</Nav.Link>
               </NavDropdown>
-              {/* End of expanding section */}
               <Nav.Link as={Link} to="/config">Config</Nav.Link>
             </Nav>
             <Button variant="outline-info" onClick={handleOpenModal}>
@@ -286,6 +289,7 @@ function App() {
           <Route path="/destinationrates" element={<DestinationRates cgratesConfig={cgratesConfig} />} />
           <Route path="/ratingplans" element={<RatingPlans cgratesConfig={cgratesConfig} />} />
           <Route path="/ratingprofiles" element={<RatingProfiles cgratesConfig={cgratesConfig} />} />
+          <Route path="/getcost" element={<GetCostView cgratesConfig={cgratesConfig} />} />
           <Route path="/config" element={<Config cgratesConfig={cgratesConfig} />} />
         </Routes>
       </Container>
