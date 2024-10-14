@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Button, Container, Row, Col, Table, Modal, Spinner, ListGroup, Accordion } from 'react-bootstrap';
+import { Form, Button, Container, Row, Col, Table, Modal, Spinner, ListGroup, Accordion, Alert } from 'react-bootstrap';
 
 const RatingProfiles = ({ cgratesConfig }) => {
     const [searchParams, setSearchParams] = useState({ tenant: '' });
@@ -14,6 +14,7 @@ const RatingProfiles = ({ cgratesConfig }) => {
         Subject: '',
         RatingPlanActivations: [{ ActivationTime: '', RatingPlanId: '', FallbackSubjects: '' }]
     });
+    const [errorMessage, setErrorMessage] = useState(null); // Store error messages
 
     const handleInputChange = (event) => {
         const { name, value } = event.target;
@@ -102,6 +103,8 @@ const RatingProfiles = ({ cgratesConfig }) => {
 
     const saveRatingProfile = async () => {
         setIsLoading(true);
+        setErrorMessage(null); // Reset error message before attempting to save
+
         try {
             const query = {
                 method: 'APIerSv1.SetRatingProfile',
@@ -114,15 +117,22 @@ const RatingProfiles = ({ cgratesConfig }) => {
                 }]
             };
 
-            await fetch(cgratesConfig.url + '/jsonrpc', {
+            const response = await fetch(cgratesConfig.url + '/jsonrpc', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(query),
             });
 
-            setShowModal(false);
+            const data = await response.json();
+
+            if (data.error) {
+                setErrorMessage(data.error.message); // Display the error message
+            } else {
+                setShowModal(false); // Close modal on success
+            }
         } catch (error) {
             console.error('Error saving rating profile:', error);
+            setErrorMessage('An unexpected error occurred while saving the profile.');
         } finally {
             setIsLoading(false);
         }
@@ -209,6 +219,9 @@ const RatingProfiles = ({ cgratesConfig }) => {
                         <Modal.Title>{isEditing ? 'Edit Rating Profile' : 'Create New Rating Profile'}</Modal.Title>
                     </Modal.Header>
                     <Modal.Body>
+                        {/* Display error message if it exists */}
+                        {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
+
                         <Form>
                             <Form.Group controlId="formCategory">
                                 <Form.Label>Category</Form.Label>
