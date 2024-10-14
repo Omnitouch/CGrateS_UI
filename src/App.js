@@ -236,8 +236,8 @@ function App() {
               <Nav.Link as={Link} to="/resources">Resources</Nav.Link>
               <Nav.Link as={Link} to="/filters">Filters</Nav.Link>
               <NavDropdown title="Actions & ActionPlans" id="rate-plans-dropdown">
-                <Nav.Link as={Link} to="/action-plans">Action Plans</Nav.Link>
-                <Nav.Link as={Link} to="/actions">Actions</Nav.Link>
+                <NavDropdown.Item as={Link} to="/action-plans">Action Plans</NavDropdown.Item>
+                <NavDropdown.Item as={Link} to="/actions">Actions</NavDropdown.Item>
               </NavDropdown>              
               <Nav.Link as={Link} to="/attributes">Attributes</Nav.Link>
               <NavDropdown title="Rate Plans & Profiles" id="rate-plans-dropdown">
@@ -245,7 +245,7 @@ function App() {
                 <NavDropdown.Item as={Link} to="/ratingplans">RatingPlans</NavDropdown.Item>
                 <NavDropdown.Item as={Link} to="/ratingprofiles">RatingProfiles</NavDropdown.Item>
                 <NavDropdown.Item as={Link} to="/getcost">GetCost</NavDropdown.Item>
-                <Nav.Link as={Link} to="/routes">Routes</Nav.Link>
+                <NavDropdown.Item as={Link} to="/routes">Routes</NavDropdown.Item>
               </NavDropdown>
               <Nav.Link as={Link} to="/config">Config</Nav.Link>
             </Nav>
