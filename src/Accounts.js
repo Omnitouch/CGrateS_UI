@@ -118,7 +118,6 @@ const GetAccounts = ({ cgratesConfig }) => {
   };
 
   const removeAccount = async (tenant, account) => {
-
     const removeQuery = {
       method: 'ApierV1.RemoveAccount',
       params: [{
@@ -165,11 +164,10 @@ const GetAccounts = ({ cgratesConfig }) => {
     setSelectedRowData(rowData);
     // Split the ID to get tenant and account
     const [tenant, account] = rowData.ID.split(':');
-    setAccountDetails({ Tenant: tenant, Account: account }); // Set the tenant and account details in state
+    setAccountDetails({ Tenant: tenant, Account: account, ...rowData }); // Set the tenant and account details in state
     setShowModal(true);
     fetchAccountDetails(tenant, account); // Fetch additional account details
   };
-  
 
   const handleBalanceClick = (balance) => {
     setSelectedBalance(balance);
@@ -324,7 +322,7 @@ const GetAccounts = ({ cgratesConfig }) => {
       {/* Modal for Account Details */}
       <Modal show={showModal} onHide={handleCloseModal} size="lg">
         <Modal.Header closeButton>
-          <Modal.Title>Account Details</Modal.Title>
+          <Modal.Title>Account Details - {accountDetails ? `${accountDetails.ID}` : ''}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {modalLoading ? (
@@ -336,8 +334,9 @@ const GetAccounts = ({ cgratesConfig }) => {
             </div>
           ) : accountDetails ? (
             <div>
-              <p><strong>Tenant:</strong> {accountDetails.Tenant}</p>
-              <p><strong>Account:</strong> {accountDetails.Account}</p>
+              <p><strong>Allow Negative:</strong> {accountDetails.AllowNegative ? 'Yes' : 'No'}</p>
+              <p><strong>Disabled:</strong> {accountDetails.Disabled ? 'Yes' : 'No'}</p>
+              <p><strong>Action Triggers:</strong> {accountDetails.ActionTriggers ? JSON.stringify(accountDetails.ActionTriggers, null, 2) : 'None'}</p>
 
               <h5>Data Balances</h5>
               {renderBalanceTable(accountDetails.BalanceMap, '*data')}
@@ -356,12 +355,12 @@ const GetAccounts = ({ cgratesConfig }) => {
           )}
         </Modal.Body>
         <Modal.Footer>
-        <Button
-          variant="danger"
-          onClick={() => removeAccount(selectedRowData.ID.split(':')[0], selectedRowData.ID.split(':')[1])}
-        >
-          Delete Account
-        </Button>
+          <Button
+            variant="danger"
+            onClick={() => removeAccount(selectedRowData.ID.split(':')[0], selectedRowData.ID.split(':')[1])}
+          >
+            Delete Account
+          </Button>
 
           <Button variant="secondary" onClick={handleCloseModal}>
             Close
