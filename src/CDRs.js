@@ -318,7 +318,6 @@ const CDRs = ({ cgratesConfig }) => {
               <Form.Group controlId="formTenant">
                 <Form.Label>Tenant</Form.Label>
                 <Form.Control as="select" name="tenant" value={searchParams.tenant} onChange={handleInputChange}>
-                  <option value="">Select Tenant</option>
                   {cgratesConfig.tenants.split(';').map((tenant, index) => (
                     <option key={index} value={tenant}>{tenant}</option>
                   ))}

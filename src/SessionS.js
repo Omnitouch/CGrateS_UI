@@ -176,7 +176,6 @@ const SessionS = ({ cgratesConfig }) => {
               <Form.Group controlId="formTenant">
                 <Form.Label>Tenant</Form.Label>
                 <Form.Control as="select" name="tenant" value={tenant} onChange={handleTenantChange}>
-                  <option value="">Select Tenant</option>
                   {cgratesConfig.tenants.split(';').map((tenantOption, index) => (
                     <option key={index} value={tenantOption}>{tenantOption}</option>
                   ))}
