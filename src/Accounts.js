@@ -32,7 +32,7 @@ const GetAccounts = ({ cgratesConfig }) => {
     const newQuery = {
       method: 'APIerSv2.GetAccounts',
       params: [{
-        Tenant: searchParams.tenant || 'cgrates.org',
+        Tenant: searchParams.tenant,
         AccountIDs: searchParams.account ? [searchParams.account] : null,
         Offset: offset,
         Limit: itemsPerPage,

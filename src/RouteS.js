@@ -34,11 +34,11 @@ const GetRoutes = ({ cgratesConfig }) => {
       method: 'RouteSv1.GetRoutes',
       params: [{
         IgnoreErrors: true,
-        Tenant: searchParams.tenant || 'cgrates.org',
+        Tenant: searchParams.tenant,
         ID: '362ac79',  // You might want to dynamically assign the ID based on actual usage
         Event: {
           Account: searchParams.account,
-          Tenant: searchParams.tenant || 'cgrates.org',
+          Tenant: searchParams.tenant,
           Subject: searchParams.account,
           SetupTime: today,
           Destination: searchParams.destination,
