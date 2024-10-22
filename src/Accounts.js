@@ -207,6 +207,9 @@ const GetAccounts = ({ cgratesConfig }) => {
 
       const data = await response.json();
       console.log('Action executed successfully:', data);
+
+      // Re-fetch account details to update balances in the open modal
+      fetchAccountDetails(tenant, account);
     } catch (error) {
       console.error('Error executing action:', error);
     }
