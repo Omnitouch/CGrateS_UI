@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Button, Container, Row, Col, Table, Pagination, Modal, Spinner } from 'react-bootstrap';
+import { Form, Button, Container, Row, Col, Table, Pagination, Modal, Spinner, Alert } from 'react-bootstrap';
 
 const GetAccounts = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
@@ -20,6 +20,8 @@ const GetAccounts = ({ cgratesConfig }) => {
   const [accountDetails, setAccountDetails] = useState(null); // State to store detailed account data
   const [modalLoading, setModalLoading] = useState(false); // Loading state for modal API call
   const [actions, setActions] = useState([]); // Actions available for the selected account
+  const [selectedAction, setSelectedAction] = useState(''); // Selected action for execution
+  const [showConfirm, setShowConfirm] = useState(false); // State to show confirmation alert
 
   useEffect(() => {
     if (searchParams.tenant) {
@@ -262,11 +264,20 @@ const GetAccounts = ({ cgratesConfig }) => {
     fetchAccountDetails(tenant, account); // Fetch additional account details
   };
 
-  const handleActionApply = (actionId) => {
-    if (selectedRowData) {
+  const handleActionSelect = (event) => {
+    setSelectedAction(event.target.value);
+  };
+
+  const handleExecuteActionClick = () => {
+    setShowConfirm(true);
+  };
+
+  const handleConfirmExecuteAction = () => {
+    if (selectedRowData && selectedAction) {
       const [tenant, account] = selectedRowData.ID.split(':');
-      executeAction(tenant, account, actionId);
+      executeAction(tenant, account, selectedAction);
     }
+    setShowConfirm(false);
   };
 
   const handleCloseModal = () => {
@@ -274,6 +285,8 @@ const GetAccounts = ({ cgratesConfig }) => {
     setSelectedRowData(null);
     setAccountDetails(null); // Clear account details when modal is closed
     setActions([]); // Clear actions when modal is closed
+    setSelectedAction(''); // Clear selected action
+    setShowConfirm(false); // Hide confirmation alert
   };
 
   const handlePageChange = (pageNumber) => {
@@ -426,13 +439,27 @@ const GetAccounts = ({ cgratesConfig }) => {
 
               <h5>Available Actions</h5>
               <Form.Group controlId="formActions">
-                <Form.Control as="select" onChange={(e) => handleActionApply(e.target.value)}>
+                <Form.Control as="select" value={selectedAction} onChange={handleActionSelect}>
                   <option value="">Select Action</option>
                   {actions.map((action, index) => (
                     <option key={index} value={action}>{action}</option>
                   ))}
                 </Form.Control>
               </Form.Group>
+
+              {selectedAction && (
+                <Button variant="primary" className="mt-3" onClick={handleExecuteActionClick}>
+                  Execute Action
+                </Button>
+              )}
+
+              {showConfirm && (
+                <Alert variant="warning" className="mt-3">
+                  <p>Confirm you want to execute Action <strong>{selectedAction}</strong> on Account <strong>{accountDetails.ID}</strong>?</p>
+                  <Button variant="danger" onClick={handleConfirmExecuteAction}>Confirm</Button>
+                  <Button variant="secondary" onClick={() => setShowConfirm(false)} className="ml-2">Cancel</Button>
+                </Alert>
+              )}
 
               <h5>Data Balances</h5>
               {renderBalanceTable(accountDetails.BalanceMap, '*data')}
@@ -502,3 +529,4 @@ const GetAccounts = ({ cgratesConfig }) => {
 };
 
 export default GetAccounts;
+
