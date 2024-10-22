@@ -3,7 +3,7 @@ import { Form, Button, Container, Row, Col, Table, Pagination, Modal, Spinner, A
 
 const GetAccounts = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
-    tenant: '',
+    tenant: cgratesConfig.tenants.split(';')[0] || '', // Set default tenant
     account: '',
   });
 
