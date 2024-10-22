@@ -452,7 +452,9 @@ const Attributes = ({ cgratesConfig }) => {
                     <h5>Attribute-Level FilterIDs</h5>
                     <ListGroup className="mb-3">
                       {editAttribute.FilterIDs && editAttribute.FilterIDs.length > 0 ? (
-                        <ListGroup.Item><strong>FilterIDs:</strong> {editAttribute.FilterIDs.join(', ')}</ListGroup.Item>
+                        editAttribute.FilterIDs.map((filterID, index) => (
+                          <ListGroup.Item key={index}><strong>FilterID:</strong> {filterID}</ListGroup.Item>
+                        ))
                       ) : (
                         <ListGroup.Item>No FilterIDs</ListGroup.Item>
                       )}
@@ -475,7 +477,9 @@ const Attributes = ({ cgratesConfig }) => {
                                 ))}
                               </ListGroup.Item>
                               {attr.FilterIDs && attr.FilterIDs.length > 0 && (
-                                <ListGroup.Item><strong>Rule-Level Filter IDs:</strong> {attr.FilterIDs.join(', ')}</ListGroup.Item>
+                                attr.FilterIDs.map((filterID, index) => (
+                                  <ListGroup.Item key={index}><strong>Rule-Level FilterID:</strong> {filterID}</ListGroup.Item>
+                                ))
                               )}
                             </ListGroup>
                           </Accordion.Body>
