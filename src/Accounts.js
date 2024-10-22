@@ -461,6 +461,33 @@ const GetAccounts = ({ cgratesConfig }) => {
               <p><strong>Disabled:</strong> {accountDetails.Disabled ? 'Yes' : 'No'}</p>
               <p><strong>Action Triggers:</strong> {accountDetails.ActionTriggers ? JSON.stringify(accountDetails.ActionTriggers, null, 2) : 'None'}</p>
 
+              <h5>Action Plans</h5>
+              {accountDetails.actionPlans && accountDetails.actionPlans.length > 0 ? (
+                <Table striped bordered hover>
+                  <thead>
+                    <tr>
+                      <th>Action Plan ID</th>
+                      <th>UUID</th>
+                      <th>Actions ID</th>
+                      <th>Next Execution Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accountDetails.actionPlans.map((plan, index) => (
+                      <tr key={index}>
+                        <td>{plan.ActionPlanId}</td>
+                        <td>{plan.Uuid}</td>
+                        <td>{plan.ActionsId}</td>
+                        <td>{plan.NextExecTime}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              ) : (
+                <p>No action plans available for this account.</p>
+              )}
+
+
               <h5>Available Actions</h5>
               <Form.Group controlId="formActions">
                 <Form.Control as="select" value={selectedAction} onChange={handleActionSelect}>
@@ -508,7 +535,6 @@ const GetAccounts = ({ cgratesConfig }) => {
           >
             Delete Account
           </Button>
-
           <Button variant="secondary" onClick={handleCloseModal}>
             Close
           </Button>
