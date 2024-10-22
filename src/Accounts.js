@@ -8,6 +8,7 @@ const GetAccounts = ({ cgratesConfig }) => {
   });
 
   const [results, setResults] = useState([]);
+  const [accountsDropdown, setAccountsDropdown] = useState([]); // State to store account dropdown values
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10); // Default 10 records per page
   const [totalItems, setTotalItems] = useState(0);
@@ -19,15 +20,20 @@ const GetAccounts = ({ cgratesConfig }) => {
   const [accountDetails, setAccountDetails] = useState(null); // State to store detailed account data
   const [modalLoading, setModalLoading] = useState(false); // Loading state for modal API call
   const [actions, setActions] = useState([]); // Actions available for the selected account
-  const [selectedAttribute, setSelectedAttribute] = useState(null); // New attribute
 
   useEffect(() => {
-    // Placeholder effect if needed later
-  }, []);
+    if (searchParams.tenant) {
+      fetchActions(searchParams.tenant);
+    }
+  }, [searchParams.tenant]);
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
     setSearchParams({ ...searchParams, [name]: value });
+
+    if (name === 'tenant') {
+      setAccountsDropdown([]); // Clear accounts dropdown when a new tenant is selected
+    }
   };
 
   const fetchResults = async (page = 1) => {
@@ -66,15 +72,21 @@ const GetAccounts = ({ cgratesConfig }) => {
       console.log('Data fetched successfully:', data);
 
       if (data && data.result) {
-        setResults(data.result); // Handle the fetched results
+        setResults(data.result); // Store the fetched results
+        setAccountsDropdown(data.result.map(account => account.ID)); // Extract account IDs for dropdown
         setTotalItems(data.result.length); // Set the total items for pagination
+        if (searchParams.tenant) {
+          fetchActions(searchParams.tenant); // Fetch actions after fetching accounts
+        }
       } else {
         setResults([]);
+        setAccountsDropdown([]);
         setTotalItems(0);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
       setResults([]);
+      setAccountsDropdown([]);
       setTotalItems(0);
     } finally {
       setIsLoading(false);
@@ -115,17 +127,53 @@ const GetAccounts = ({ cgratesConfig }) => {
 
       if (data && data.result) {
         setAccountDetails(data.result[0]); // Store account details in state
-        setActions(data.result[0].Actions || []); // Store available actions for the account
       } else {
         setAccountDetails(null);
-        setActions([]);
       }
     } catch (error) {
       console.error('Error fetching account details:', error);
       setAccountDetails(null);
-      setActions([]);
     } finally {
       setModalLoading(false); // End modal loading
+    }
+  };
+
+  const fetchActions = async (tenant) => {
+    const actionsQuery = {
+      method: 'APIerSv2.GetActions',
+      params: [{
+        Tenant: tenant
+      }],
+      id: 2
+    };
+
+    console.log(`Fetching actions for tenant: ${tenant}`);
+
+    try {
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(actionsQuery),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Actions fetched successfully:', data);
+
+      if (data && data.result) {
+        const actionKeys = Object.keys(data.result); // Extract action keys to use as action names
+        setActions(actionKeys); // Store available actions for the tenant
+      } else {
+        setActions([]);
+      }
+    } catch (error) {
+      console.error('Error fetching actions:', error);
+      setActions([]);
     }
   };
 
@@ -289,9 +337,14 @@ const GetAccounts = ({ cgratesConfig }) => {
               </Form.Group>
             </Col>
             <Col md={4}>
-              <Form.Group controlId="formAccount">
+              <Form.Group controlId="formAccountDropdown">
                 <Form.Label>Account</Form.Label>
-                <Form.Control type="text" name="account" value={searchParams.account} onChange={handleInputChange} />
+                <Form.Control as="select" name="account" value={searchParams.account} onChange={handleInputChange}>
+                  <option value="">Select Account</option>
+                  {accountsDropdown.map((account, index) => (
+                    <option key={index} value={account}>{account}</option>
+                  ))}
+                </Form.Control>
               </Form.Group>
             </Col>
             <Col md={12} className="d-flex align-items-end mt-3">
