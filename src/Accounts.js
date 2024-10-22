@@ -313,6 +313,9 @@ const GetAccounts = ({ cgratesConfig }) => {
                   {page + 1}
                 </Pagination.Item>
               ))}
+              {results.length === itemsPerPage && (
+                <Pagination.Next onClick={() => handlePageChange(currentPage + 1)} />
+              )}
             </Pagination>
           </div>
         )}
