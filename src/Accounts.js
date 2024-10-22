@@ -97,7 +97,7 @@ const GetAccounts = ({ cgratesConfig }) => {
 
   const fetchAccountDetails = async (tenant, account) => {
     setModalLoading(true); // Set modal loading
-    const newQuery = {
+    const accountDetailsQuery = {
       method: 'APIerSv2.GetAccounts',
       params: [{
         Tenant: tenant,
@@ -109,31 +109,52 @@ const GetAccounts = ({ cgratesConfig }) => {
       id: 1
     };
 
+    const actionPlanQuery = {
+      method: 'ApierV2.GetAccountActionPlan',
+      params: [{
+        Account: account,
+        Tenant: tenant
+      }],
+      id: 5
+    };
+
     console.log(`Fetching account details for account: ${account}`);
 
     try {
-      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newQuery),
-      });
+      const [accountDetailsResponse, actionPlanResponse] = await Promise.all([
+        fetch(cgratesConfig.url + '/jsonrpc', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(accountDetailsQuery),
+        }),
+        fetch(cgratesConfig.url + '/jsonrpc', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(actionPlanQuery),
+        })
+      ]);
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (!accountDetailsResponse.ok || !actionPlanResponse.ok) {
+        throw new Error(`HTTP error! status: ${accountDetailsResponse.status} or ${actionPlanResponse.status}`);
       }
 
-      const data = await response.json();
-      console.log('Detailed account data:', data);
+      const accountDetailsData = await accountDetailsResponse.json();
+      const actionPlanData = await actionPlanResponse.json();
 
-      if (data && data.result) {
-        setAccountDetails(data.result[0]); // Store account details in state
+      console.log('Detailed account data:', accountDetailsData);
+      console.log('Action plan data:', actionPlanData);
+
+      if (accountDetailsData && accountDetailsData.result) {
+        setAccountDetails({ ...accountDetailsData.result[0], actionPlans: actionPlanData.result || [] }); // Store account details and action plans in state
       } else {
         setAccountDetails(null);
       }
     } catch (error) {
-      console.error('Error fetching account details:', error);
+      console.error('Error fetching account details or action plans:', error);
       setAccountDetails(null);
     } finally {
       setModalLoading(false); // End modal loading
@@ -532,4 +553,3 @@ const GetAccounts = ({ cgratesConfig }) => {
 };
 
 export default GetAccounts;
-
