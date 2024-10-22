@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form, Button, Container, Row, Col, Table, Pagination, Modal, Spinner } from 'react-bootstrap';
 
 const GetAccounts = ({ cgratesConfig }) => {
@@ -18,6 +18,12 @@ const GetAccounts = ({ cgratesConfig }) => {
   const [selectedBalance, setSelectedBalance] = useState(null); // Store clicked balance data
   const [accountDetails, setAccountDetails] = useState(null); // State to store detailed account data
   const [modalLoading, setModalLoading] = useState(false); // Loading state for modal API call
+  const [actions, setActions] = useState([]); // Actions available for the selected account
+  const [selectedAttribute, setSelectedAttribute] = useState(null); // New attribute
+
+  useEffect(() => {
+    // Placeholder effect if needed later
+  }, []);
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
@@ -78,12 +84,15 @@ const GetAccounts = ({ cgratesConfig }) => {
   const fetchAccountDetails = async (tenant, account) => {
     setModalLoading(true); // Set modal loading
     const newQuery = {
-      method: 'ApierV2.GetAccount',
+      method: 'APIerSv2.GetAccounts',
       params: [{
         Tenant: tenant,
-        Account: account
+        AccountIDs: [account],
+        Offset: 0,
+        Limit: 999,
+        Filter: null
       }],
-      id: 2
+      id: 1
     };
 
     console.log(`Fetching account details for account: ${account}`);
@@ -105,21 +114,57 @@ const GetAccounts = ({ cgratesConfig }) => {
       console.log('Detailed account data:', data);
 
       if (data && data.result) {
-        setAccountDetails(data.result); // Store account details in state
+        setAccountDetails(data.result[0]); // Store account details in state
+        setActions(data.result[0].Actions || []); // Store available actions for the account
       } else {
         setAccountDetails(null);
+        setActions([]);
       }
     } catch (error) {
       console.error('Error fetching account details:', error);
       setAccountDetails(null);
+      setActions([]);
     } finally {
       setModalLoading(false); // End modal loading
     }
   };
 
+  const executeAction = async (tenant, account, actionId) => {
+    const actionQuery = {
+      method: 'APIerSv1.ExecuteAction',
+      params: [{
+        Tenant: tenant,
+        Account: account,
+        ActionsId: actionId
+      }],
+      id: 4
+    };
+
+    console.log(`Executing action ${actionId} for account: ${account}`);
+
+    try {
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(actionQuery),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Action executed successfully:', data);
+    } catch (error) {
+      console.error('Error executing action:', error);
+    }
+  };
+
   const removeAccount = async (tenant, account) => {
     const removeQuery = {
-      method: 'ApierV1.RemoveAccount',
+      method: 'APIerV1.RemoveAccount',
       params: [{
         Tenant: tenant,
         Account: account,
@@ -169,20 +214,18 @@ const GetAccounts = ({ cgratesConfig }) => {
     fetchAccountDetails(tenant, account); // Fetch additional account details
   };
 
-  const handleBalanceClick = (balance) => {
-    setSelectedBalance(balance);
-    setBalanceModal(true); // Show balance modal with clicked balance details
+  const handleActionApply = (actionId) => {
+    if (selectedRowData) {
+      const [tenant, account] = selectedRowData.ID.split(':');
+      executeAction(tenant, account, actionId);
+    }
   };
 
   const handleCloseModal = () => {
     setShowModal(false);
     setSelectedRowData(null);
     setAccountDetails(null); // Clear account details when modal is closed
-  };
-
-  const handleCloseBalanceModal = () => {
-    setBalanceModal(false);
-    setSelectedBalance(null); // Clear balance details when modal is closed
+    setActions([]); // Clear actions when modal is closed
   };
 
   const handlePageChange = (pageNumber) => {
@@ -220,26 +263,14 @@ const GetAccounts = ({ cgratesConfig }) => {
     );
   };
 
-  // Function to render all properties of a selected balance
-  const renderBalanceDetails = (balance) => {
-    return (
-      <Table striped bordered hover>
-        <thead>
-          <tr>
-            <th>Property</th>
-            <th>Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          {Object.entries(balance).map(([key, value], index) => (
-            <tr key={index}>
-              <td>{key}</td>
-              <td>{typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : String(value)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </Table>
-    );
+  const handleBalanceClick = (balance) => {
+    setSelectedBalance(balance);
+    setBalanceModal(true); // Show balance modal with clicked balance details
+  };
+
+  const handleCloseBalanceModal = () => {
+    setBalanceModal(false);
+    setSelectedBalance(null); // Clear balance details when modal is closed
   };
 
   return (
@@ -340,6 +371,16 @@ const GetAccounts = ({ cgratesConfig }) => {
               <p><strong>Disabled:</strong> {accountDetails.Disabled ? 'Yes' : 'No'}</p>
               <p><strong>Action Triggers:</strong> {accountDetails.ActionTriggers ? JSON.stringify(accountDetails.ActionTriggers, null, 2) : 'None'}</p>
 
+              <h5>Available Actions</h5>
+              <Form.Group controlId="formActions">
+                <Form.Control as="select" onChange={(e) => handleActionApply(e.target.value)}>
+                  <option value="">Select Action</option>
+                  {actions.map((action, index) => (
+                    <option key={index} value={action}>{action}</option>
+                  ))}
+                </Form.Control>
+              </Form.Group>
+
               <h5>Data Balances</h5>
               {renderBalanceTable(accountDetails.BalanceMap, '*data')}
 
@@ -377,7 +418,22 @@ const GetAccounts = ({ cgratesConfig }) => {
         </Modal.Header>
         <Modal.Body>
           {selectedBalance ? (
-            renderBalanceDetails(selectedBalance)
+            <Table striped bordered hover>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(selectedBalance).map(([key, value], index) => (
+                  <tr key={index}>
+                    <td>{key}</td>
+                    <td>{typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : String(value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
           ) : (
             <p>No balance details available.</p>
           )}
