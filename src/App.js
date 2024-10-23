@@ -15,6 +15,7 @@ import DestinationRates from './DestinationRates';
 import RatingPlans from './RatingPlans';
 import RatingProfiles from './RatingProfile';
 import GetCostView from './GetCost';
+import Chargers from './Chargers.js';
 import { BrowserRouter as Router, Route, Routes, Link, useLocation } from 'react-router-dom';
 import { marked } from 'marked';
 
@@ -208,6 +209,7 @@ function App() {
         '/routes': 'Routes - Omnitouch CGrateS UI',
         '/attributes': 'Attributes - Omnitouch CGrateS UI',
         '/filters': 'Filters - Omnitouch CGrateS UI',
+        '/chargers': 'Chargers - Omnitouch CGrateS UI',
         '/destinationrates': 'DestinationRates - Omnitouch CGrateS UI',
         '/ratingplans': 'RatingPlans - Omnitouch CGrateS UI',
         '/ratingprofiles': 'RatingProfiles - Omnitouch CGrateS UI',
@@ -241,6 +243,7 @@ function App() {
               </NavDropdown>              
               <Nav.Link as={Link} to="/attributes">Attributes</Nav.Link>
               <NavDropdown title="Rate Plans & Profiles" id="rate-plans-dropdown">
+                <NavDropdown.Item as={Link} to="/chargers">Chargers</NavDropdown.Item>
                 <NavDropdown.Item as={Link} to="/destinationrates">DestinationRates</NavDropdown.Item>
                 <NavDropdown.Item as={Link} to="/ratingplans">RatingPlans</NavDropdown.Item>
                 <NavDropdown.Item as={Link} to="/ratingprofiles">RatingProfiles</NavDropdown.Item>
@@ -286,6 +289,7 @@ function App() {
           <Route path="/routes" element={<RouteS cgratesConfig={cgratesConfig} />} />
           <Route path="/attributes" element={<Attributes cgratesConfig={cgratesConfig} />} />
           <Route path="/filters" element={<Filters cgratesConfig={cgratesConfig} />} />
+          <Route path="/chargers" element={<Chargers cgratesConfig={cgratesConfig} />} />
           <Route path="/destinationrates" element={<DestinationRates cgratesConfig={cgratesConfig} />} />
           <Route path="/ratingplans" element={<RatingPlans cgratesConfig={cgratesConfig} />} />
           <Route path="/ratingprofiles" element={<RatingProfiles cgratesConfig={cgratesConfig} />} />
