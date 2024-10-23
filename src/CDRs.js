@@ -33,7 +33,7 @@ const CDRs = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
     setupTimeStart: '',
     setupTimeEnd: '',
-    tenant: '',
+    tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant
     account: '',
     past: '',
     cgratesInstance: '',

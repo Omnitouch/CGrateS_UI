@@ -3,7 +3,7 @@ import { Form, Button, Container, Row, Col, Table, Modal, Spinner, Accordion, Li
 
 const Attributes = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
-    tenant: '', // Tenant selection
+    tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant // Tenant selection
   });
   const [attributes, setAttributes] = useState([]); // Store the list of attributes
   const [selectedAttribute, setSelectedAttribute] = useState(null); // Store the selected attribute's details

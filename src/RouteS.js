@@ -4,7 +4,7 @@ import moment from 'moment';
 
 const GetRoutes = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
-    tenant: '',
+    tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant
     account: '',
     destination: ''
   });

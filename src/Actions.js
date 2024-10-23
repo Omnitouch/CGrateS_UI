@@ -3,7 +3,7 @@ import { Form, Button, Container, Row, Col, Table, Modal, Spinner, ListGroup } f
 
 const ActionsPage = ({ cgratesConfig }) => {
     const [searchParams, setSearchParams] = useState({
-        tenant: '', // Tenant selection
+        tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant // Tenant selection
     });
     const [actions, setActions] = useState([]); // Store the list of actions
     const [selectedAction, setSelectedAction] = useState(null); // Store the selected action's details

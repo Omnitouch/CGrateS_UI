@@ -3,7 +3,7 @@ import { Form, Button, Container, Row, Col, Table, Modal, Spinner, ListGroup } f
 
 const Resources = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
-    tenant: '', // Tenant selection
+    tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant // Tenant selection
   });
   const [resources, setResources] = useState([]); // Store the list of resources
   const [selectedResource, setSelectedResource] = useState(null); // Store the selected resource's details
