@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form, Button, Container, Row, Col, Table, Modal, Spinner, ListGroup } from 'react-bootstrap';
 
 const Chargers = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
-    tenant: '', // Tenant selection
+    tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant
   });
   const [chargers, setChargers] = useState([]); // Store the list of chargers
   const [selectedCharger, setSelectedCharger] = useState(null); // Store the selected charger's details
@@ -13,6 +13,10 @@ const Chargers = ({ cgratesConfig }) => {
   const [error, setError] = useState(''); // Handle error messages
   const [isEditing, setIsEditing] = useState(false); // Manage edit state
   const [editCharger, setEditCharger] = useState({}); // Store edited charger
+
+  useEffect(() => {
+    setSearchParams({ tenant: cgratesConfig.tenants.split(';')[0] }); // Ensure tenant is set to default on mount
+  }, [cgratesConfig]);
 
   // Handle input change for tenant selection
   const handleInputChange = (event) => {
@@ -87,8 +91,13 @@ const Chargers = ({ cgratesConfig }) => {
       const chargerProfileData = await chargerProfileResponse.json();
 
       if (chargerProfileData.result) {
-        setSelectedCharger(chargerProfileData.result);
-        setEditCharger(chargerProfileData.result);
+        // Ensure FilterIDs and AttributeIDs are not null, convert them to empty arrays if null
+        const result = chargerProfileData.result;
+        result.FilterIDs = result.FilterIDs || [];
+        result.AttributeIDs = result.AttributeIDs || [];
+        
+        setSelectedCharger(result);
+        setEditCharger(result);
         setShowModal(true); // Show the modal with details
         setIsEditing(false); // Ensure it starts in view mode
       }
@@ -114,6 +123,11 @@ const Chargers = ({ cgratesConfig }) => {
     setEditCharger({ ...editCharger, [name]: value });
   };
 
+  const handleEditArrayChange = (event, arrayName) => {
+    const value = event.target.value.split(',').map(item => item.trim());
+    setEditCharger({ ...editCharger, [arrayName]: value });
+  };
+
   const saveCharger = async () => {
     setIsLoading(true);
     setError(''); // Clear previous error
@@ -124,10 +138,9 @@ const Chargers = ({ cgratesConfig }) => {
           {
             Tenant: editCharger.Tenant,
             ID: editCharger.ID,
-            // Uncomment fields as needed
-            // RunID: editCharger.RunID,
-            // FilterIDs: editCharger.FilterIDs,
-            // AttributeIDs: editCharger.AttributeIDs,
+            RunID: editCharger.RunID,
+            FilterIDs: editCharger.FilterIDs,
+            AttributeIDs: editCharger.AttributeIDs,
             Weight: editCharger.Weight,
           },
         ],
@@ -174,6 +187,8 @@ const Chargers = ({ cgratesConfig }) => {
       Stored: true,
       Weight: 10,
       ThresholdIDs: ['*none'],
+      RunID: '',
+      AttributeIDs: [],
     });
     setSelectedCharger(null); // Clear selectedCharger so it doesn't render view mode
     setIsEditing(true); // Set to edit mode
@@ -262,6 +277,18 @@ const Chargers = ({ cgratesConfig }) => {
                 <Form.Group>
                   <Form.Label>Weight</Form.Label>
                   <Form.Control type="number" name="Weight" value={editCharger.Weight} onChange={handleEditChange} />
+                </Form.Group>
+                <Form.Group>
+                  <Form.Label>Run ID</Form.Label>
+                  <Form.Control type="text" name="RunID" value={editCharger.RunID} onChange={handleEditChange} />
+                </Form.Group>
+                <Form.Group>
+                  <Form.Label>Filter IDs (comma-separated)</Form.Label>
+                  <Form.Control type="text" name="FilterIDs" value={editCharger.FilterIDs.join(',')} onChange={(e) => handleEditArrayChange(e, 'FilterIDs')} />
+                </Form.Group>
+                <Form.Group>
+                  <Form.Label>Attribute IDs (comma-separated)</Form.Label>
+                  <Form.Control type="text" name="AttributeIDs" value={editCharger.AttributeIDs.join(',')} onChange={(e) => handleEditArrayChange(e, 'AttributeIDs')} />
                 </Form.Group>
               </>
             ) : (
