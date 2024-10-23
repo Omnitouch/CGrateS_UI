@@ -37,11 +37,12 @@ If you're new to CGrateS, and want to learn more about it:
 Not all API endpoints are exposed here.
 So far what has been include is limited support for:
  * Searching and exporting CDRs
- * Viewing Accounts & Account Balances
+ * Viewing Accounts & Account Balances (And Executing Actions / Viewing ActionPlans)
  * Viewing / Terminating SessionS
  * Managing Resources & monitoring usage of them
  * Managing ActionPlans
  * Managing Actions
+ * Managing ChargerS
  * Viewing Routes / Least Cost Routes
  * Managing AttributeS
  * Managing FilterS

@@ -8,7 +8,6 @@ const GetAccounts = ({ cgratesConfig }) => {
   });
 
   const [results, setResults] = useState([]);
-  const [accountsDropdown, setAccountsDropdown] = useState([]); // State to store account dropdown values
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10); // Default 10 records per page
   const [totalItems, setTotalItems] = useState(0);
@@ -32,10 +31,6 @@ const GetAccounts = ({ cgratesConfig }) => {
   const handleInputChange = (event) => {
     const { name, value } = event.target;
     setSearchParams({ ...searchParams, [name]: value });
-
-    if (name === 'tenant') {
-      setAccountsDropdown([]); // Clear accounts dropdown when a new tenant is selected
-    }
   };
 
   const fetchResults = async (page = 1) => {
@@ -75,20 +70,17 @@ const GetAccounts = ({ cgratesConfig }) => {
 
       if (data && data.result) {
         setResults(data.result); // Store the fetched results
-        setAccountsDropdown(data.result.map(account => account.ID)); // Extract account IDs for dropdown
         setTotalItems(data.result.length); // Set the total items for pagination
         if (searchParams.tenant) {
           fetchActions(searchParams.tenant); // Fetch actions after fetching accounts
         }
       } else {
         setResults([]);
-        setAccountsDropdown([]);
         setTotalItems(0);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
       setResults([]);
-      setAccountsDropdown([]);
       setTotalItems(0);
     } finally {
       setIsLoading(false);
@@ -273,6 +265,44 @@ const GetAccounts = ({ cgratesConfig }) => {
     }
   };
 
+  const removeActionPlan = async (tenant, actionPlanId) => {
+    const removeActionPlanQuery = {
+      method: 'APIerSv1.RemoveActionPlan',
+      params: [{
+        Tenant: tenant,
+        Id: actionPlanId
+      }],
+      id: 6
+    };
+
+    console.log(`Removing action plan: ${actionPlanId}`);
+
+    try {
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(removeActionPlanQuery),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Action plan removed successfully:', data);
+
+      // Refresh modal content after removing the action plan
+      if (selectedRowData) {
+        const [tenant, account] = selectedRowData.ID.split(':');
+        fetchAccountDetails(tenant, account); // Refresh account details
+      }
+    } catch (error) {
+      console.error('Error removing action plan:', error);
+    }
+  };
+
   const handleSubmit = (event) => {
     event.preventDefault();
     setCurrentPage(1); // Reset to the first page
@@ -281,7 +311,6 @@ const GetAccounts = ({ cgratesConfig }) => {
 
   const handleRowClick = (rowData) => {
     setSelectedRowData(rowData);
-    // Split the ID to get tenant and account
     const [tenant, account] = rowData.ID.split(':');
     setAccountDetails({ Tenant: tenant, Account: account, ...rowData }); // Set the tenant and account details in state
     setShowModal(true);
@@ -374,14 +403,15 @@ const GetAccounts = ({ cgratesConfig }) => {
               </Form.Group>
             </Col>
             <Col md={4}>
-              <Form.Group controlId="formAccountDropdown">
+              <Form.Group controlId="formAccount">
                 <Form.Label>Account</Form.Label>
-                <Form.Control as="select" name="account" value={searchParams.account} onChange={handleInputChange}>
-                  <option value="">Select Account</option>
-                  {accountsDropdown.map((account, index) => (
-                    <option key={index} value={account}>{account}</option>
-                  ))}
-                </Form.Control>
+                <Form.Control
+                  type="text"
+                  name="account"
+                  value={searchParams.account}
+                  placeholder="Search Account"
+                  onChange={handleInputChange}
+                />
               </Form.Group>
             </Col>
             <Col md={12} className="d-flex align-items-end mt-3">
@@ -470,6 +500,7 @@ const GetAccounts = ({ cgratesConfig }) => {
                       <th>UUID</th>
                       <th>Actions ID</th>
                       <th>Next Execution Time</th>
+                      <th>Remove</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -479,6 +510,14 @@ const GetAccounts = ({ cgratesConfig }) => {
                         <td>{plan.Uuid}</td>
                         <td>{plan.ActionsId}</td>
                         <td>{plan.NextExecTime}</td>
+                        <td>
+                          <Button
+                            variant="danger"
+                            onClick={() => removeActionPlan(accountDetails.Tenant, plan.ActionPlanId)}
+                          >
+                            Remove
+                          </Button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -486,7 +525,6 @@ const GetAccounts = ({ cgratesConfig }) => {
               ) : (
                 <p>No action plans available for this account.</p>
               )}
-
 
               <h5>Available Actions</h5>
               <Form.Group controlId="formActions">
