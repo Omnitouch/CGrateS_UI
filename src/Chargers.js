@@ -91,11 +91,8 @@ const Chargers = ({ cgratesConfig }) => {
       const chargerProfileData = await chargerProfileResponse.json();
 
       if (chargerProfileData.result) {
-        // Ensure FilterIDs and AttributeIDs are not null, convert them to empty arrays if null
         const result = chargerProfileData.result;
-        result.FilterIDs = result.FilterIDs || [];
-        result.AttributeIDs = result.AttributeIDs || [];
-        
+        result.FilterIDs = result.FilterIDs || []; // Ensure FilterIDs are initialized as an array
         setSelectedCharger(result);
         setEditCharger(result);
         setShowModal(true); // Show the modal with details
@@ -123,9 +120,25 @@ const Chargers = ({ cgratesConfig }) => {
     setEditCharger({ ...editCharger, [name]: value });
   };
 
-  const handleEditArrayChange = (event, arrayName) => {
-    const value = event.target.value.split(',').map(item => item.trim());
-    setEditCharger({ ...editCharger, [arrayName]: value });
+  // Handle FilterID changes
+  const handleFilterIDChange = (index, newValue) => {
+    const updatedFilterIDs = [...editCharger.FilterIDs];
+    updatedFilterIDs[index] = newValue;
+    setEditCharger({ ...editCharger, FilterIDs: updatedFilterIDs });
+  };
+
+  // Add a new FilterID
+  const addFilterID = () => {
+    const updatedFilterIDs = [...(editCharger.FilterIDs || [])];
+    updatedFilterIDs.push(''); // Add empty FilterID
+    setEditCharger({ ...editCharger, FilterIDs: updatedFilterIDs });
+  };
+
+  // Remove a FilterID
+  const removeFilterID = (index) => {
+    const updatedFilterIDs = [...editCharger.FilterIDs];
+    updatedFilterIDs.splice(index, 1);
+    setEditCharger({ ...editCharger, FilterIDs: updatedFilterIDs });
   };
 
   const saveCharger = async () => {
@@ -283,12 +296,19 @@ const Chargers = ({ cgratesConfig }) => {
                   <Form.Control type="text" name="RunID" value={editCharger.RunID} onChange={handleEditChange} />
                 </Form.Group>
                 <Form.Group>
-                  <Form.Label>Filter IDs (comma-separated)</Form.Label>
-                  <Form.Control type="text" name="FilterIDs" value={editCharger.FilterIDs.join(',')} onChange={(e) => handleEditArrayChange(e, 'FilterIDs')} />
-                </Form.Group>
-                <Form.Group>
-                  <Form.Label>Attribute IDs (comma-separated)</Form.Label>
-                  <Form.Control type="text" name="AttributeIDs" value={editCharger.AttributeIDs.join(',')} onChange={(e) => handleEditArrayChange(e, 'AttributeIDs')} />
+                  <Form.Label>Filter IDs</Form.Label>
+                  {(editCharger.FilterIDs || []).map((filterID, index) => (
+                    <div key={index} style={{ display: 'flex', marginBottom: '5px' }}>
+                      <Form.Control
+                        type="text"
+                        value={filterID}
+                        onChange={(e) => handleFilterIDChange(index, e.target.value)}
+                        style={{ marginRight: '10px' }}
+                      />
+                      <Button variant="danger" onClick={() => removeFilterID(index)}>Remove</Button>
+                    </div>
+                  ))}
+                  <Button onClick={addFilterID}>Add FilterID</Button>
                 </Form.Group>
               </>
             ) : (
@@ -300,8 +320,7 @@ const Chargers = ({ cgratesConfig }) => {
                     <ListGroup.Item><strong>ID:</strong> {selectedCharger.ID}</ListGroup.Item>
                     <ListGroup.Item><strong>Weight:</strong> {selectedCharger.Weight}</ListGroup.Item>
                     <ListGroup.Item><strong>Run ID:</strong> {selectedCharger.RunID}</ListGroup.Item>
-                    <ListGroup.Item><strong>Filter IDs:</strong> {selectedCharger.FilterIDs && selectedCharger.FilterIDs.length > 0 ? selectedCharger.FilterIDs.join(', ') : 'None'}</ListGroup.Item>
-                    <ListGroup.Item><strong>Attribute IDs:</strong> {selectedCharger.AttributeIDs && selectedCharger.AttributeIDs.length > 0 ? selectedCharger.AttributeIDs.join(', ') : 'None'}</ListGroup.Item>
+                    <ListGroup.Item><strong>Filter IDs:</strong> {selectedCharger.FilterIDs.length > 0 ? selectedCharger.FilterIDs.join(', ') : 'None'}</ListGroup.Item>
                   </ListGroup>
                 </>
               )
