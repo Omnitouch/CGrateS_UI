@@ -93,6 +93,7 @@ const Chargers = ({ cgratesConfig }) => {
       if (chargerProfileData.result) {
         const result = chargerProfileData.result;
         result.FilterIDs = result.FilterIDs || []; // Ensure FilterIDs are initialized as an array
+        result.AttributeIDs = result.AttributeIDs || []; // Ensure AttributeIDs are initialized as an array
         setSelectedCharger(result);
         setEditCharger(result);
         setShowModal(true); // Show the modal with details
@@ -139,6 +140,27 @@ const Chargers = ({ cgratesConfig }) => {
     const updatedFilterIDs = [...editCharger.FilterIDs];
     updatedFilterIDs.splice(index, 1);
     setEditCharger({ ...editCharger, FilterIDs: updatedFilterIDs });
+  };
+
+  // Handle AttributeID changes
+  const handleAttributeIDChange = (index, newValue) => {
+    const updatedAttributeIDs = [...editCharger.AttributeIDs];
+    updatedAttributeIDs[index] = newValue;
+    setEditCharger({ ...editCharger, AttributeIDs: updatedAttributeIDs });
+  };
+
+  // Add a new AttributeID
+  const addAttributeID = () => {
+    const updatedAttributeIDs = [...(editCharger.AttributeIDs || [])];
+    updatedAttributeIDs.push(''); // Add empty AttributeID
+    setEditCharger({ ...editCharger, AttributeIDs: updatedAttributeIDs });
+  };
+
+  // Remove an AttributeID
+  const removeAttributeID = (index) => {
+    const updatedAttributeIDs = [...editCharger.AttributeIDs];
+    updatedAttributeIDs.splice(index, 1);
+    setEditCharger({ ...editCharger, AttributeIDs: updatedAttributeIDs });
   };
 
   const saveCharger = async () => {
@@ -310,6 +332,21 @@ const Chargers = ({ cgratesConfig }) => {
                   ))}
                   <Button onClick={addFilterID}>Add FilterID</Button>
                 </Form.Group>
+                <Form.Group>
+                  <Form.Label>Attribute IDs</Form.Label>
+                  {(editCharger.AttributeIDs || []).map((attributeID, index) => (
+                    <div key={index} style={{ display: 'flex', marginBottom: '5px' }}>
+                      <Form.Control
+                        type="text"
+                        value={attributeID}
+                        onChange={(e) => handleAttributeIDChange(index, e.target.value)}
+                        style={{ marginRight: '10px' }}
+                      />
+                      <Button variant="danger" onClick={() => removeAttributeID(index)}>Remove</Button>
+                    </div>
+                  ))}
+                  <Button onClick={addAttributeID}>Add AttributeID</Button>
+                </Form.Group>
               </>
             ) : (
               selectedCharger && (
@@ -321,6 +358,7 @@ const Chargers = ({ cgratesConfig }) => {
                     <ListGroup.Item><strong>Weight:</strong> {selectedCharger.Weight}</ListGroup.Item>
                     <ListGroup.Item><strong>Run ID:</strong> {selectedCharger.RunID}</ListGroup.Item>
                     <ListGroup.Item><strong>Filter IDs:</strong> {selectedCharger.FilterIDs.length > 0 ? selectedCharger.FilterIDs.join(', ') : 'None'}</ListGroup.Item>
+                    <ListGroup.Item><strong>Attribute IDs:</strong> {selectedCharger.AttributeIDs.length > 0 ? selectedCharger.AttributeIDs.join(', ') : 'None'}</ListGroup.Item>
                   </ListGroup>
                 </>
               )
