@@ -230,7 +230,7 @@ const GetAccounts = ({ cgratesConfig }) => {
 
   const removeAccount = async (tenant, account) => {
     const removeQuery = {
-      method: 'APIerV1.RemoveAccount',
+      method: 'APIerSV1.RemoveAccount',
       params: [{
         Tenant: tenant,
         Account: account,
