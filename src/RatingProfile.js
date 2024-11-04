@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Button, Container, Row, Col, Table, Modal, Spinner, ListGroup, Accordion, Alert } from 'react-bootstrap';
+import { Form, Button, Container, Row, Col, Table, Modal, Spinner, Alert } from 'react-bootstrap';
 
 const RatingProfiles = ({ cgratesConfig }) => {
     const [searchParams, setSearchParams] = useState({ tenant: '' });
@@ -8,30 +8,43 @@ const RatingProfiles = ({ cgratesConfig }) => {
     const [showModal, setShowModal] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [responseTime, setResponseTime] = useState(null);
-    const [isEditing, setIsEditing] = useState(false); // Track whether we're editing a profile or creating a new one
+    const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({
         Category: '',
         Subject: '',
         RatingPlanActivations: [{ ActivationTime: '', RatingPlanId: '', FallbackSubjects: '' }]
     });
-    const [errorMessage, setErrorMessage] = useState(null); // Store error messages
+    const [errorMessage, setErrorMessage] = useState(null);
 
     const handleInputChange = (event) => {
         const { name, value } = event.target;
         setSearchParams({ ...searchParams, [name]: value });
     };
 
-    // Handle changes in the top-level form fields
     const handleFormChange = (event) => {
         const { name, value } = event.target;
         setFormData({ ...formData, [name]: value });
     };
 
-    // Handle changes for nested RatingPlanActivations fields
     const handleActivationChange = (index, event) => {
         const { name, value } = event.target;
         const updatedActivations = [...formData.RatingPlanActivations];
         updatedActivations[index] = { ...updatedActivations[index], [name]: value };
+        setFormData({ ...formData, RatingPlanActivations: updatedActivations });
+    };
+
+    const addActivation = () => {
+        setFormData({
+            ...formData,
+            RatingPlanActivations: [
+                ...formData.RatingPlanActivations,
+                { ActivationTime: '', RatingPlanId: '', FallbackSubjects: '' }
+            ]
+        });
+    };
+
+    const removeActivation = (index) => {
+        const updatedActivations = formData.RatingPlanActivations.filter((_, i) => i !== index);
         setFormData({ ...formData, RatingPlanActivations: updatedActivations });
     };
 
@@ -103,7 +116,7 @@ const RatingProfiles = ({ cgratesConfig }) => {
 
     const saveRatingProfile = async () => {
         setIsLoading(true);
-        setErrorMessage(null); // Reset error message before attempting to save
+        setErrorMessage(null);
 
         try {
             const query = {
@@ -126,9 +139,9 @@ const RatingProfiles = ({ cgratesConfig }) => {
             const data = await response.json();
 
             if (data.error) {
-                setErrorMessage(data.error.message); // Display the error message
+                setErrorMessage(data.error.message);
             } else {
-                setShowModal(false); // Close modal on success
+                setShowModal(false);
             }
         } catch (error) {
             console.error('Error saving rating profile:', error);
@@ -212,13 +225,11 @@ const RatingProfiles = ({ cgratesConfig }) => {
                     </Table>
                 )}
 
-                {/* Modal for creating/editing rating profiles */}
                 <Modal show={showModal} onHide={handleCloseModal} size="lg">
                     <Modal.Header closeButton>
                         <Modal.Title>{isEditing ? 'Edit Rating Profile' : 'Create New Rating Profile'}</Modal.Title>
                     </Modal.Header>
                     <Modal.Body>
-                        {/* Display error message if it exists */}
                         {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
 
                         <Form>
@@ -232,7 +243,7 @@ const RatingProfiles = ({ cgratesConfig }) => {
                             </Form.Group>
                             <h5>Rating Plan Activations</h5>
                             {formData.RatingPlanActivations.map((activation, index) => (
-                                <div key={index}>
+                                <div key={index} className="mb-3">
                                     <Form.Group controlId={`formActivationTime${index}`}>
                                         <Form.Label>Activation Time</Form.Label>
                                         <Form.Control
@@ -260,8 +271,10 @@ const RatingProfiles = ({ cgratesConfig }) => {
                                             onChange={(e) => handleActivationChange(index, e)}
                                         />
                                     </Form.Group>
+                                    <Button variant="danger" onClick={() => removeActivation(index)}>Remove Activation</Button>
                                 </div>
                             ))}
+                            <Button variant="success" onClick={addActivation}>Add Activation</Button>
                         </Form>
                     </Modal.Body>
                     <Modal.Footer>
