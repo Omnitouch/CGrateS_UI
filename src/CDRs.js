@@ -3,7 +3,6 @@ import { Form, Button, Container, Row, Col, Table, Pagination, Modal, Spinner } 
 import Datetime from 'react-datetime';
 import moment from 'moment';
 
-
 // Options for the "Past X" dropdown
 const pastOptions = [
   { label: 'Past 15 minutes', value: 15 },
@@ -38,7 +37,7 @@ const CDRs = ({ cgratesConfig }) => {
     past: '',
     cgratesInstance: '',
     subject: '',
-    category: ''
+    category: [] // Update to an array to hold multiple categories
   });
 
   const [query, setQuery] = useState(null); // State to store the API query object
@@ -56,8 +55,6 @@ const CDRs = ({ cgratesConfig }) => {
   const [isExporting, setIsExporting] = useState(false); // New state for handling export loading
   const [exportApiQuery, setExportApiQuery] = useState(''); // State to store the export API query
   const [exporterOptions, setExporterOptions] = useState([]); // Dynamically populated exporter list
-
-
 
   const handleDateChange = (type, moment) => {
     setSearchParams({
@@ -83,6 +80,11 @@ const CDRs = ({ cgratesConfig }) => {
     setSearchParams({ ...searchParams, [name]: value });
   };
 
+  const handleCategoryChange = (event) => {
+    const selectedOptions = Array.from(event.target.selectedOptions).map(option => option.value);
+    setSearchParams({ ...searchParams, category: selectedOptions });
+  };
+
   const handlePastChange = (event) => {
     const value = event.target.value;
     const end = moment();
@@ -99,7 +101,6 @@ const CDRs = ({ cgratesConfig }) => {
     setIsLoading(true);
     setResults([]); // Clear the current results
     const startTime = Date.now();
-
     const newQuery = {
       method: 'CDRsV2.GetCDRs',
       params: [{
@@ -112,28 +113,33 @@ const CDRs = ({ cgratesConfig }) => {
       id: 0
     };
 
+    // Set Tenants
     if (searchParams.tenant) {
       newQuery.params[0].Tenants = [searchParams.tenant];
     }
-
+    // Handle comma-separated Accounts
     if (searchParams.account) {
-      newQuery.params[0].Accounts = [searchParams.account];
+      const accounts = searchParams.account.includes(',')
+        ? searchParams.account.split(',').map((acc) => acc.trim())
+        : [searchParams.account];
+      newQuery.params[0].Accounts = accounts;
     }
-
+    // Handle comma-separated Subjects
     if (searchParams.subject) {
-      newQuery.params[0].Subjects = [searchParams.subject];
+      const subjects = searchParams.subject.includes(',')
+        ? searchParams.subject.split(',').map((subj) => subj.trim())
+        : [searchParams.subject];
+      newQuery.params[0].Subjects = subjects;
     }
-
-    if (searchParams.category) {
-      newQuery.params[0].Categories = [searchParams.category];
+  
+    // Set Categories
+    if (searchParams.category && searchParams.category.length > 0) {
+      newQuery.params[0].Categories = searchParams.category;
     }
 
     setQuery(newQuery); // Store the query for later use in export
     setApiQuery(JSON.stringify(newQuery, null, 2));
-
-
-    console.log(`Fetching data from: ${cgratesConfig}`);
-
+  
     try {
       const response = await fetch(cgratesConfig.url + '/jsonrpc', {
         method: 'POST',
@@ -142,18 +148,16 @@ const CDRs = ({ cgratesConfig }) => {
         },
         body: JSON.stringify(newQuery),
       });
-
+  
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-
+  
       const data = await response.json();
       const endTime = Date.now();
       const timeTaken = ((endTime - startTime) / 1000).toFixed(2);
       setResponseTime(timeTaken);
-
-      console.log('Data fetched successfully:', data);
-
+  
       if (data && data.result) {
         setResults(data.result); // Handle the fetched results
       } else {
@@ -167,6 +171,7 @@ const CDRs = ({ cgratesConfig }) => {
       setIsLoading(false);
     }
   };
+  
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -327,24 +332,42 @@ const CDRs = ({ cgratesConfig }) => {
             <Col md={3}>
               <Form.Group controlId="formAccount">
                 <Form.Label>Account</Form.Label>
-                <Form.Control type="text" name="account" value={searchParams.account} onChange={handleInputChange} />
+                <Form.Control
+                  type="text"
+                  name="account"
+                  value={searchParams.account}
+                  onChange={handleInputChange}
+                />
+                <Form.Text muted>Separate multiple accounts with commas.</Form.Text>
               </Form.Group>
             </Col>
             <Col md={3}>
               <Form.Group controlId="formSubject">
                 <Form.Label>Subject</Form.Label>
-                <Form.Control type="text" name="subject" value={searchParams.subject} onChange={handleInputChange} />
+                <Form.Control
+                  type="text"
+                  name="subject"
+                  value={searchParams.subject}
+                  onChange={handleInputChange}
+                />
+                <Form.Text muted>Separate multiple subjects with commas.</Form.Text>
               </Form.Group>
             </Col>
             <Col md={3}>
               <Form.Group controlId="formCategory">
                 <Form.Label>Category</Form.Label>
-                <Form.Control as="select" name="category" value={searchParams.category} onChange={handleInputChange}>
-                  <option value="">Select Category</option>
+                <Form.Control
+                  as="select"
+                  name="category"
+                  value={searchParams.category}
+                  onChange={handleCategoryChange}
+                  multiple // Enable multiple selection
+                >
                   {categoryOptions.map((option, index) => (
                     <option key={index} value={option.value}>{option.label}</option>
                   ))}
                 </Form.Control>
+                <Form.Text muted>Hold Ctrl (Cmd on Mac) to select multiple categories.</Form.Text>
               </Form.Group>
             </Col>
             <Col md={12} className="d-flex align-items-end mt-3">
