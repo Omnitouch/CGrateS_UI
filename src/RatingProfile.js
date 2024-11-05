@@ -15,6 +15,53 @@ const RatingProfiles = ({ cgratesConfig }) => {
         RatingPlanActivations: [{ ActivationTime: '', RatingPlanId: '', FallbackSubjects: '' }]
     });
     const [errorMessage, setErrorMessage] = useState(null);
+    const [ratingPlanOptions, setRatingPlanOptions] = useState([]);
+
+    useEffect(() => {
+        fetchTPIdsAndRatingPlans();
+    }, []);
+
+    const fetchTPIdsAndRatingPlans = async () => {
+        setIsLoading(true);
+        try {
+            // Fetch all TPIds
+            const tpIdQuery = { method: 'APIerSv1.GetTPIds', params: [] };
+            const tpIdResponse = await fetch(cgratesConfig.url + '/jsonrpc', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(tpIdQuery),
+            });
+            const tpIdData = await tpIdResponse.json();
+
+            if (tpIdData.result) {
+                let allRatingPlans = [];
+
+                // For each TPid, fetch RatingPlanIds
+                for (const TPid of tpIdData.result) {
+                    const ratingPlanQuery = {
+                        jsonrpc: '2.0',
+                        method: 'ApierV1.GetTPRatingPlanIds',
+                        params: [{ TPid }]
+                    };
+                    const ratingPlanResponse = await fetch(cgratesConfig.url + '/jsonrpc', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(ratingPlanQuery),
+                    });
+                    const ratingPlanData = await ratingPlanResponse.json();
+                    
+                    if (ratingPlanData.result) {
+                        allRatingPlans = allRatingPlans.concat(ratingPlanData.result);
+                    }
+                }
+                setRatingPlanOptions(allRatingPlans);
+            }
+        } catch (error) {
+            console.error('Error fetching TPIds or RatingPlanIds:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const handleInputChange = (event) => {
         const { name, value } = event.target;
@@ -176,7 +223,7 @@ const RatingProfiles = ({ cgratesConfig }) => {
         <div className="App">
             <Container>
                 <h2>Rating Profiles</h2>
-                <Form onSubmit={handleSubmit} className="mt-4">
+                <Form onSubmit={(e) => { e.preventDefault(); fetchRatingProfiles(); }} className="mt-4">
                     <Row>
                         <Col md={6}>
                             <Form.Group controlId="formTenant">
@@ -256,11 +303,16 @@ const RatingProfiles = ({ cgratesConfig }) => {
                                     <Form.Group controlId={`formRatingPlanId${index}`}>
                                         <Form.Label>Rating Plan ID</Form.Label>
                                         <Form.Control
-                                            type="text"
+                                            as="select"
                                             name="RatingPlanId"
                                             value={activation.RatingPlanId}
                                             onChange={(e) => handleActivationChange(index, e)}
-                                        />
+                                        >
+                                            <option value="">Select Rating Plan ID</option>
+                                            {ratingPlanOptions.map((planId, idx) => (
+                                                <option key={idx} value={planId}>{planId}</option>
+                                            ))}
+                                        </Form.Control>
                                     </Form.Group>
                                     <Form.Group controlId={`formFallbackSubjects${index}`}>
                                         <Form.Label>Fallback Subjects</Form.Label>
@@ -278,7 +330,7 @@ const RatingProfiles = ({ cgratesConfig }) => {
                         </Form>
                     </Modal.Body>
                     <Modal.Footer>
-                        <Button variant="secondary" onClick={handleCloseModal}>Close</Button>
+                        <Button variant="secondary" onClick={() => setShowModal(false)}>Close</Button>
                         <Button variant="primary" onClick={saveRatingProfile}>{isEditing ? 'Save Changes' : 'Create Profile'}</Button>
                     </Modal.Footer>
                 </Modal>
