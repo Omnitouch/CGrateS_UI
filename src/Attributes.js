@@ -263,6 +263,40 @@ const Attributes = ({ cgratesConfig }) => {
     }
   };
 
+  // Delete selected attribute profile
+  const deleteAttribute = async (attributeId) => {
+    setIsLoading(true);
+    try {
+      const query = {
+        method: 'APIerSv1.RemoveAttributeProfile',
+        params: [{ Tenant: searchParams.tenant, Id: attributeId }]
+      };
+
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(query),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.result) {
+        console.log('Attribute profile deleted successfully');
+        setShowModal(false);
+        fetchAttributes(); // Refresh the list of attributes after deletion
+      }
+    } catch (error) {
+      console.error('Error deleting attribute profile:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleRowClick = (attributeId) => {
     fetchAttributeDetails(attributeId); // Fetch the details when an attribute is clicked
   };
@@ -335,7 +369,7 @@ const Attributes = ({ cgratesConfig }) => {
               </tbody>
             </Table>
             {/* Button to create new attribute */}
-            <Button variant="success" className="mt-4" onClick={openCreateNewAttributeModal}>Create New Attribute</Button>
+            <Button variant="success" className="mt-4" onClick={() => openCreateNewAttributeModal()}>Create New Attribute</Button>
           </>
         )}
 
@@ -503,6 +537,7 @@ const Attributes = ({ cgratesConfig }) => {
                 Edit
               </Button>
             )}
+            <Button variant="danger" onClick={() => deleteAttribute(editAttribute.ID)}>Delete Attribute</Button>
             <Button variant="secondary" onClick={handleCloseModal}>
               Close
             </Button>
