@@ -240,7 +240,7 @@ const CDRs = ({ cgratesConfig }) => {
 
     try {
       const selectedInstance = "test"; // Simulating instance retrieval
-      const response = await fetch(selectedInstance.url + '/jsonrpc', {
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
