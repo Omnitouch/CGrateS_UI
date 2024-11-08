@@ -37,7 +37,8 @@ const CDRs = ({ cgratesConfig }) => {
     past: '',
     cgratesInstance: '',
     subject: '',
-    category: [] // Update to an array to hold multiple categories
+    category: [], // Update to an array to hold multiple categories
+    destination: '' // New state for Destination
   });
 
   const [query, setQuery] = useState(null); // State to store the API query object
@@ -131,10 +132,17 @@ const CDRs = ({ cgratesConfig }) => {
         : [searchParams.subject];
       newQuery.params[0].Subjects = subjects;
     }
-  
+
     // Set Categories
     if (searchParams.category && searchParams.category.length > 0) {
       newQuery.params[0].Categories = searchParams.category;
+    }
+    // Set Destination
+    if (searchParams.destination) {
+      const destinations = searchParams.destination.includes(',')
+        ? searchParams.destination.split(',').map((dest) => dest.trim())
+        : [searchParams.destination];
+      newQuery.params[0].Destinations = destinations;
     }
 
     setQuery(newQuery); // Store the query for later use in export
@@ -351,6 +359,18 @@ const CDRs = ({ cgratesConfig }) => {
                   onChange={handleInputChange}
                 />
                 <Form.Text muted>Separate multiple subjects with commas.</Form.Text>
+              </Form.Group>
+            </Col>
+            <Col md={3}>
+              <Form.Group controlId="formSubject">
+                <Form.Label>Destination</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="destination"
+                  value={searchParams.destination}
+                  onChange={handleInputChange}
+                />
+                <Form.Text muted>Separate multiple destinations with commas.</Form.Text>
               </Form.Group>
             </Col>
             <Col md={3}>
