@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { Form, Button, Container, Row, Col, Table, Modal, Spinner, ListGroup } from 'react-bootstrap';
+import AccountDropdown from './AccountDropdown'; // Import the AccountDropdown component
 
 const ActionsPage = ({ cgratesConfig }) => {
     const [searchParams, setSearchParams] = useState({
-        tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant // Tenant selection
+        tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant
     });
     const [actions, setActions] = useState([]); // Store the list of actions
     const [selectedAction, setSelectedAction] = useState(null); // Store the selected action's details
+    const [selectedAccount, setSelectedAccount] = useState(null); // Store the selected account details
     const [isEditing, setIsEditing] = useState(false); // Track if editing is active
     const [showModal, setShowModal] = useState(false); // Control the modal display
     const [isLoading, setIsLoading] = useState(false); // Handle loading state
@@ -104,6 +106,49 @@ const ActionsPage = ({ cgratesConfig }) => {
         setShowModal(true);
         setIsEditing(false); // Start in view mode
     };
+
+    const handleExecuteAction = async () => {
+        if (!selectedAccount || !selectedAction) {
+            alert('Please select an action and an account.');
+            return;
+        }
+
+        const { tenant, account } = selectedAccount;
+        const query = {
+            method: 'APIerSv1.ExecuteAction',
+            params: [
+                {
+                    Tenant: tenant,
+                    Account: account,
+                    ActionsId: selectedAction[0]?.Id,
+                },
+            ],
+        };
+
+        try {
+            const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(query),
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.result) {
+                alert('Action executed successfully!');
+            } else {
+                alert('Failed to execute action.');
+            }
+        } catch (error) {
+            console.error('Error executing action:', error);
+        }
+    };
+
 
     const handleEditChange = (index, field, value) => {
         const updatedAction = [...selectedAction];
@@ -269,6 +314,7 @@ const ActionsPage = ({ cgratesConfig }) => {
     const handleCloseModal = () => {
         setShowModal(false);
         setSelectedAction(null);
+        setSelectedAccount(null); // Clear selected account when modal is closed
         setError('');
     };
 
@@ -276,10 +322,10 @@ const ActionsPage = ({ cgratesConfig }) => {
         if (!window.confirm(`Are you sure you want to delete the action with ID: ${actionId}?`)) {
             return; // Exit if the user cancels
         }
-    
+
         setIsLoading(true);
         setError(''); // Clear previous error
-    
+
         try {
             const query = {
                 method: 'APIerSv1.RemoveActions',
@@ -290,7 +336,7 @@ const ActionsPage = ({ cgratesConfig }) => {
                     },
                 ],
             };
-    
+
             const response = await fetch(cgratesConfig.url + '/jsonrpc', {
                 method: 'POST',
                 headers: {
@@ -298,11 +344,11 @@ const ActionsPage = ({ cgratesConfig }) => {
                 },
                 body: JSON.stringify(query),
             });
-    
+
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-    
+
             const data = await response.json();
             if (data.result) {
                 console.log('Action deleted successfully');
@@ -318,7 +364,7 @@ const ActionsPage = ({ cgratesConfig }) => {
             setIsLoading(false);
         }
     };
-    
+
 
     return (
         <Container>
@@ -341,7 +387,7 @@ const ActionsPage = ({ cgratesConfig }) => {
                 </Row>
             </Form>
 
-            <Button className="mt-3" variant="primary" onClick={handleCreateNewAction}>
+            <Button className="mt-3" variant="primary" onClick={() => setIsEditing(true)}>
                 Create New Action
             </Button>
 
@@ -382,7 +428,6 @@ const ActionsPage = ({ cgratesConfig }) => {
                         {isEditing ? 'Edit Action' : 'Action Details'}
                         {selectedAction && selectedAction[0]?.Id ? ` for ${selectedAction[0].Id}` : ''}
                     </Modal.Title>
-
                 </Modal.Header>
                 <Modal.Body>
                     {selectedAction && selectedAction.map((part, index) => (
@@ -546,6 +591,19 @@ const ActionsPage = ({ cgratesConfig }) => {
                             Add New Part
                         </Button>
                     )}
+                    <h5>Execute Action</h5>
+                    <AccountDropdown
+                        cgratesConfig={cgratesConfig}
+                        onSelect={setSelectedAccount}
+                    />
+                    <Button
+                        variant="primary"
+                        className="mt-3"
+                        onClick={handleExecuteAction}
+                        disabled={!selectedAccount}
+                    >
+                        Execute Action
+                    </Button>
                 </Modal.Body>
                 <Modal.Footer>
                     {isEditing ? (
