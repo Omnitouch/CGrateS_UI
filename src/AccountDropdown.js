@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Spinner } from 'react-bootstrap';
+import Select from 'react-select';
 
 const AccountDropdown = ({ cgratesConfig, onSelect }) => {
     const [accounts, setAccounts] = useState([]); // Full list of accounts
-    const [filteredAccounts, setFilteredAccounts] = useState([]); // Filtered accounts for display
+    const [options, setOptions] = useState([]); // Options for the dropdown
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
-    const [searchTerm, setSearchTerm] = useState(''); // Track user input
 
     useEffect(() => {
         const fetchAccounts = async () => {
@@ -38,11 +37,12 @@ const AccountDropdown = ({ cgratesConfig, onSelect }) => {
                 const data = await response.json();
 
                 if (data && data.result) {
-                    setAccounts(data.result.map(account => account.ID)); // Store account IDs
-                    setFilteredAccounts(data.result.map(account => account.ID)); // Initially display all
+                    const accountIds = data.result.map(account => account.ID);
+                    setAccounts(accountIds);
+                    setOptions(accountIds.map(id => ({ value: id, label: id }))); // Prepare options for dropdown
                 } else {
                     setAccounts([]);
-                    setFilteredAccounts([]);
+                    setOptions([]);
                 }
             } catch (error) {
                 console.error('Error fetching accounts:', error);
@@ -55,54 +55,28 @@ const AccountDropdown = ({ cgratesConfig, onSelect }) => {
         fetchAccounts();
     }, [cgratesConfig]);
 
-    const handleSearchChange = (e) => {
-        const term = e.target.value;
-        setSearchTerm(term);
-
-        // Filter accounts based on the search term
-        setFilteredAccounts(
-            accounts.filter(account =>
-                account.toLowerCase().includes(term.toLowerCase())
-            )
-        );
-    };
-
-    const handleSelect = (e) => {
-        const selected = e.target.value;
-        const [tenant, account] = selected.split(':'); // Split into tenant and account
-        onSelect({ tenant, account }); // Return as an object
+    const handleSelect = (selectedOption) => {
+        if (selectedOption) {
+            const [tenant, account] = selectedOption.value.split(':'); // Split into tenant and account
+            onSelect({ tenant, account }); // Return as an object
+        }
     };
 
     return (
         <div>
-            <Form.Group>
-                <Form.Label>Select Account</Form.Label>
-                <Form.Control
-                    type="text"
-                    placeholder="Search accounts..."
-                    value={searchTerm}
-                    onChange={handleSearchChange}
-                />
-            </Form.Group>
+            <label htmlFor="account-select">Select Account</label>
             {isLoading ? (
-                <Spinner animation="border" role="status">
-                    <span className="sr-only">Loading accounts...</span>
-                </Spinner>
+                <p>Loading accounts...</p>
             ) : error ? (
                 <p className="text-danger">{error}</p>
             ) : (
-                <Form.Group>
-                    <Form.Control as="select" onChange={handleSelect} defaultValue="">
-                        <option value="" disabled>
-                            Select an account
-                        </option>
-                        {filteredAccounts.map((account, index) => (
-                            <option key={index} value={account}>
-                                {account}
-                            </option>
-                        ))}
-                    </Form.Control>
-                </Form.Group>
+                <Select
+                    id="account-select"
+                    options={options}
+                    isSearchable
+                    placeholder="Search or select an account..."
+                    onChange={handleSelect}
+                />
             )}
         </div>
     );

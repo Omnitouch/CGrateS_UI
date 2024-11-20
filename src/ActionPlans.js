@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { Form, Button, Container, Row, Col, Table, Modal, Spinner, Accordion, ListGroup, Alert } from 'react-bootstrap';
+import AccountDropdown from './AccountDropdown'; // Import the AccountDropdown component
 
 const Actions = ({ cgratesConfig }) => {
     const [searchParams, setSearchParams] = useState({
-        tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant // Tenant selection
+        tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant
     });
     const [actions, setActions] = useState([]); // Store the list of action plans
     const [selectedAction, setSelectedAction] = useState(null); // Store the selected action plan's details
     const [editAction, setEditAction] = useState(null); // Store the editable action plan details
     const [showModal, setShowModal] = useState(false); // Control the modal display
     const [isLoading, setIsLoading] = useState(false); // Handle loading state
-    const [responseTime, setResponseTime] = useState(null); // API response time
+    const [selectedAccount, setSelectedAccount] = useState(null); // Store the selected account for assigning
     const [isEditing, setIsEditing] = useState(false); // Toggle editing mode
     const [isNew, setIsNew] = useState(false); // Flag to track if creating a new action plan
     const [errorMessage, setErrorMessage] = useState(''); // Handle error messages
@@ -25,8 +26,6 @@ const Actions = ({ cgratesConfig }) => {
     const fetchActions = async () => {
         setIsLoading(true);
         setActions([]); // Clear previous results
-        const startTime = Date.now();
-
         try {
             const query = {
                 method: 'APIerSv1.GetActionPlanIDs',
@@ -46,9 +45,6 @@ const Actions = ({ cgratesConfig }) => {
             }
 
             const data = await response.json();
-            const endTime = Date.now();
-            const timeTaken = ((endTime - startTime) / 1000).toFixed(2);
-            setResponseTime(timeTaken);
 
             if (data.result) {
                 setActions(data.result); // Set the fetched action IDs
@@ -235,10 +231,10 @@ const Actions = ({ cgratesConfig }) => {
         if (!window.confirm(`Are you sure you want to delete the action plan with ID: ${actionPlanId}?`)) {
             return; // Exit if the user cancels
         }
-    
+
         setIsLoading(true);
         setErrorMessage(''); // Clear previous error messages
-    
+
         try {
             const query = {
                 method: 'APIerSv1.RemoveActionPlan',
@@ -249,7 +245,7 @@ const Actions = ({ cgratesConfig }) => {
                     },
                 ],
             };
-    
+
             const response = await fetch(cgratesConfig.url + '/jsonrpc', {
                 method: 'POST',
                 headers: {
@@ -257,11 +253,11 @@ const Actions = ({ cgratesConfig }) => {
                 },
                 body: JSON.stringify(query),
             });
-    
+
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-    
+
             const data = await response.json();
             if (data.result) {
                 console.log('Action plan deleted successfully');
@@ -277,7 +273,58 @@ const Actions = ({ cgratesConfig }) => {
             setIsLoading(false);
         }
     };
-    
+
+
+    // Assign ActionPlan to Account
+    const assignActionPlan = async () => {
+        if (!selectedAccount) {
+            alert('Please select an account.');
+            return;
+        }
+
+        const { tenant, account } = selectedAccount;
+        const query = {
+            method: 'ApierV2.SetAccount',
+            params: [
+                {
+                    Tenant: tenant,
+                    Account: account,
+                    ActionPlanIds: [selectedAction?.Id],
+                    ActionPlansOverwrite: true,
+                    ReloadScheduler: true
+                }
+            ]
+        };
+
+        setIsLoading(true);
+        setErrorMessage('');
+        try {
+            const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(query),
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data.result) {
+                alert(`ActionPlan "${selectedAction?.Id}" assigned successfully to Account "${account}".`);
+            } else {
+                alert('Failed to assign ActionPlan.');
+            }
+        } catch (error) {
+            setErrorMessage(`Error assigning ActionPlan: ${error.message}`);
+            console.error('Error assigning ActionPlan:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     return (
         <div className="App">
@@ -310,11 +357,6 @@ const Actions = ({ cgratesConfig }) => {
                     </div>
                 ) : (
                     <>
-                        {responseTime && (
-                            <p className="mt-3">
-                                Response from CGrateS at <b>{cgratesConfig.url}</b> in {responseTime} seconds
-                            </p>
-                        )}
                         <Table striped bordered hover className="mt-4">
                             <thead>
                                 <tr>
@@ -453,6 +495,21 @@ const Actions = ({ cgratesConfig }) => {
                                                 </Accordion.Item>
                                             ))}
                                         </Accordion>
+
+
+                                        <h5>Assign ActionPlan to Account</h5>
+                                        <AccountDropdown
+                                            cgratesConfig={cgratesConfig}
+                                            onSelect={setSelectedAccount}
+                                        />
+                                        <Button
+                                            variant="primary"
+                                            className="mt-3"
+                                            onClick={assignActionPlan}
+                                            disabled={!selectedAccount}
+                                        >
+                                            Assign ActionPlan
+                                        </Button>
                                     </>
                                 )}
                             </>
