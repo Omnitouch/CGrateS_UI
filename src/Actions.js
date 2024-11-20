@@ -422,7 +422,7 @@ const ActionsPage = ({ cgratesConfig }) => {
                 </Table>
             )}
 
-            <Modal show={showModal} onHide={handleCloseModal} size="lg">
+            <Modal show={showModal} onHide={handleCloseModal} size="xl">
                 <Modal.Header closeButton>
                     <Modal.Title>
                         {isEditing ? 'Edit Action' : 'Action Details'}

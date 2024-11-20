@@ -272,7 +272,7 @@ const RatingProfiles = ({ cgratesConfig }) => {
                     </Table>
                 )}
 
-                <Modal show={showModal} onHide={handleCloseModal} size="lg">
+                <Modal show={showModal} onHide={handleCloseModal} size="xl">
                     <Modal.Header closeButton>
                         <Modal.Title>{isEditing ? 'Edit Rating Profile' : 'Create New Rating Profile'}</Modal.Title>
                     </Modal.Header>

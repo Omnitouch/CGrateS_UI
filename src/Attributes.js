@@ -374,7 +374,7 @@ const Attributes = ({ cgratesConfig }) => {
         )}
 
         {/* Modal for displaying attribute details */}
-        <Modal show={showModal} onHide={handleCloseModal} size="lg">
+        <Modal show={showModal} onHide={handleCloseModal} size="xl">
           <Modal.Header closeButton>
             <Modal.Title>{isNew ? "Create New Attribute" : "Attribute Profile Details"}</Modal.Title>
           </Modal.Header>

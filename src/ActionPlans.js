@@ -383,7 +383,7 @@ const Actions = ({ cgratesConfig }) => {
                 )}
 
                 {/* Modal for displaying action plan details */}
-                <Modal show={showModal} onHide={handleCloseModal} size="lg">
+                <Modal show={showModal} onHide={handleCloseModal} size="xl">
                     <Modal.Header closeButton>
                         <Modal.Title>{isNew ? "Create New Action Plan" : "Action Plan Details"}</Modal.Title>
                     </Modal.Header>

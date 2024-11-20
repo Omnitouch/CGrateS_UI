@@ -184,7 +184,7 @@ const RatingPlans = ({ cgratesConfig }) => {
       </Container>
 
       {/* Modal for Rating Plan Data */}
-      <Modal show={showModal} onHide={handleCloseModal} size="lg">
+      <Modal show={showModal} onHide={handleCloseModal} size="xl">
         <Modal.Header closeButton>
           <Modal.Title>Rating Plan Details: {modalData?.ID}</Modal.Title>
         </Modal.Header>

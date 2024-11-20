@@ -294,7 +294,7 @@ const Chargers = ({ cgratesConfig }) => {
         )}
 
         {/* Modal for displaying charger details */}
-        <Modal show={showModal} onHide={handleCloseModal} size="lg">
+        <Modal show={showModal} onHide={handleCloseModal} size="xl">
           <Modal.Header closeButton>
             <Modal.Title>{isEditing ? 'Edit Charger Profile' : 'Charger Profile Details'}</Modal.Title>
           </Modal.Header>

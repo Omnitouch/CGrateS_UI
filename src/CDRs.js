@@ -462,7 +462,7 @@ const CDRs = ({ cgratesConfig }) => {
       </Container>
 
       {/* Modal for Row Details */}
-      <Modal show={showModal} onHide={handleCloseModal}>
+      <Modal show={showModal} onHide={handleCloseModal} size="xl">
         <Modal.Header closeButton>
           <Modal.Title>Row Details</Modal.Title>
         </Modal.Header>

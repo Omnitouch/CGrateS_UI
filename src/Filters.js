@@ -355,7 +355,7 @@ const Filters = ({ cgratesConfig }) => {
         )}
 
         {/* Modal for displaying and editing filter details */}
-        <Modal show={showModal} onHide={handleCloseModal} size="lg">
+        <Modal show={showModal} onHide={handleCloseModal} size="xl">
           <Modal.Header closeButton>
             <Modal.Title>Filter Profile Details</Modal.Title>
           </Modal.Header>

@@ -318,7 +318,7 @@ const Resources = ({ cgratesConfig }) => {
         )}
 
         {/* Modal for displaying resource details */}
-        <Modal show={showModal} onHide={handleCloseModal} size="lg">
+        <Modal show={showModal} onHide={handleCloseModal} size="xl">
           <Modal.Header closeButton>
             <Modal.Title>{isEditing ? 'Edit Resource Profile' : 'Resource Profile Details'}</Modal.Title>
           </Modal.Header>

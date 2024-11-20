@@ -230,7 +230,7 @@ const SessionS = ({ cgratesConfig }) => {
       </Container>
 
       {/* Modal for Session Details */}
-      <Modal show={showModal} onHide={handleCloseModal} size="lg">
+      <Modal show={showModal} onHide={handleCloseModal} size="xl">
         <Modal.Header closeButton>
           <Modal.Title>Session Details</Modal.Title>
         </Modal.Header>

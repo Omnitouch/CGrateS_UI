@@ -277,7 +277,7 @@ const DestinationRates = ({ cgratesConfig }) => {
       </Container>
 
       {/* Modal for Destination Rate Data */}
-      <Modal show={showModal} onHide={handleCloseModal} size="lg">
+      <Modal show={showModal} onHide={handleCloseModal} size="xl">
         <Modal.Header closeButton>
           <Modal.Title>Destination Rate Details: {modalData?.ID}</Modal.Title>
         </Modal.Header>

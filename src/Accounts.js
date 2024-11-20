@@ -526,7 +526,7 @@ const GetAccounts = ({ cgratesConfig }) => {
       </Container>
 
       {/* Modal for Account Details */}
-      <Modal show={showModal} onHide={handleCloseModal} size="lg">
+      <Modal show={showModal} onHide={handleCloseModal} size="xl">
         <Modal.Header closeButton>
           <Modal.Title>Account Details - {accountDetails ? `${accountDetails.ID}` : ''}</Modal.Title>
         </Modal.Header>
@@ -633,7 +633,7 @@ const GetAccounts = ({ cgratesConfig }) => {
       </Modal>
 
       {/* Modal for Balance Details */}
-      <Modal show={balanceModal} onHide={handleCloseBalanceModal} size="lg">
+      <Modal show={balanceModal} onHide={handleCloseBalanceModal} size="xl">
         <Modal.Header closeButton>
           <Modal.Title>Balance Details</Modal.Title>
         </Modal.Header>
