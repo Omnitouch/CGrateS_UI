@@ -207,6 +207,53 @@ const Resources = ({ cgratesConfig }) => {
     setShowModal(true); // Open modal for the new resource
   };
 
+  const deleteResource = async (resourceId) => {
+    if (!window.confirm(`Are you sure you want to delete the resource with ID: ${resourceId}?`)) {
+      return; // Exit if the user cancels
+    }
+
+    setIsLoading(true);
+    setError(''); // Clear previous error
+    try {
+      const query = {
+        method: 'APIerSv1.RemoveResourceProfile',
+        params: [
+          {
+            ID: resourceId,
+            Tenant: searchParams.tenant,
+          },
+        ],
+      };
+
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(query),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.result) {
+        console.log('Resource deleted successfully');
+        fetchResources(); // Refresh the resource list
+        handleCloseModal();
+      } else {
+        throw new Error(data.error?.message || 'Failed to delete resource');
+      }
+    } catch (error) {
+      console.error('Error deleting resource:', error);
+      setError('Failed to delete resource. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
   return (
     <div className="App">
       <Container>
@@ -377,10 +424,14 @@ const Resources = ({ cgratesConfig }) => {
                 Edit
               </Button>
             )}
+            <Button variant="danger" onClick={() => deleteResource(selectedResource.ID)}>
+              Delete Resource
+            </Button>
             <Button variant="secondary" onClick={handleCloseModal}>
               Close
             </Button>
           </Modal.Footer>
+
         </Modal>
       </Container>
     </div>

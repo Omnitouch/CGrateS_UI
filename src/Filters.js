@@ -54,7 +54,7 @@ const Filters = ({ cgratesConfig }) => {
     setIsLoading(true);
     setFilters([]); // Clear previous results
     const startTime = Date.now();
-    
+
     try {
       const query = {
         method: 'APIerSv1.GetFilterIDs',
@@ -244,6 +244,53 @@ const Filters = ({ cgratesConfig }) => {
     setShowModal(true); // Open modal for the new filter
   };
 
+  const deleteFilter = async (filterId) => {
+    if (!window.confirm(`Are you sure you want to delete the filter with ID: ${filterId}?`)) {
+      return; // Exit if the user cancels
+    }
+
+    setIsLoading(true);
+    setError(''); // Clear previous error
+    try {
+      const query = {
+        method: 'APIerSv1.RemoveFilter',
+        params: [
+          {
+            ID: filterId,
+            Tenant: searchParams.tenant,
+          },
+        ],
+      };
+
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(query),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.result) {
+        console.log('Filter deleted successfully');
+        fetchFilters(); // Refresh the filter list
+        handleCloseModal(); // Close the modal
+      } else {
+        throw new Error(data.error?.message || 'Failed to delete filter');
+      }
+    } catch (error) {
+      console.error('Error deleting filter:', error);
+      setError('Failed to delete filter. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
   return (
     <div className="App">
       <Container>
@@ -334,10 +381,10 @@ const Filters = ({ cgratesConfig }) => {
                   <div key={ruleIndex} style={{ border: '1px solid #ddd', padding: '10px', marginBottom: '10px' }}>
                     <Form.Group>
                       <Form.Label>Type</Form.Label>
-                      <Form.Control 
-                        as="select" 
-                        value={rule.Type} 
-                        onChange={(e) => handleRuleChange(ruleIndex, 'Type', e.target.value)} 
+                      <Form.Control
+                        as="select"
+                        value={rule.Type}
+                        onChange={(e) => handleRuleChange(ruleIndex, 'Type', e.target.value)}
                       >
                         <option value="">Select Type</option>
                         {filterTypes.map((type, index) => (
@@ -350,10 +397,10 @@ const Filters = ({ cgratesConfig }) => {
                     </Form.Group>
                     <Form.Group>
                       <Form.Label>Element</Form.Label>
-                      <Form.Control 
-                        type="text" 
-                        value={rule.Element} 
-                        onChange={(e) => handleRuleChange(ruleIndex, 'Element', e.target.value)} 
+                      <Form.Control
+                        type="text"
+                        value={rule.Element}
+                        onChange={(e) => handleRuleChange(ruleIndex, 'Element', e.target.value)}
                       />
                     </Form.Group>
                     <Form.Label>Values</Form.Label>
@@ -389,7 +436,7 @@ const Filters = ({ cgratesConfig }) => {
                     <ListGroup className="mb-3">
                       <ListGroup.Item><strong>Tenant:</strong> {selectedFilter.Tenant}</ListGroup.Item>
                       <ListGroup.Item><strong>ID:</strong> {selectedFilter.ID}</ListGroup.Item>
-                      <ListGroup.Item><strong>Activation Interval:</strong> 
+                      <ListGroup.Item><strong>Activation Interval:</strong>
                         {selectedFilter.ActivationInterval
                           ? `${selectedFilter.ActivationInterval.ActivationTime} to ${selectedFilter.ActivationInterval.ExpiryTime}`
                           : 'N/A'}
@@ -423,10 +470,14 @@ const Filters = ({ cgratesConfig }) => {
                 Edit
               </Button>
             )}
+            <Button variant="danger" onClick={() => deleteFilter(selectedFilter.ID)}>
+              Delete Filter
+            </Button>
             <Button variant="secondary" onClick={handleCloseModal}>
               Close
             </Button>
           </Modal.Footer>
+
         </Modal>
       </Container>
     </div>
