@@ -272,6 +272,54 @@ const ActionsPage = ({ cgratesConfig }) => {
         setError('');
     };
 
+    const handleDeleteAction = async (actionId) => {
+        if (!window.confirm(`Are you sure you want to delete the action with ID: ${actionId}?`)) {
+            return; // Exit if the user cancels
+        }
+    
+        setIsLoading(true);
+        setError(''); // Clear previous error
+    
+        try {
+            const query = {
+                method: 'APIerSv1.RemoveActions',
+                params: [
+                    {
+                        ActionIDs: [actionId],
+                        Tenant: searchParams.tenant,
+                    },
+                ],
+            };
+    
+            const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(query),
+            });
+    
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+    
+            const data = await response.json();
+            if (data.result) {
+                console.log('Action deleted successfully');
+                fetchActions(); // Refresh the actions list
+                setShowModal(false); // Close the modal
+            } else {
+                throw new Error(data.error?.message || 'Failed to delete action');
+            }
+        } catch (error) {
+            console.error('Error deleting action:', error);
+            setError('Failed to delete action. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+
     return (
         <Container>
             <h2>Manage Actions</h2>
@@ -507,6 +555,11 @@ const ActionsPage = ({ cgratesConfig }) => {
                     ) : (
                         <Button variant="secondary" onClick={() => setIsEditing(true)}>
                             Edit
+                        </Button>
+                    )}
+                    {selectedAction && selectedAction[0]?.Id && (
+                        <Button variant="danger" onClick={() => handleDeleteAction(selectedAction[0]?.Id)}>
+                            Delete Action
                         </Button>
                     )}
                     <Button variant="secondary" onClick={handleCloseModal}>

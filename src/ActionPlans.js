@@ -231,6 +231,54 @@ const Actions = ({ cgratesConfig }) => {
         fetchActions(); // Fetch actions based on the selected tenant
     };
 
+    const handleDeleteActionPlan = async (actionPlanId) => {
+        if (!window.confirm(`Are you sure you want to delete the action plan with ID: ${actionPlanId}?`)) {
+            return; // Exit if the user cancels
+        }
+    
+        setIsLoading(true);
+        setErrorMessage(''); // Clear previous error messages
+    
+        try {
+            const query = {
+                method: 'APIerSv1.RemoveActionPlan',
+                params: [
+                    {
+                        Id: actionPlanId,
+                        Tenant: searchParams.tenant, // Use the selected tenant
+                    },
+                ],
+            };
+    
+            const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(query),
+            });
+    
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+    
+            const data = await response.json();
+            if (data.result) {
+                console.log('Action plan deleted successfully');
+                fetchActions(); // Refresh the list of actions
+                setShowModal(false); // Close the modal
+            } else if (data.error) {
+                setErrorMessage(`Error: ${data.error}`);
+            }
+        } catch (error) {
+            console.error('Error deleting action plan:', error);
+            setErrorMessage(`Error deleting action plan: ${error.message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+
     return (
         <div className="App">
             <Container>
@@ -288,7 +336,7 @@ const Actions = ({ cgratesConfig }) => {
                             </tbody>
                         </Table>
                         {/* Button to create new action plan */}
-                        <Button variant="success" className="mt-4" onClick={openCreateNewActionModal}>Create New Action</Button>
+                        <Button variant="success" className="mt-4" onClick={openCreateNewActionModal}>Create New ActionPlan</Button>
                     </>
                 )}
 
@@ -422,10 +470,16 @@ const Actions = ({ cgratesConfig }) => {
                                 Edit
                             </Button>
                         )}
+                        {!isNew && (
+                            <Button variant="danger" onClick={() => handleDeleteActionPlan(editAction.Id)}>
+                                Delete Action Plan
+                            </Button>
+                        )}
                         <Button variant="secondary" onClick={handleCloseModal}>
                             Close
                         </Button>
                     </Modal.Footer>
+
                 </Modal>
 
 
