@@ -350,7 +350,53 @@ const GetAccounts = ({ cgratesConfig }) => {
   // Function to render the balance map by category
   const renderBalanceTable = (balanceMap, category) => {
     if (!balanceMap || !balanceMap[category]) return null;
-
+  
+    const handleRemoveBalance = async (balance) => {
+      if (!window.confirm(`Are you sure you want to remove the balance with ID: ${balance.ID}?`)) {
+        return;
+      }
+  
+      const removeBalanceQuery = {
+        method: 'APIerSv1.RemoveBalances',
+        params: [{
+          Tenant: searchParams.tenant,
+          Account: selectedRowData.ID.split(':')[1], // Account ID
+          BalanceType: category, // Balance category (*monetary, *data, etc.)
+          Balance: {
+            ID: balance.ID, // Balance ID to remove
+          },
+          ActionExtraData: null,
+          Cdrlog: true, // Enable CDR logging
+        }],
+        id: 6,
+      };
+  
+      console.log(`Removing balance ID: ${balance.ID} for account: ${selectedRowData.ID.split(':')[1]}`);
+  
+      try {
+        const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(removeBalanceQuery),
+        });
+  
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+  
+        const data = await response.json();
+        console.log('Balance removed successfully:', data);
+  
+        // Refresh account details to reflect the removal
+        const [tenant, account] = selectedRowData.ID.split(':');
+        fetchAccountDetails(tenant, account);
+      } catch (error) {
+        console.error('Error removing balance:', error);
+      }
+    };
+  
     return (
       <Table striped bordered hover>
         <thead>
@@ -360,22 +406,29 @@ const GetAccounts = ({ cgratesConfig }) => {
             <th>Expiration Date</th>
             <th>Weight</th>
             <th>Blocker</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
           {balanceMap[category].map((balance, index) => (
-            <tr key={index} onClick={() => handleBalanceClick(balance)} style={{ cursor: 'pointer' }}>
+            <tr key={index} style={{ cursor: 'pointer' }}>
               <td>{balance.ID}</td>
               <td>{balance.Value}</td>
               <td>{balance.ExpirationDate}</td>
               <td>{balance.Weight}</td>
               <td>{balance.Blocker ? 'Yes' : 'No'}</td>
+              <td>
+                <Button variant="danger" onClick={() => handleRemoveBalance(balance)}>
+                  Remove Balance
+                </Button>
+              </td>
             </tr>
           ))}
         </tbody>
       </Table>
     );
   };
+  
 
   const handleBalanceClick = (balance) => {
     setSelectedBalance(balance);
