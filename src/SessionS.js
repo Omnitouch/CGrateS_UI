@@ -2,15 +2,19 @@ import React, { useState } from 'react';
 import { Form, Button, Container, Row, Col, Table, Modal, Spinner } from 'react-bootstrap';
 
 const SessionS = ({ cgratesConfig }) => {
-  const [tenant, setTenant] = useState('');
+  const [searchParams, setSearchParams] = useState({
+    tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant
+  });
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
   const [terminateLoading, setTerminateLoading] = useState(false);
 
-  const handleTenantChange = (event) => {
-    setTenant(event.target.value);
+  // Handle input change for tenant selection
+  const handleInputChange = (event) => {
+    const { name, value } = event.target;
+    setSearchParams({ ...searchParams, [name]: value });
   };
 
   const fetchSessions = async () => {
@@ -22,7 +26,7 @@ const SessionS = ({ cgratesConfig }) => {
       params: [{
         Limit: null,
         Filters: null,
-        Tenant: tenant || 'mnc040.mcc738.3gppnetwork.org',
+        Tenant: searchParams.tenant,
         APIOpts: {}
       }],
       id: 2
@@ -175,9 +179,9 @@ const SessionS = ({ cgratesConfig }) => {
             <Col md={6}>
               <Form.Group controlId="formTenant">
                 <Form.Label>Tenant</Form.Label>
-                <Form.Control as="select" name="tenant" value={tenant} onChange={handleTenantChange}>
-                  {cgratesConfig.tenants.split(';').map((tenantOption, index) => (
-                    <option key={index} value={tenantOption}>{tenantOption}</option>
+                <Form.Control as="select" name="tenant" value={searchParams.tenant} onChange={handleInputChange}>
+                  {cgratesConfig.tenants.split(';').map((tenant, index) => (
+                    <option key={index} value={tenant}>{tenant}</option>
                   ))}
                 </Form.Control>
               </Form.Group>
