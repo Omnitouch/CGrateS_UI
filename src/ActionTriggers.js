@@ -136,6 +136,53 @@ const ActionTriggers = ({ cgratesConfig }) => {
         }
     };
 
+    // Delete the current ActionTrigger
+    const removeActionTrigger = async () => {
+        if (!editTrigger.GroupID) {
+            setErrorMessage('Cannot delete ActionTrigger: GroupID is missing.');
+            return;
+        }
+
+        if (!window.confirm(`Are you sure you want to delete the ActionTrigger: ${editTrigger.GroupID}?`)) {
+            return;
+        }
+
+        setIsLoading(true);
+        setErrorMessage('');
+        try {
+            const query = {
+                method: 'APIerSv1.RemoveActionTrigger',
+                params: [{ GroupID: editTrigger.GroupID, Tenant: searchParams.tenant }],
+            };
+
+            const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(query),
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.result) {
+                console.log(`ActionTrigger ${editTrigger.GroupID} removed successfully.`);
+                setShowModal(false);
+                fetchTriggers(); // Refresh the list of triggers
+            } else if (data.error) {
+                setErrorMessage(`Error: ${data.error}`);
+            }
+        } catch (error) {
+            setErrorMessage(`Error: ${error.message}`);
+            console.error('Error removing ActionTrigger:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const handleCloseModal = () => {
         setShowModal(false);
         setEditTrigger(null);
@@ -268,7 +315,7 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                         </Form.Control>
                                     </Form.Group>
                                     <Form.Group>
-                                        <Form.Label>Balance ID</Form.Label>
+                                        <Form.Label>ID</Form.Label>
                                         <Form.Control
                                             type="text"
                                             value={editTrigger.Balance.ID || ''}
@@ -327,10 +374,19 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                         }
                                     />
                                 </Form.Group>
+                                <div style={{ marginTop: '20px' }}>
+                                    <h5>JSON Representation</h5>
+                                    <pre style={{ background: '#f8f9fa', padding: '10px', borderRadius: '5px' }}>
+                                        {JSON.stringify(editTrigger, null, 2)}
+                                    </pre>
+                                </div>
                             </>
                         )}
                     </Modal.Body>
                     <Modal.Footer>
+                        <Button variant="danger" onClick={removeActionTrigger}>
+                            Remove ActionTrigger
+                        </Button>
                         <Button variant="primary" onClick={saveChanges}>
                             Save Changes
                         </Button>
