@@ -33,10 +33,10 @@ const ActionTriggers = ({ cgratesConfig }) => {
         MinSleep: 0,
         ExpirationDate: '',
         ActivationDate: '',
+        BalanceType: '*monetary', // Mapped from API `Type`
         Balance: {
-            BalanceType: '*monetary',
-            Type: '*monetary',
-            BalanceID: '',
+            Type: '*monetary', // Used for reading
+            ID: '',
             Value: 0,
         },
         Weight: 0,
@@ -76,12 +76,13 @@ const ActionTriggers = ({ cgratesConfig }) => {
 
             const data = await response.json();
             if (data.result) {
-                // Map ID to GroupID for editing compatibility
-                const triggersWithGroupID = data.result.map(trigger => ({
+                // Map ID to GroupID and Type to BalanceType for editing compatibility
+                const triggersWithMappings = data.result.map(trigger => ({
                     ...trigger,
                     GroupID: trigger.ID,
+                    BalanceType: trigger.Balance?.Type, // Map Type to BalanceType
                 }));
-                setTriggers(triggersWithGroupID);
+                setTriggers(triggersWithMappings);
             } else {
                 console.warn('No action triggers found.');
             }
@@ -122,16 +123,21 @@ const ActionTriggers = ({ cgratesConfig }) => {
                 return;
             }
 
+            // Prepare payload for API call
             const payload = {
-                GroupID: editTrigger.GroupID, // Use GroupID when setting the trigger
+                GroupID: editTrigger.GroupID,
                 ActionTrigger: {
-                    ...editTrigger,
+                    BalanceType: editTrigger.BalanceType, // Map BalanceType to API field
                     Balance: {
-                        ...editTrigger.Balance,
-                        Value: parseFloat(editTrigger.Balance.Value || 0),
+                        BalanceType: editTrigger.BalanceType, // Use BalanceType instead of Type
                     },
+                    ThresholdType: editTrigger.ThresholdType,
+                    ThresholdValue: editTrigger.ThresholdValue,
+                    Weight: editTrigger.Weight,
+                    ActionsID: editTrigger.ActionsID,
                 },
                 Overwrite: true,
+                Tenant: searchParams.tenant,
             };
 
             const query = {
@@ -264,8 +270,7 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                     <th>Threshold Type</th>
                                     <th>Threshold Value</th>
                                     <th>Actions ID</th>
-                                    <th>Executed</th>
-                                    <th>Last Execution Time</th>
+                                    <th>Balance Type</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -276,12 +281,11 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                         <td>{trigger.ThresholdType}</td>
                                         <td>{trigger.ThresholdValue}</td>
                                         <td>{trigger.ActionsID}</td>
-                                        <td>{trigger.Executed ? 'Yes' : 'No'}</td>
-                                        <td>{trigger.LastExecutionTime}</td>
+                                        <td>{trigger.BalanceType}</td>
                                     </tr>
                                 )) : (
                                     <tr>
-                                        <td colSpan="7" className="text-center">No triggers available</td>
+                                        <td colSpan="6" className="text-center">No triggers available</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -333,7 +337,7 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                     />
                                 </Form.Group>
                                 <Form.Group>
-                                    <Form.Label>Recurrent</Form.Label>
+                                <Form.Label>Recurrent</Form.Label>
                                     <Form.Check
                                         type="checkbox"
                                         checked={editTrigger.Recurrent}
@@ -375,24 +379,21 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                 <div style={{ paddingLeft: '20px', borderLeft: '2px solid #ddd', marginTop: '15px' }}>
                                     <h5>Balance Parameters</h5>
                                     <Form.Group>
-                                        <Form.Label>Balance Type</Form.Label>
-                                        <Form.Control
-                                            as="select"
-                                            value={editTrigger.Balance.BalanceType || ''}
-                                            onChange={(e) =>
-                                                setEditTrigger({
-                                                    ...editTrigger,
-                                                    Balance: { ...editTrigger.Balance, BalanceType: e.target.value },
-                                                })
-                                            }
-                                        >
-                                            <option value="">Select Balance Type</option>
-                                            {balanceTypes.map((type, index) => (
-                                                <option key={index} value={type}>
-                                                    {type}
-                                                </option>
-                                            ))}
-                                        </Form.Control>
+                                    <Form.Label>Balance Type</Form.Label>
+                                    <Form.Control
+                                        as="select"
+                                        value={editTrigger.BalanceType || ''}
+                                        onChange={(e) =>
+                                            setEditTrigger({ ...editTrigger, BalanceType: e.target.value })
+                                        }
+                                    >
+                                        <option value="">Select Balance Type</option>
+                                        {balanceTypes.map((type, index) => (
+                                            <option key={index} value={type}>
+                                                {type}
+                                            </option>
+                                        ))}
+                                    </Form.Control>
                                     </Form.Group>
                                     <Form.Group>
                                         <Form.Label>ID</Form.Label>
