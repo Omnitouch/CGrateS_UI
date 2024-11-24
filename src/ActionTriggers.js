@@ -11,7 +11,7 @@ const ActionTriggers = ({ cgratesConfig }) => {
     const [isLoading, setIsLoading] = useState(false); // Handle loading state
     const [errorMessage, setErrorMessage] = useState(''); // Handle error messages
 
-    // Available ThresholdTypes
+    // Available ThresholdTypes and BalanceTypes
     const thresholdTypes = [
         '*min_balance',
         '*max_balance',
@@ -21,6 +21,7 @@ const ActionTriggers = ({ cgratesConfig }) => {
         '*min_balance_counter',
         '*max_balance_counter',
     ];
+    const balanceTypes = ['*voice', '*data', '*sms', '*monetary', '*generic'];
 
     // Handle input change for tenant selection
     const handleInputChange = (event) => {
@@ -52,7 +53,12 @@ const ActionTriggers = ({ cgratesConfig }) => {
 
             const data = await response.json();
             if (data.result) {
-                setTriggers(data.result); // Set the fetched triggers
+                // Map ID to GroupID for editing compatibility
+                const triggersWithGroupID = data.result.map(trigger => ({
+                    ...trigger,
+                    GroupID: trigger.ID,
+                }));
+                setTriggers(triggersWithGroupID);
             } else {
                 console.warn('No action triggers found.');
             }
@@ -86,7 +92,7 @@ const ActionTriggers = ({ cgratesConfig }) => {
             }
 
             const payload = {
-                GroupID: editTrigger.GroupID,
+                GroupID: editTrigger.GroupID, // Use GroupID when setting the trigger
                 ActionTrigger: {
                     ...editTrigger,
                     Balance: {
@@ -239,53 +245,68 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                         }
                                     />
                                 </Form.Group>
-                                <Form.Group>
-                                    <Form.Label>Balance Parameters</Form.Label>
-                                    <Form.Label>Balance Type</Form.Label>
-                                    <Form.Control
-                                        type="text"
-                                        value={editTrigger.Balance.BalanceType || ''}
-                                        onChange={(e) =>
-                                            setEditTrigger({
-                                                ...editTrigger,
-                                                Balance: { ...editTrigger.Balance, BalanceType: e.target.value },
-                                            })
-                                        }
-                                    />
-                                    <Form.Label>ID</Form.Label>
-                                    <Form.Control
-                                        type="text"
-                                        value={editTrigger.Balance.ID || ''}
-                                        onChange={(e) =>
-                                            setEditTrigger({
-                                                ...editTrigger,
-                                                Balance: { ...editTrigger.Balance, ID: e.target.value },
-                                            })
-                                        }
-                                    />
-                                    <Form.Label>Balance ID</Form.Label>
-                                    <Form.Control
-                                        type="text"
-                                        value={editTrigger.Balance.BalanceID || ''}
-                                        onChange={(e) =>
-                                            setEditTrigger({
-                                                ...editTrigger,
-                                                Balance: { ...editTrigger.Balance, BalanceID: e.target.value },
-                                            })
-                                        }
-                                    />
-                                    <Form.Label>Value</Form.Label>
-                                    <Form.Control
-                                        type="number"
-                                        value={editTrigger.Balance.Value || 0}
-                                        onChange={(e) =>
-                                            setEditTrigger({
-                                                ...editTrigger,
-                                                Balance: { ...editTrigger.Balance, Value: parseFloat(e.target.value) },
-                                            })
-                                        }
-                                    />
-                                </Form.Group>
+                                <div style={{ paddingLeft: '20px', borderLeft: '2px solid #ddd', marginTop: '15px' }}>
+                                    <h5>Balance Parameters</h5>
+                                    <Form.Group>
+                                        <Form.Label>Balance Type</Form.Label>
+                                        <Form.Control
+                                            as="select"
+                                            value={editTrigger.Balance.BalanceType || ''}
+                                            onChange={(e) =>
+                                                setEditTrigger({
+                                                    ...editTrigger,
+                                                    Balance: { ...editTrigger.Balance, BalanceType: e.target.value },
+                                                })
+                                            }
+                                        >
+                                            <option value="">Select Balance Type</option>
+                                            {balanceTypes.map((type, index) => (
+                                                <option key={index} value={type}>
+                                                    {type}
+                                                </option>
+                                            ))}
+                                        </Form.Control>
+                                    </Form.Group>
+                                    <Form.Group>
+                                        <Form.Label>Balance ID</Form.Label>
+                                        <Form.Control
+                                            type="text"
+                                            value={editTrigger.Balance.ID || ''}
+                                            onChange={(e) =>
+                                                setEditTrigger({
+                                                    ...editTrigger,
+                                                    Balance: { ...editTrigger.Balance, ID: e.target.value },
+                                                })
+                                            }
+                                        />
+                                    </Form.Group>
+                                    <Form.Group>
+                                        <Form.Label>Balance ID</Form.Label>
+                                        <Form.Control
+                                            type="text"
+                                            value={editTrigger.Balance.BalanceID || ''}
+                                            onChange={(e) =>
+                                                setEditTrigger({
+                                                    ...editTrigger,
+                                                    Balance: { ...editTrigger.Balance, BalanceID: e.target.value },
+                                                })
+                                            }
+                                        />
+                                    </Form.Group>
+                                    <Form.Group>
+                                        <Form.Label>Value</Form.Label>
+                                        <Form.Control
+                                            type="number"
+                                            value={editTrigger.Balance.Value || 0}
+                                            onChange={(e) =>
+                                                setEditTrigger({
+                                                    ...editTrigger,
+                                                    Balance: { ...editTrigger.Balance, Value: parseFloat(e.target.value) },
+                                                })
+                                            }
+                                        />
+                                    </Form.Group>
+                                </div>
                                 <Form.Group>
                                     <Form.Label>Weight</Form.Label>
                                     <Form.Control
