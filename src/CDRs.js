@@ -452,8 +452,8 @@ const formatUsage = (usage, tor) => {
             {results && results.length > 0 ? results.map((result, index) => (
               <tr key={index} onClick={() => handleRowClick(result)} style={{ cursor: 'pointer' }}>
                 <td>{index + 1 + (currentPage - 1) * 50}</td>
-                <td>{result.SetupTime}</td>
-                <td>{result.AnswerTime}</td>
+                <td>{moment(result.SetupTime).format('YYYY-MM-DD HH:mm:ss')}</td>
+                <td>{moment(result.AnswerTime).format('YYYY-MM-DD HH:mm:ss')}</td>
                 <td>{result.Tenant}</td>
                 <td>{result.Account}</td>
                 <td>{result.Category}</td>

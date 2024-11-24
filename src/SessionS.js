@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Form, Button, Container, Row, Col, Table, Modal, Spinner } from 'react-bootstrap';
+import Datetime from 'react-datetime';
+import moment from 'moment';
 
 const SessionS = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
@@ -238,6 +240,7 @@ const SessionS = ({ cgratesConfig }) => {
                 <th>Setup Time</th>
                 <th>Destination</th>
                 <th>Usage</th>
+                <th>LoopIndex</th>
               </tr>
             </thead>
             <tbody>
@@ -247,9 +250,14 @@ const SessionS = ({ cgratesConfig }) => {
                   <td>{result.Tenant}</td>
                   <td>{result.Account}</td>
                   <td>{result.Category}</td>
-                  <td>{result.SetupTime}</td>
+                  <td>
+                    {moment(result.SetupTime).format('YYYY-MM-DD HH:mm:ss')}
+                    <br />
+                    <small>({moment().diff(moment(result.SetupTime), 'minutes')} minutes ago)</small>
+                  </td>
                   <td>{result.Destination}</td>
                   <td>{formatUsage(result.Usage, result.ToR)}</td>
+                  <td>{result.LoopIndex}</td>
                 </tr>
               )) : (
                 <tr>

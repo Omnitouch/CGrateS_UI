@@ -454,7 +454,7 @@ const GetAccounts = ({ cgratesConfig }) => {
           {balanceMap[category].map((balance, index) => {
             const { prettyDate, timeUntil } = formatExpiration(balance.ExpirationDate);
             return (
-              <tr key={index} style={{ cursor: 'pointer' }}>
+              <tr key={index} onClick={() => handleBalanceClick(balance)} style={{ cursor: 'pointer' }}>
                 <td>{balance.ID}</td>
                 <td>{balance.Value}</td>
                 <td>
