@@ -29,14 +29,21 @@ const ActionTriggers = ({ cgratesConfig }) => {
         GroupID: '',
         ThresholdType: '',
         ThresholdValue: 0,
-        Weight: 0,
-        ActionsID: '',
+        Recurrent: false,
+        MinSleep: 0,
+        ExpirationDate: '',
+        ActivationDate: '',
         Balance: {
             BalanceType: '*monetary',
-            ID: '',
+            Type: '*monetary',
             BalanceID: '',
             Value: 0,
         },
+        Weight: 0,
+        ActionsID: '',
+        MinQueuedItems: 0,
+        Executed: false,
+        LastExecutionTime: '',
     };
 
     // Handle input change for tenant selection
@@ -257,6 +264,8 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                     <th>Threshold Type</th>
                                     <th>Threshold Value</th>
                                     <th>Actions ID</th>
+                                    <th>Executed</th>
+                                    <th>Last Execution Time</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -267,10 +276,12 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                         <td>{trigger.ThresholdType}</td>
                                         <td>{trigger.ThresholdValue}</td>
                                         <td>{trigger.ActionsID}</td>
+                                        <td>{trigger.Executed ? 'Yes' : 'No'}</td>
+                                        <td>{trigger.LastExecutionTime}</td>
                                     </tr>
                                 )) : (
                                     <tr>
-                                        <td colSpan="5" className="text-center">No triggers available</td>
+                                        <td colSpan="7" className="text-center">No triggers available</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -321,6 +332,46 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                         }
                                     />
                                 </Form.Group>
+                                <Form.Group>
+                                    <Form.Label>Recurrent</Form.Label>
+                                    <Form.Check
+                                        type="checkbox"
+                                        checked={editTrigger.Recurrent}
+                                        onChange={(e) =>
+                                            setEditTrigger({ ...editTrigger, Recurrent: e.target.checked })
+                                        }
+                                    />
+                                </Form.Group>
+                                <Form.Group>
+                                    <Form.Label>Min Sleep (ns)</Form.Label>
+                                    <Form.Control
+                                        type="number"
+                                        value={editTrigger.MinSleep}
+                                        onChange={(e) =>
+                                            setEditTrigger({ ...editTrigger, MinSleep: parseInt(e.target.value, 10) })
+                                        }
+                                    />
+                                </Form.Group>
+                                <Form.Group>
+                                    <Form.Label>Expiration Date</Form.Label>
+                                    <Form.Control
+                                        type="text"
+                                        value={editTrigger.ExpirationDate}
+                                        onChange={(e) =>
+                                            setEditTrigger({ ...editTrigger, ExpirationDate: e.target.value })
+                                        }
+                                    />
+                                </Form.Group>
+                                <Form.Group>
+                                    <Form.Label>Activation Date</Form.Label>
+                                    <Form.Control
+                                        type="text"
+                                        value={editTrigger.ActivationDate}
+                                        onChange={(e) =>
+                                            setEditTrigger({ ...editTrigger, ActivationDate: e.target.value })
+                                        }
+                                    />
+                                </Form.Group>
                                 <div style={{ paddingLeft: '20px', borderLeft: '2px solid #ddd', marginTop: '15px' }}>
                                     <h5>Balance Parameters</h5>
                                     <Form.Group>
@@ -352,19 +403,6 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                                 setEditTrigger({
                                                     ...editTrigger,
                                                     Balance: { ...editTrigger.Balance, ID: e.target.value },
-                                                })
-                                            }
-                                        />
-                                    </Form.Group>
-                                    <Form.Group>
-                                        <Form.Label>Balance ID</Form.Label>
-                                        <Form.Control
-                                            type="text"
-                                            value={editTrigger.Balance.BalanceID || ''}
-                                            onChange={(e) =>
-                                                setEditTrigger({
-                                                    ...editTrigger,
-                                                    Balance: { ...editTrigger.Balance, BalanceID: e.target.value },
                                                 })
                                             }
                                         />
@@ -402,6 +440,24 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                             setEditTrigger({ ...editTrigger, ActionsID: e.target.value })
                                         }
                                     />
+                                </Form.Group>
+                                <Form.Group>
+                                    <Form.Label>Min Queued Items</Form.Label>
+                                    <Form.Control
+                                        type="number"
+                                        value={editTrigger.MinQueuedItems}
+                                        onChange={(e) =>
+                                            setEditTrigger({ ...editTrigger, MinQueuedItems: parseInt(e.target.value, 10) })
+                                        }
+                                    />
+                                </Form.Group>
+                                <Form.Group>
+                                    <Form.Label>Executed</Form.Label>
+                                    <Form.Control type="text" value={editTrigger.Executed ? 'Yes' : 'No'} readOnly />
+                                </Form.Group>
+                                <Form.Group>
+                                    <Form.Label>Last Execution Time</Form.Label>
+                                    <Form.Control type="text" value={editTrigger.LastExecutionTime} readOnly />
                                 </Form.Group>
                                 <div style={{ marginTop: '20px' }}>
                                     <h5>JSON Representation</h5>
