@@ -347,6 +347,47 @@ const GetAccounts = ({ cgratesConfig }) => {
     fetchResults(pageNumber);
   };
 
+  function formatExpiration(expirationDateStr) {
+    const expirationDate = new Date(expirationDateStr);
+    const now = new Date();
+
+    // Format the date
+    const options = {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZoneName: 'short',
+    };
+    const prettyDate = expirationDate.toLocaleString('en-US', options);
+
+    // Calculate time difference
+    const diffInSeconds = Math.floor((expirationDate - now) / 1000);
+    let timeUntil;
+
+    if (diffInSeconds < 60) {
+        timeUntil = `${diffInSeconds} seconds`;
+    } else if (diffInSeconds < 3600) {
+        const minutes = Math.floor(diffInSeconds / 60);
+        timeUntil = `${minutes} minutes`;
+    } else if (diffInSeconds < 86400) {
+        const hours = Math.floor(diffInSeconds / 3600);
+        timeUntil = `${hours} hours`;
+    } else if (diffInSeconds < 604800) {
+        const days = Math.floor(diffInSeconds / 86400);
+        timeUntil = `${days} days`;
+    } else {
+        const weeks = Math.floor(diffInSeconds / 604800);
+        timeUntil = `${weeks} weeks`;
+    }
+
+    return { prettyDate, timeUntil };
+}
+
+
   // Function to render the balance map by category
   const renderBalanceTable = (balanceMap, category) => {
     if (!balanceMap || !balanceMap[category]) return null;
@@ -410,25 +451,31 @@ const GetAccounts = ({ cgratesConfig }) => {
           </tr>
         </thead>
         <tbody>
-          {balanceMap[category].map((balance, index) => (
-            <tr key={index} style={{ cursor: 'pointer' }}>
-              <td>{balance.ID}</td>
-              <td>{balance.Value}</td>
-              <td>{balance.ExpirationDate}</td>
-              <td>{balance.Weight}</td>
-              <td>{balance.Blocker ? 'Yes' : 'No'}</td>
-              <td>
-                <Button variant="danger" onClick={() => handleRemoveBalance(balance)}>
-                  Remove Balance
-                </Button>
-              </td>
-            </tr>
-          ))}
+          {balanceMap[category].map((balance, index) => {
+            const { prettyDate, timeUntil } = formatExpiration(balance.ExpirationDate);
+            return (
+              <tr key={index} style={{ cursor: 'pointer' }}>
+                <td>{balance.ID}</td>
+                <td>{balance.Value}</td>
+                <td>
+                  {prettyDate}
+                  <br />
+                  <span style={{ color: 'gray' }}>Time remaining: {timeUntil}</span>
+                </td>
+                <td>{balance.Weight}</td>
+                <td>{balance.Blocker ? 'Yes' : 'No'}</td>
+                <td>
+                  <Button variant="danger" onClick={() => handleRemoveBalance(balance)}>
+                    Remove Balance
+                  </Button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </Table>
     );
   };
-  
 
   const handleBalanceClick = (balance) => {
     setSelectedBalance(balance);
