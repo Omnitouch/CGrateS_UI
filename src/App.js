@@ -4,6 +4,7 @@ import { Modal, Button, Navbar, Nav, Container, Form, Alert, NavDropdown } from 
 import CDRs from './CDRs';
 import Accounts from './Accounts';
 import ActionPlans from './ActionPlans';
+import ActionTriggers from './ActionTriggers.js';
 import Actions from './Actions';
 import Attributes from './Attributes';
 import Filters from './Filters';
@@ -205,6 +206,7 @@ function App() {
         '/sessions': 'Sessions - Omnitouch CGrateS UI',
         '/resources': 'Resources - Omnitouch CGrateS UI',
         '/action-plans': 'Action Plans - Omnitouch CGrateS UI',
+        '/action-triggers': 'Action Triggers - Omnitouch CGrateS UI',
         '/actions': 'Actions - Omnitouch CGrateS UI',
         '/routes': 'Routes - Omnitouch CGrateS UI',
         '/attributes': 'Attributes - Omnitouch CGrateS UI',
@@ -237,7 +239,8 @@ function App() {
               <Nav.Link as={Link} to="/sessions">Sessions</Nav.Link>
               <Nav.Link as={Link} to="/resources">Resources</Nav.Link>
               <Nav.Link as={Link} to="/filters">Filters</Nav.Link>
-              <NavDropdown title="Actions & ActionPlans" id="rate-plans-dropdown">
+              <NavDropdown title="Actions & ActionPlans" id="actions-dropdown">
+                <NavDropdown.Item as={Link} to="/action-triggers">Action Triggers</NavDropdown.Item>
                 <NavDropdown.Item as={Link} to="/action-plans">Action Plans</NavDropdown.Item>
                 <NavDropdown.Item as={Link} to="/actions">Actions</NavDropdown.Item>
               </NavDropdown>              
@@ -284,6 +287,7 @@ function App() {
           <Route path="/accounts" element={<Accounts cgratesConfig={cgratesConfig} />} />
           <Route path="/sessions" element={<SessionS cgratesConfig={cgratesConfig} />} />
           <Route path="/resources" element={<Resources cgratesConfig={cgratesConfig} />} />
+          <Route path="/action-triggers" element={<ActionTriggers cgratesConfig={cgratesConfig} />} />
           <Route path="/action-plans" element={<ActionPlans cgratesConfig={cgratesConfig} />} />
           <Route path="/actions" element={<Actions cgratesConfig={cgratesConfig} />} />
           <Route path="/routes" element={<RouteS cgratesConfig={cgratesConfig} />} />
