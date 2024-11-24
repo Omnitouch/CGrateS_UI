@@ -9,6 +9,7 @@ const ActionTriggers = ({ cgratesConfig }) => {
     const [editTrigger, setEditTrigger] = useState(null); // Store editable trigger details
     const [showModal, setShowModal] = useState(false); // Control the modal display
     const [isLoading, setIsLoading] = useState(false); // Handle loading state
+    const [isNewTrigger, setIsNewTrigger] = useState(false); // Determine if adding a new trigger
     const [errorMessage, setErrorMessage] = useState(''); // Handle error messages
 
     // Available ThresholdTypes and BalanceTypes
@@ -22,6 +23,21 @@ const ActionTriggers = ({ cgratesConfig }) => {
         '*max_balance_counter',
     ];
     const balanceTypes = ['*voice', '*data', '*sms', '*monetary', '*generic'];
+
+    // Default template for a new trigger
+    const defaultTrigger = {
+        GroupID: '',
+        ThresholdType: '',
+        ThresholdValue: 0,
+        Weight: 0,
+        ActionsID: '',
+        Balance: {
+            BalanceType: '*monetary',
+            ID: '',
+            BalanceID: '',
+            Value: 0,
+        },
+    };
 
     // Handle input change for tenant selection
     const handleInputChange = (event) => {
@@ -69,13 +85,21 @@ const ActionTriggers = ({ cgratesConfig }) => {
         }
     };
 
-    // Open modal for editing an existing trigger
-    const handleRowClick = (trigger) => {
-        setEditTrigger(trigger);
+    // Open modal for adding a new trigger
+    const openAddTriggerModal = () => {
+        setEditTrigger(defaultTrigger);
+        setIsNewTrigger(true);
         setShowModal(true);
     };
 
-    // Save the edited trigger
+    // Open modal for editing an existing trigger
+    const handleRowClick = (trigger) => {
+        setEditTrigger(trigger);
+        setIsNewTrigger(false);
+        setShowModal(true);
+    };
+
+    // Save the edited or newly created trigger
     const saveChanges = async () => {
         setIsLoading(true);
         setErrorMessage('');
@@ -104,7 +128,7 @@ const ActionTriggers = ({ cgratesConfig }) => {
             };
 
             const query = {
-                method: 'APIerSv1.SetActionTrigger',
+                method: isNewTrigger ? 'APIerSv1.SetActionTrigger' : 'APIerSv1.SetActionTrigger',
                 params: [payload],
             };
 
@@ -122,7 +146,7 @@ const ActionTriggers = ({ cgratesConfig }) => {
 
             const data = await response.json();
             if (data.result) {
-                console.log('Action trigger updated successfully');
+                console.log(`Action trigger ${isNewTrigger ? 'created' : 'updated'} successfully`);
                 setShowModal(false);
                 fetchTriggers(); // Refresh the list of triggers
             } else if (data.error) {
@@ -205,8 +229,13 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                 </Form.Control>
                             </Form.Group>
                         </Col>
-                        <Col md={6} className="d-flex align-items-end">
-                            <Button type="submit" className="w-100">Fetch Triggers</Button>
+                        <Col md={3}>
+                            <Button type="submit" className="w-100 mt-4">Fetch Triggers</Button>
+                        </Col>
+                        <Col md={3}>
+                            <Button variant="success" className="w-100 mt-4" onClick={openAddTriggerModal}>
+                                Add Trigger
+                            </Button>
                         </Col>
                     </Row>
                 </Form>
@@ -251,7 +280,7 @@ const ActionTriggers = ({ cgratesConfig }) => {
 
                 <Modal show={showModal} onHide={handleCloseModal} size="lg">
                     <Modal.Header closeButton>
-                        <Modal.Title>Edit Action Trigger</Modal.Title>
+                        <Modal.Title>{isNewTrigger ? 'Add New Trigger' : 'Edit Action Trigger'}</Modal.Title>
                     </Modal.Header>
                     <Modal.Body>
                         {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
@@ -384,11 +413,13 @@ const ActionTriggers = ({ cgratesConfig }) => {
                         )}
                     </Modal.Body>
                     <Modal.Footer>
-                        <Button variant="danger" onClick={removeActionTrigger}>
-                            Remove ActionTrigger
-                        </Button>
+                        {!isNewTrigger && (
+                            <Button variant="danger" onClick={removeActionTrigger}>
+                                Remove ActionTrigger
+                            </Button>
+                        )}
                         <Button variant="primary" onClick={saveChanges}>
-                            Save Changes
+                            {isNewTrigger ? 'Add Trigger' : 'Save Changes'}
                         </Button>
                         <Button variant="secondary" onClick={handleCloseModal}>
                             Close
