@@ -261,7 +261,7 @@ const SessionS = ({ cgratesConfig }) => {
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan="7" className="text-center">No results available</td>
+                  <td colSpan="8" className="text-center">No results available</td>
                 </tr>
               )}
             </tbody>
