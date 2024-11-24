@@ -9,8 +9,6 @@ const ActionTriggers = ({ cgratesConfig }) => {
     const [editTrigger, setEditTrigger] = useState(null); // Store editable trigger details
     const [showModal, setShowModal] = useState(false); // Control the modal display
     const [isLoading, setIsLoading] = useState(false); // Handle loading state
-    const [isEditing, setIsEditing] = useState(false); // Toggle editing mode
-    const [isNew, setIsNew] = useState(false); // Flag to track if creating a new trigger
     const [errorMessage, setErrorMessage] = useState(''); // Handle error messages
 
     // Available ThresholdTypes
@@ -65,30 +63,13 @@ const ActionTriggers = ({ cgratesConfig }) => {
         }
     };
 
-    // Open modal to create a new trigger
-    const openCreateNewTriggerModal = () => {
-        const newTrigger = {
-            GroupID: '', // Mandatory
-            ActionTrigger: {
-                Balance: {
-                    BalanceType: '*monetary',
-                    ID: '*default',
-                    BalanceID: '*default',
-                    Value: 0,
-                },
-                ThresholdType: '',
-                ThresholdValue: 0,
-                Weight: 0,
-                ActionsID: '',
-            },
-        };
-        setEditTrigger(newTrigger);
-        setIsNew(true); // Mark this as a new trigger creation
-        setIsEditing(true); // Automatically start in edit mode
-        setShowModal(true); // Show modal
+    // Open modal for editing an existing trigger
+    const handleRowClick = (trigger) => {
+        setEditTrigger(trigger);
+        setShowModal(true);
     };
 
-    // Save the edited or newly created trigger
+    // Save the edited trigger
     const saveChanges = async () => {
         setIsLoading(true);
         setErrorMessage('');
@@ -98,7 +79,7 @@ const ActionTriggers = ({ cgratesConfig }) => {
                 setIsLoading(false);
                 return;
             }
-            if (!editTrigger.ActionTrigger.ThresholdType) {
+            if (!editTrigger.ThresholdType) {
                 setErrorMessage('ThresholdType is required.');
                 setIsLoading(false);
                 return;
@@ -106,7 +87,13 @@ const ActionTriggers = ({ cgratesConfig }) => {
 
             const payload = {
                 GroupID: editTrigger.GroupID,
-                ActionTrigger: editTrigger.ActionTrigger,
+                ActionTrigger: {
+                    ...editTrigger,
+                    Balance: {
+                        ...editTrigger.Balance,
+                        Value: parseFloat(editTrigger.Balance.Value || 0),
+                    },
+                },
                 Overwrite: true,
             };
 
@@ -130,7 +117,6 @@ const ActionTriggers = ({ cgratesConfig }) => {
             const data = await response.json();
             if (data.result) {
                 console.log('Action trigger updated successfully');
-                setIsEditing(false);
                 setShowModal(false);
                 fetchTriggers(); // Refresh the list of triggers
             } else if (data.error) {
@@ -147,7 +133,6 @@ const ActionTriggers = ({ cgratesConfig }) => {
     const handleCloseModal = () => {
         setShowModal(false);
         setEditTrigger(null);
-        setIsEditing(false);
         setErrorMessage('');
     };
 
@@ -189,30 +174,31 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                     <th>ID</th>
                                     <th>Threshold Type</th>
                                     <th>Threshold Value</th>
+                                    <th>Actions ID</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {triggers.length > 0 ? triggers.map((trigger, index) => (
-                                    <tr key={index}>
+                                    <tr key={index} onClick={() => handleRowClick(trigger)} style={{ cursor: 'pointer' }}>
                                         <td>{index + 1}</td>
                                         <td>{trigger.ID}</td>
                                         <td>{trigger.ThresholdType}</td>
                                         <td>{trigger.ThresholdValue}</td>
+                                        <td>{trigger.ActionsID}</td>
                                     </tr>
                                 )) : (
                                     <tr>
-                                        <td colSpan="4" className="text-center">No triggers available</td>
+                                        <td colSpan="5" className="text-center">No triggers available</td>
                                     </tr>
                                 )}
                             </tbody>
                         </Table>
-                        <Button variant="success" className="mt-4" onClick={openCreateNewTriggerModal}>Create New Trigger</Button>
                     </>
                 )}
 
                 <Modal show={showModal} onHide={handleCloseModal} size="lg">
                     <Modal.Header closeButton>
-                        <Modal.Title>{isNew ? "Create New Trigger" : "Trigger Details"}</Modal.Title>
+                        <Modal.Title>Edit Action Trigger</Modal.Title>
                     </Modal.Header>
                     <Modal.Body>
                         {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
@@ -230,12 +216,9 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                     <Form.Label>Threshold Type</Form.Label>
                                     <Form.Control
                                         as="select"
-                                        value={editTrigger.ActionTrigger.ThresholdType}
+                                        value={editTrigger.ThresholdType}
                                         onChange={(e) =>
-                                            setEditTrigger({
-                                                ...editTrigger,
-                                                ActionTrigger: { ...editTrigger.ActionTrigger, ThresholdType: e.target.value },
-                                            })
+                                            setEditTrigger({ ...editTrigger, ThresholdType: e.target.value })
                                         }
                                     >
                                         <option value="">Select Threshold Type</option>
@@ -250,12 +233,9 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                     <Form.Label>Threshold Value</Form.Label>
                                     <Form.Control
                                         type="number"
-                                        value={editTrigger.ActionTrigger.ThresholdValue}
+                                        value={editTrigger.ThresholdValue}
                                         onChange={(e) =>
-                                            setEditTrigger({
-                                                ...editTrigger,
-                                                ActionTrigger: { ...editTrigger.ActionTrigger, ThresholdValue: parseInt(e.target.value, 10) },
-                                            })
+                                            setEditTrigger({ ...editTrigger, ThresholdValue: parseInt(e.target.value, 10) })
                                         }
                                     />
                                 </Form.Group>
@@ -264,56 +244,44 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                     <Form.Label>Balance Type</Form.Label>
                                     <Form.Control
                                         type="text"
-                                        value={editTrigger.ActionTrigger.Balance.BalanceType}
+                                        value={editTrigger.Balance.BalanceType || ''}
                                         onChange={(e) =>
                                             setEditTrigger({
                                                 ...editTrigger,
-                                                ActionTrigger: {
-                                                    ...editTrigger.ActionTrigger,
-                                                    Balance: { ...editTrigger.ActionTrigger.Balance, BalanceType: e.target.value },
-                                                },
+                                                Balance: { ...editTrigger.Balance, BalanceType: e.target.value },
                                             })
                                         }
                                     />
                                     <Form.Label>ID</Form.Label>
                                     <Form.Control
                                         type="text"
-                                        value={editTrigger.ActionTrigger.Balance.ID}
+                                        value={editTrigger.Balance.ID || ''}
                                         onChange={(e) =>
                                             setEditTrigger({
                                                 ...editTrigger,
-                                                ActionTrigger: {
-                                                    ...editTrigger.ActionTrigger,
-                                                    Balance: { ...editTrigger.ActionTrigger.Balance, ID: e.target.value },
-                                                },
+                                                Balance: { ...editTrigger.Balance, ID: e.target.value },
                                             })
                                         }
                                     />
                                     <Form.Label>Balance ID</Form.Label>
                                     <Form.Control
                                         type="text"
-                                        value={editTrigger.ActionTrigger.Balance.BalanceID}
+                                        value={editTrigger.Balance.BalanceID || ''}
                                         onChange={(e) =>
                                             setEditTrigger({
                                                 ...editTrigger,
-                                                ActionTrigger: {
-                                                    ...editTrigger.ActionTrigger,
-                                                    Balance: { ...editTrigger.ActionTrigger.Balance, BalanceID: e.target.value },
-                                                },
+                                                Balance: { ...editTrigger.Balance, BalanceID: e.target.value },
                                             })
                                         }
                                     />
                                     <Form.Label>Value</Form.Label>
                                     <Form.Control
                                         type="number"
-                                        value={editTrigger.ActionTrigger.Balance.Value}
+                                        value={editTrigger.Balance.Value || 0}
                                         onChange={(e) =>
                                             setEditTrigger({
                                                 ...editTrigger,
-                                                ActionTrigger: {
-                                                    ...editTrigger.ActionTrigger,
-                                                    Balance: { ...editTrigger.ActionTrigger.Balance, Value: parseFloat(e.target.value) },
-                                                },
+                                                Balance: { ...editTrigger.Balance, Value: parseFloat(e.target.value) },
                                             })
                                         }
                                     />
@@ -322,12 +290,9 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                     <Form.Label>Weight</Form.Label>
                                     <Form.Control
                                         type="number"
-                                        value={editTrigger.ActionTrigger.Weight}
+                                        value={editTrigger.Weight}
                                         onChange={(e) =>
-                                            setEditTrigger({
-                                                ...editTrigger,
-                                                ActionTrigger: { ...editTrigger.ActionTrigger, Weight: parseInt(e.target.value, 10) },
-                                            })
+                                            setEditTrigger({ ...editTrigger, Weight: parseInt(e.target.value, 10) })
                                         }
                                     />
                                 </Form.Group>
@@ -335,12 +300,9 @@ const ActionTriggers = ({ cgratesConfig }) => {
                                     <Form.Label>Actions ID</Form.Label>
                                     <Form.Control
                                         type="text"
-                                        value={editTrigger.ActionTrigger.ActionsID}
+                                        value={editTrigger.ActionsID}
                                         onChange={(e) =>
-                                            setEditTrigger({
-                                                ...editTrigger,
-                                                ActionTrigger: { ...editTrigger.ActionTrigger, ActionsID: e.target.value },
-                                            })
+                                            setEditTrigger({ ...editTrigger, ActionsID: e.target.value })
                                         }
                                     />
                                 </Form.Group>
@@ -349,7 +311,7 @@ const ActionTriggers = ({ cgratesConfig }) => {
                     </Modal.Body>
                     <Modal.Footer>
                         <Button variant="primary" onClick={saveChanges}>
-                            {isNew ? "Create Trigger" : "Save Changes"}
+                            Save Changes
                         </Button>
                         <Button variant="secondary" onClick={handleCloseModal}>
                             Close
