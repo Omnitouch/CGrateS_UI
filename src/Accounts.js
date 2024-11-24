@@ -348,19 +348,28 @@ const GetAccounts = ({ cgratesConfig }) => {
   };
 
   function formatExpiration(expirationDateStr) {
+    // Convert to date
     const expirationDate = new Date(expirationDateStr);
     const now = new Date();
 
+    // Check if the date is "0001-01-01T00:00:00Z"
+    if (expirationDate.toISOString() === "0001-01-01T00:00:00.000Z") {
+      return {
+        prettyDate: "Never",
+        timeUntil: "forever",
+      };
+    }
+
     // Format the date
     const options = {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        timeZoneName: 'short',
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZoneName: 'short',
     };
     const prettyDate = expirationDate.toLocaleString('en-US', options);
 
@@ -369,34 +378,36 @@ const GetAccounts = ({ cgratesConfig }) => {
     let timeUntil;
 
     if (diffInSeconds < 60) {
-        timeUntil = `${diffInSeconds} seconds`;
+      timeUntil = `${diffInSeconds} seconds`;
     } else if (diffInSeconds < 3600) {
-        const minutes = Math.floor(diffInSeconds / 60);
-        timeUntil = `${minutes} minutes`;
+      const minutes = Math.floor(diffInSeconds / 60);
+      timeUntil = `${minutes} minutes`;
     } else if (diffInSeconds < 86400) {
-        const hours = Math.floor(diffInSeconds / 3600);
-        timeUntil = `${hours} hours`;
+      const hours = Math.floor(diffInSeconds / 3600);
+      timeUntil = `${hours} hours`;
     } else if (diffInSeconds < 604800) {
-        const days = Math.floor(diffInSeconds / 86400);
-        timeUntil = `${days} days`;
+      const days = Math.floor(diffInSeconds / 86400);
+      timeUntil = `${days} days`;
     } else {
-        const weeks = Math.floor(diffInSeconds / 604800);
-        timeUntil = `${weeks} weeks`;
+      const weeks = Math.floor(diffInSeconds / 604800);
+      timeUntil = `${weeks} weeks`;
     }
 
     return { prettyDate, timeUntil };
-}
+  }
+
+
 
 
   // Function to render the balance map by category
   const renderBalanceTable = (balanceMap, category) => {
     if (!balanceMap || !balanceMap[category]) return null;
-  
+
     const handleRemoveBalance = async (balance) => {
       if (!window.confirm(`Are you sure you want to remove the balance with ID: ${balance.ID}?`)) {
         return;
       }
-  
+
       const removeBalanceQuery = {
         method: 'APIerSv1.RemoveBalances',
         params: [{
@@ -411,9 +422,9 @@ const GetAccounts = ({ cgratesConfig }) => {
         }],
         id: 6,
       };
-  
+
       console.log(`Removing balance ID: ${balance.ID} for account: ${selectedRowData.ID.split(':')[1]}`);
-  
+
       try {
         const response = await fetch(cgratesConfig.url + '/jsonrpc', {
           method: 'POST',
@@ -422,14 +433,14 @@ const GetAccounts = ({ cgratesConfig }) => {
           },
           body: JSON.stringify(removeBalanceQuery),
         });
-  
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-  
+
         const data = await response.json();
         console.log('Balance removed successfully:', data);
-  
+
         // Refresh account details to reflect the removal
         const [tenant, account] = selectedRowData.ID.split(':');
         fetchAccountDetails(tenant, account);
@@ -437,7 +448,7 @@ const GetAccounts = ({ cgratesConfig }) => {
         console.error('Error removing balance:', error);
       }
     };
-  
+
     return (
       <Table striped bordered hover>
         <thead>
