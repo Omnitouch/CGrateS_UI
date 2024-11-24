@@ -11,7 +11,35 @@ const SessionS = ({ cgratesConfig }) => {
   const [selectedSession, setSelectedSession] = useState(null);
   const [terminateLoading, setTerminateLoading] = useState(false);
 
-  // Handle input change for tenant selection
+  // Utility function to format Usage based on ToR
+  const formatUsage = (usage, tor) => {
+    if (tor === '*data') {
+      const mb = (usage / (1024 * 1024)).toFixed(2);
+      return (
+        <>
+          {`${mb} MB`}
+          <br />
+          {`(${usage} bytes)`}
+        </>
+      );
+    } else if (tor === '*voice') {
+      const totalSeconds = Math.floor(usage / 1e9); // Convert nanoseconds to seconds
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      const timeFormatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      return (
+        <>
+          {timeFormatted}
+          <br />
+          {`(${usage} ns)`}
+        </>
+      );
+    }
+    return usage; // Default case, no formatting
+  };
+
+
   const handleInputChange = (event) => {
     const { name, value } = event.target;
     setSearchParams({ ...searchParams, [name]: value });
@@ -221,7 +249,7 @@ const SessionS = ({ cgratesConfig }) => {
                   <td>{result.Category}</td>
                   <td>{result.SetupTime}</td>
                   <td>{result.Destination}</td>
-                  <td>{result.Usage}</td>
+                  <td>{formatUsage(result.Usage, result.ToR)}</td>
                 </tr>
               )) : (
                 <tr>
