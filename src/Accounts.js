@@ -351,7 +351,6 @@ const GetAccounts = ({ cgratesConfig }) => {
     // Convert to date
     const expirationDate = new Date(expirationDateStr);
     const now = new Date();
-
     // Check if the date is "0001-01-01T00:00:00Z"
     if (expirationDate.toISOString() === "0001-01-01T00:00:00.000Z") {
       return {
