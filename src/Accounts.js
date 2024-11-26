@@ -706,40 +706,47 @@ const GetAccounts = ({ cgratesConfig }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {accountDetails.ActionTriggers.map((trigger, index) => (
-                      <tr key={index}>
-                        <td>
-                          {trigger.ID}
-                          <br />
-                          <span style={{ color: 'gray' }}>{trigger.UniqueID}</span>
-                        </td>
-                        <td>{trigger.ActionsID}</td>
-                        <td>
-                          {trigger.LastExecutionTime}
-                          <br />
-                          <span style={{ color: 'gray' }}>Executed: {trigger.Executed  ? 'Yes' : 'No'}</span>
-                        </td>
-                        <td>
-                          <Button variant="success" onClick={() => handleActionTriggerClick(trigger)}>
-                            View ActionTrigger
-                          </Button>
-                          <br />
-                          <Button
-                            variant="danger"
-                            onClick={() => removeActionTrigger(accountDetails.ID.split(':')[0], accountDetails.ID.split(':')[1], trigger.ActionsID, trigger.UniqueID)}
-                          >
-                            Remove ActionTrigger
-                          </Button>
-                          <br />
-                          <Button
-                            variant="warning"
-                            onClick={() => resetActionTrigger(accountDetails.ID.split(':')[0], accountDetails.ID.split(':')[1], trigger.ActionsID, trigger.UniqueID)}
-                          >
-                            Reset ActionTrigger
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
+          {accountDetails.ActionTriggers.map((trigger, index) => {
+            const { prettyDate, timeUntil } = formatExpiration(trigger.LastExecutionTime);
+            return (
+              <tr key={index}>
+                <td>
+                  {trigger.ID}
+                  <br />
+                  <span style={{ color: 'gray' }}>{trigger.UniqueID}</span>
+                </td>
+                <td>{trigger.ActionsID}</td>
+                <td>
+                  {timeUntil} ago 
+                  <br/>
+                  <span style={{ color: 'gray' }}>
+                    {prettyDate}
+                    <br />
+                    Executed: {trigger.Executed ? 'Yes' : 'No'}
+                    </span>
+                </td>
+                <td>
+                  <Button variant="success" onClick={() => handleActionTriggerClick(trigger)}>
+                    View ActionTrigger
+                  </Button>
+                  <br />
+                  <Button
+                    variant="danger"
+                    onClick={() => removeActionTrigger(accountDetails.ID.split(':')[0], accountDetails.ID.split(':')[1], trigger.ActionsID, trigger.UniqueID)}
+                  >
+                    Remove ActionTrigger
+                  </Button>
+                  <br />
+                  <Button
+                    variant="warning"
+                    onClick={() => resetActionTrigger(accountDetails.ID.split(':')[0], accountDetails.ID.split(':')[1], trigger.ActionsID, trigger.UniqueID)}
+                  >
+                    Reset ActionTrigger
+                  </Button>
+                </td>
+              </tr>
+            );
+          })}
                   </tbody>
                 </Table>
               ) : (
