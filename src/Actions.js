@@ -387,7 +387,7 @@ const ActionsPage = ({ cgratesConfig }) => {
                 </Row>
             </Form>
 
-            <Button className="mt-3" variant="primary" onClick={() => setIsEditing(true)}>
+            <Button className="mt-3" variant="primary" onClick={handleCreateNewAction}>
                 Create New Action
             </Button>
 
