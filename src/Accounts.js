@@ -303,14 +303,13 @@ const GetAccounts = ({ cgratesConfig }) => {
     }
   };
 
-  const removeActionTrigger = async (tenant, account, actionTrigger) => {
+  const removeActionTrigger = async (tenant, account, actionTrigger, UniqueID) => {
     const removeActionTriggerQuery = {
       method: 'APIerSv1.RemoveAccountActionTriggers',
       params: [{
         Tenant: tenant,
         Account: account,
-        ActionTriggerIDs: [actionTrigger],
-        GroupId: actionTrigger
+        UniqueID: UniqueID,
       }],
       id: 6
     };
@@ -504,7 +503,7 @@ const GetAccounts = ({ cgratesConfig }) => {
           {balanceMap[category].map((balance, index) => {
             const { prettyDate, timeUntil } = formatExpiration(balance.ExpirationDate);
             return (
-              <tr key={index} onClick={() => handleBalanceClick(balance)} style={{ cursor: 'pointer' }}>
+              <tr key={index} style={{ cursor: 'pointer' }}>
                 <td>{balance.ID}</td>
                 <td>{balance.Value}</td>
                 <td>
@@ -515,6 +514,10 @@ const GetAccounts = ({ cgratesConfig }) => {
                 <td>{balance.Weight}</td>
                 <td>{balance.Blocker ? 'Yes' : 'No'}</td>
                 <td>
+                  <Button variant="success" onClick={() => handleBalanceClick(balance)}>
+                    View Balance
+                  </Button>
+                  <br />
                   <Button variant="danger" onClick={() => handleRemoveBalance(balance)}>
                     Remove Balance
                   </Button>
@@ -662,13 +665,13 @@ const GetAccounts = ({ cgratesConfig }) => {
                         <td>{trigger.ActionsID}</td>
                         <td>{trigger.LastExecutionTime}</td>
                         <td>
-                        <Button
+                          <Button
                             variant="danger"
-                            onClick={() => removeActionTrigger(accountDetails.ID.split(':')[0], accountDetails.ID.split(':')[1], trigger.ActionsID)}
+                            onClick={() => removeActionTrigger(accountDetails.ID.split(':')[0], accountDetails.ID.split(':')[1], trigger.ActionsID, trigger.UniqueID)}
                           >
                             Remove
                           </Button>
-                          </td>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
