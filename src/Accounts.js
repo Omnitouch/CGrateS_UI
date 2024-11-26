@@ -303,6 +303,46 @@ const GetAccounts = ({ cgratesConfig }) => {
     }
   };
 
+  const removeActionTrigger = async (tenant, account, actionTrigger) => {
+    const removeActionTriggerQuery = {
+      method: 'APIerSv1.RemoveAccountActionTriggers',
+      params: [{
+        Tenant: tenant,
+        Account: account,
+        ActionTriggerIDs: [actionTrigger],
+        GroupId: actionTrigger
+      }],
+      id: 6
+    };
+
+    console.log(`Removing actionTrigger: ${actionTrigger}`);
+
+    try {
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(removeActionTriggerQuery),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Action Trigger removed successfully:', data);
+
+      // Refresh modal content after removing the action plan
+      if (selectedRowData) {
+        const [tenant, account] = selectedRowData.ID.split(':');
+        fetchAccountDetails(tenant, account); // Refresh account details
+      }
+    } catch (error) {
+      console.error('Error removing action actionTrigger:', error);
+    }
+  };
+
   const handleSubmit = (event) => {
     event.preventDefault();
     setCurrentPage(1); // Reset to the first page
@@ -600,7 +640,42 @@ const GetAccounts = ({ cgratesConfig }) => {
               <p><strong>Allow Negative:</strong> {accountDetails.AllowNegative ? 'Yes' : 'No'}</p>
               <p><strong>Disabled:</strong> {accountDetails.Disabled ? 'Yes' : 'No'}</p>
               <p><strong>Action Triggers:</strong> {accountDetails.ActionTriggers ? JSON.stringify(accountDetails.ActionTriggers, null, 2) : 'None'}</p>
-
+              <h5>Action Triggers</h5>
+              {accountDetails.ActionTriggers && accountDetails.ActionTriggers.length > 0 ? (
+                <Table striped bordered hover>
+                  <thead>
+                    <tr>
+                      <th>Action Trigger ID</th>
+                      <th>Action</th>
+                      <th>Last Execution Time</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accountDetails.ActionTriggers.map((trigger, index) => (
+                      <tr key={index}>
+                        <td>
+                          {trigger.ID}
+                          <br />
+                          <span style={{ color: 'gray' }}>{trigger.UniqueID}</span>
+                        </td>
+                        <td>{trigger.ActionsID}</td>
+                        <td>{trigger.LastExecutionTime}</td>
+                        <td>
+                        <Button
+                            variant="danger"
+                            onClick={() => removeActionTrigger(accountDetails.ID.split(':')[0], accountDetails.ID.split(':')[1], trigger.ActionsID)}
+                          >
+                            Remove
+                          </Button>
+                          </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              ) : (
+                <p>No ActionTriggers available for this account.</p>
+              )}
               <h5>Action Plans</h5>
               {accountDetails.actionPlans && accountDetails.actionPlans.length > 0 ? (
                 <Table striped bordered hover>
