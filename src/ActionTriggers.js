@@ -135,6 +135,8 @@ const ActionTriggers = ({ cgratesConfig }) => {
                     ThresholdValue: editTrigger.ThresholdValue,
                     Weight: editTrigger.Weight,
                     ActionsID: editTrigger.ActionsID,
+                    UniqueID: editTrigger.UniqueID,
+                    GroupID: editTrigger.GroupID,
                 },
                 Overwrite: true,
                 Tenant: searchParams.tenant,

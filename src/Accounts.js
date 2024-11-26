@@ -14,8 +14,10 @@ const GetAccounts = ({ cgratesConfig }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [balanceModal, setBalanceModal] = useState(false); // New modal for balance details
+  const [actionTriggerModal, setActionTriggerModal] = useState(false); // New modal for action trigger details
   const [selectedRowData, setSelectedRowData] = useState(null);
   const [selectedBalance, setSelectedBalance] = useState(null); // Store clicked balance data
+  const [selectedActionTrigger, setSelectedActionTrigger] = useState(null); // Store clicked action trigger data
   const [accountDetails, setAccountDetails] = useState(null); // State to store detailed account data
   const [modalLoading, setModalLoading] = useState(false); // Loading state for modal API call
   const [actions, setActions] = useState([]); // Actions available for the selected account
@@ -342,6 +344,46 @@ const GetAccounts = ({ cgratesConfig }) => {
     }
   };
 
+  const resetActionTrigger = async (tenant, account, actionTrigger, UniqueID) => {
+    const resetActionTriggerQuery = {
+      method: 'APIerSv1.ResetAccountActionTriggers',
+      params: [{
+        Tenant: tenant,
+        Account: account,
+        UniqueID: UniqueID,
+        Executed: false
+      }],
+      id: 6
+    };
+
+    console.log(`Removing actionTrigger: ${actionTrigger}`);
+
+    try {
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(resetActionTriggerQuery),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Action Trigger reset successfully:', data);
+
+      // Refresh modal content after removing the action plan
+      if (selectedRowData) {
+        const [tenant, account] = selectedRowData.ID.split(':');
+        fetchAccountDetails(tenant, account); // Refresh account details
+      }
+    } catch (error) {
+      console.error('Error resetting action actionTrigger:', error);
+    }
+  };
+
   const handleSubmit = (event) => {
     event.preventDefault();
     setCurrentPage(1); // Reset to the first page
@@ -540,6 +582,16 @@ const GetAccounts = ({ cgratesConfig }) => {
     setSelectedBalance(null); // Clear balance details when modal is closed
   };
 
+  const handleActionTriggerClick = (trigger) => {
+    setSelectedActionTrigger(trigger);
+    setActionTriggerModal(true); // Show balance modal with clicked balance details
+  };
+
+  const handleCloseActionTriggerModal = () => {
+    setActionTriggerModal(false);
+    setSelectedActionTrigger(null); // Clear balance details when modal is closed
+  };
+
   return (
     <div className="App">
       <Container>
@@ -642,7 +694,6 @@ const GetAccounts = ({ cgratesConfig }) => {
             <div>
               <p><strong>Allow Negative:</strong> {accountDetails.AllowNegative ? 'Yes' : 'No'}</p>
               <p><strong>Disabled:</strong> {accountDetails.Disabled ? 'Yes' : 'No'}</p>
-              <p><strong>Action Triggers:</strong> {accountDetails.ActionTriggers ? JSON.stringify(accountDetails.ActionTriggers, null, 2) : 'None'}</p>
               <h5>Action Triggers</h5>
               {accountDetails.ActionTriggers && accountDetails.ActionTriggers.length > 0 ? (
                 <Table striped bordered hover>
@@ -663,13 +714,28 @@ const GetAccounts = ({ cgratesConfig }) => {
                           <span style={{ color: 'gray' }}>{trigger.UniqueID}</span>
                         </td>
                         <td>{trigger.ActionsID}</td>
-                        <td>{trigger.LastExecutionTime}</td>
                         <td>
+                          {trigger.LastExecutionTime}
+                          <br />
+                          <span style={{ color: 'gray' }}>Executed: {trigger.Executed  ? 'Yes' : 'No'}</span>
+                        </td>
+                        <td>
+                          <Button variant="success" onClick={() => handleActionTriggerClick(trigger)}>
+                            View ActionTrigger
+                          </Button>
+                          <br />
                           <Button
                             variant="danger"
                             onClick={() => removeActionTrigger(accountDetails.ID.split(':')[0], accountDetails.ID.split(':')[1], trigger.ActionsID, trigger.UniqueID)}
                           >
-                            Remove
+                            Remove ActionTrigger
+                          </Button>
+                          <br />
+                          <Button
+                            variant="warning"
+                            onClick={() => resetActionTrigger(accountDetails.ID.split(':')[0], accountDetails.ID.split(':')[1], trigger.ActionsID, trigger.UniqueID)}
+                          >
+                            Reset ActionTrigger
                           </Button>
                         </td>
                       </tr>
@@ -796,6 +862,40 @@ const GetAccounts = ({ cgratesConfig }) => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={handleCloseBalanceModal}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal for Action Trigger Details */}
+      <Modal show={actionTriggerModal} onHide={handleCloseActionTriggerModal} size="xl">
+        <Modal.Header closeButton>
+          <Modal.Title>Action Trigger Details</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {selectedActionTrigger ? (
+            <Table striped bordered hover>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(selectedActionTrigger).map(([key, value], index) => (
+                  <tr key={index}>
+                    <td>{key}</td>
+                    <td>{typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : String(value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          ) : (
+            <p>No action trigger details available.</p>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleCloseActionTriggerModal}>
             Close
           </Button>
         </Modal.Footer>
