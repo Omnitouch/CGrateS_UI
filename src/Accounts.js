@@ -390,13 +390,18 @@ const GetAccounts = ({ cgratesConfig }) => {
     fetchResults(1);
   };
 
-  const handleRowClick = (rowData) => {
+  const handleRowClick = async (rowData) => {
     setSelectedRowData(rowData);
     const [tenant, account] = rowData.ID.split(':');
     setAccountDetails({ Tenant: tenant, Account: account, ...rowData }); // Set the tenant and account details in state
+  
+    // Fetch actions before opening the modal
+    await fetchActions(tenant);
+  
     setShowModal(true);
     fetchAccountDetails(tenant, account); // Fetch additional account details
   };
+  
 
   const handleActionSelect = (event) => {
     setSelectedAction(event.target.value);
@@ -422,6 +427,7 @@ const GetAccounts = ({ cgratesConfig }) => {
     setSelectedAction(''); // Clear selected action
     setShowConfirm(false); // Hide confirmation alert
   };
+  
 
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber);
@@ -476,7 +482,33 @@ const GetAccounts = ({ cgratesConfig }) => {
     return { prettyDate, timeUntil };
   }
 
-
+  // Utility function to format Usage based on ToR
+  const formatUsage = (usage, tor) => {
+    if (tor === '*data') {
+      const mb = (usage / (1024 * 1024)).toFixed(2);
+      return (
+        <>
+          {`${mb} MB`}
+          <br />
+          {`(${usage} bytes)`}
+        </>
+      );
+    } else if (tor === '*voice') {
+      const totalSeconds = Math.floor(usage / 1e9); // Convert nanoseconds to seconds
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      const timeFormatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      return (
+        <>
+          {timeFormatted}
+          <br />
+          {`(${usage} ns)`}
+        </>
+      );
+    }
+    return usage; // Default case, no formatting
+  };
 
 
   // Function to render the balance map by category
@@ -547,7 +579,7 @@ const GetAccounts = ({ cgratesConfig }) => {
             return (
               <tr key={index} style={{ cursor: 'pointer' }}>
                 <td>{balance.ID}</td>
-                <td>{balance.Value}</td>
+                <td>{formatUsage(balance.Value, category)}</td>
                 <td>
                   {prettyDate}
                   <br />
