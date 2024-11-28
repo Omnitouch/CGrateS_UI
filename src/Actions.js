@@ -74,38 +74,40 @@ const ActionsPage = ({ cgratesConfig }) => {
         return true;
     };
 
-
     const handleRowClick = (actionDetails) => {
         const updatedActionDetails = actionDetails.map(part => {
             const { Balance, ExtraParameters } = part;
-
-            // Convert DestinationIDs object back into a string for display/editing
+    
+            // Safely handle Balance and DestinationIDs
             const updatedBalance = Balance ? {
                 ...Balance,
-                DestinationIDs: typeof Balance.DestinationIDs === 'object'
-                    ? Object.keys(Balance.DestinationIDs).join(';')
-                    : Balance.DestinationIDs,
-            } : part.Balance;
-
+                DestinationIDs: Balance.DestinationIDs
+                    ? typeof Balance.DestinationIDs === 'object'
+                        ? Object.keys(Balance.DestinationIDs).join(';')
+                        : Balance.DestinationIDs
+                    : '', // Default to an empty string if null or undefined
+            } : null; // Default to null if Balance itself is null or undefined
+    
             // Safely handle ExtraParameters: parse if it's JSON, otherwise keep as a string
             let parsedExtraParameters = ExtraParameters;
             if (isValidJson(ExtraParameters)) {
                 parsedExtraParameters = JSON.stringify(JSON.parse(ExtraParameters), null, 2); // Pretty-print JSON
             } else {
-                parsedExtraParameters = ExtraParameters; // Keep as-is if not valid JSON
+                parsedExtraParameters = ExtraParameters || ''; // Default to an empty string if null or undefined
             }
-
+    
             return {
                 ...part,
                 Balance: updatedBalance,
                 ExtraParameters: parsedExtraParameters,
             };
         });
-
+    
         setSelectedAction(updatedActionDetails);
         setShowModal(true);
         setIsEditing(false); // Start in view mode
     };
+    
 
     const handleExecuteAction = async () => {
         if (!selectedAccount || !selectedAction) {
