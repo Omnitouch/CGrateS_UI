@@ -441,8 +441,8 @@ const GetAccounts = ({ cgratesConfig }) => {
     // Check if the date is "0001-01-01T00:00:00Z"
     if (expirationDate.toISOString() === "0001-01-01T00:00:00.000Z") {
       return {
-        prettyDate: "Never",
-        timeUntil: "forever",
+        prettyDate: "No date set",
+        timeUntil: "Never",
       };
     }
 
@@ -749,7 +749,7 @@ const GetAccounts = ({ cgratesConfig }) => {
                 </td>
                 <td>{trigger.ActionsID}</td>
                 <td>
-                  {timeUntil} ago 
+                  {timeUntil} 
                   <br/>
                   <span style={{ color: 'gray' }}>
                     {prettyDate}
