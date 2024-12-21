@@ -2,413 +2,459 @@ import React, { useState, useEffect } from 'react';
 import { Form, Button, Container, Row, Col, Table, Modal, Spinner, ListGroup } from 'react-bootstrap';
 
 const Timings = ({ cgratesConfig }) => {
-    const [tpids, setTPIDs] = useState([]); // Store TPIDs for dropdown
-    const [searchParams, setSearchParams] = useState({
-        tpid: '', // Selected TPID for Timings
-    });
-    const [timings, setTimings] = useState([]); // Store the list of timings
-    const [selectedTiming, setSelectedTiming] = useState(null); // Store the selected timing's details
-    const [isEditing, setIsEditing] = useState(false); // Track if editing is active
-    const [showModal, setShowModal] = useState(false); // Control the modal display
-    const [isLoading, setIsLoading] = useState(false); // Handle loading state
-    const [error, setError] = useState(''); // Handle error messages
-    const [isActiveResult, setIsActiveResult] = useState(null); // Store the result of TimingIsActiveAt test
+  const [tpids, setTPIDs] = useState([]); // Store TPIDs for dropdown
+  const [searchParams, setSearchParams] = useState({
+    tpid: '', // Selected TPID for Timings
+  });
+  const [timings, setTimings] = useState([]); // Store the list of timings
+  const [selectedTiming, setSelectedTiming] = useState(null); // Store the selected timing's details
+  const [isEditing, setIsEditing] = useState(false); // Track if editing is active
+  const [showModal, setShowModal] = useState(false); // Control the modal display
+  const [isLoading, setIsLoading] = useState(false); // Handle loading state
+  const [error, setError] = useState(''); // Handle error messages
+  const [isActiveResult, setIsActiveResult] = useState(null); // Store the result of TimingIsActiveAt test
 
-    useEffect(() => {
-        const fetchTPIDs = async () => {
-            const newQuery = {
-                method: 'APIerSv1.GetTPIds',
-                params: [],
-            };
+  useEffect(() => {
+    const fetchTPIDs = async () => {
+      const newQuery = {
+        method: 'APIerSv1.GetTPIds',
+        params: [],
+      };
 
-            try {
-                const response = await fetch(cgratesConfig.url + '/jsonrpc', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(newQuery),
-                });
+      try {
+        const response = await fetch(`${cgratesConfig.url}/jsonrpc`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(newQuery),
+        });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
 
-                const data = await response.json();
-                if (data && data.result) {
-                    setTPIDs(data.result);
-                }
-            } catch (error) {
-                console.error('Error fetching TPIDs:', error);
-                setTPIDs([]);
-            }
+        const data = await response.json();
+        if (data && data.result) {
+          setTPIDs(data.result);
+        }
+      } catch (error) {
+        console.error('Error fetching TPIDs:', error);
+        setTPIDs([]);
+      }
+    };
+
+    fetchTPIDs();
+  }, [cgratesConfig.url]);
+
+  const handleTPIDChange = (event) => {
+    setSearchParams({ ...searchParams, tpid: event.target.value });
+  };
+
+  const fetchTimings = async () => {
+    setIsLoading(true);
+    setError('');
+    setTimings([]);
+    try {
+      const query = {
+        method: 'ApierV1.GetTPTimingIds',
+        params: searchParams.tpid ? [{ TPid: searchParams.tpid }] : [{}], // or add Tenant, etc., if needed
+      };
+
+      const response = await fetch(`${cgratesConfig.url}/jsonrpc`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(query),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.result && data.result.length > 0) {
+        setTimings(data.result);
+      } else {
+        setError('No timings found.');
+      }
+    } catch (error) {
+      console.error('Error fetching timings:', error);
+      setError('Error fetching timings: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRowClick = async (timingId) => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const query = {
+        method: 'ApierV1.GetTiming',
+        params: [{ TPid: searchParams.tpid, ID: timingId }], // or add Tenant if needed
+      };
+
+      const response = await fetch(`${cgratesConfig.url}/jsonrpc`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(query),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.result) {
+        // If API returns StartTime/EndTime, combine them into a single Time string.
+        let combinedTime = '*any';
+        if (data.result.StartTime && data.result.EndTime) {
+          combinedTime = `${data.result.StartTime};${data.result.EndTime}`;
+        } else if (data.result.Time) {
+          combinedTime = data.result.Time;
+        }
+
+        const mergedTiming = {
+          ID: data.result.ID || '',
+          Years: data.result.Years?.length ? data.result.Years.join(',') : '*any',
+          Months: data.result.Months?.length ? data.result.Months.join(',') : '*any',
+          MonthDays: data.result.MonthDays?.length ? data.result.MonthDays.join(',') : '*any',
+          WeekDays: data.result.WeekDays?.length ? data.result.WeekDays.join(',') : '*any',
+          Time: combinedTime,
         };
 
-        fetchTPIDs();
-    }, [cgratesConfig.url]);
-
-    const handleTPIDChange = (event) => {
-        setSearchParams({ ...searchParams, tpid: event.target.value });
-    };
-
-    const fetchTimings = async () => {
-        setIsLoading(true);
-        try {
-            const query = {
-                method: 'GetTPTimingIds',
-                params: searchParams.tpid ? [{ TPid: searchParams.tpid }] : [{}], // Fetch timings for the specified TPID
-            };
-
-            const response = await fetch(cgratesConfig.url + '/jsonrpc', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(query),
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            if (data.result && data.result.length > 0) {
-                setTimings(data.result);
-            } else {
-                setError('No timings found.');
-            }
-        } catch (error) {
-            console.error('Error fetching timings:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleRowClick = async (timingId) => {
-        setIsLoading(true);
-        try {
-            const query = {
-                method: 'GetTiming',
-                params: [{ TPid: searchParams.tpid, ID: timingId }],
-            };
-
-            const response = await fetch(cgratesConfig.url + '/jsonrpc', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(query),
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            if (data.result) {
-                setSelectedTiming(data.result);
-                setShowModal(true);
-                setIsEditing(false);
-            } else {
-                setError('Failed to retrieve timing details.');
-            }
-        } catch (error) {
-            console.error('Error fetching timing details:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleEditChange = (field, value) => {
-        setSelectedTiming({ ...selectedTiming, [field]: value });
-    };
-
-    const handleSaveTiming = async () => {
-        setIsLoading(true);
-        setError('');
-
-        try {
-            const query = {
-                method: 'ApierV2.SetTPTiming',
-                params: [
-                    {
-                        TPid: searchParams.tpid,
-                        ID: selectedTiming.ID,
-                        Years: selectedTiming.Years || '*any',
-                        Months: selectedTiming.Months || '*any',
-                        MonthDays: selectedTiming.MonthDays || '*any',
-                        WeekDays: selectedTiming.WeekDays || '*any',
-                        Time: selectedTiming.Time || '*any',
-                    },
-                ],
-            };
-
-            const response = await fetch(cgratesConfig.url + '/jsonrpc', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(query),
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            if (data.result) {
-                console.log('Timing saved successfully');
-                fetchTimings(); // Refresh timings list
-                setShowModal(false); // Close modal
-            } else {
-                throw new Error(data.error?.message || 'Failed to save timing');
-            }
-        } catch (error) {
-            console.error('Error saving timing:', error);
-            setError('Error saving timing: ' + error.message);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleCreateNewTiming = () => {
-        setSelectedTiming({
-            ID: '',
-            Years: '*any',
-            Months: '*any',
-            MonthDays: '*any',
-            WeekDays: '*any',
-            Time: '*any',
-        });
+        setSelectedTiming(mergedTiming);
         setShowModal(true);
-        setIsEditing(true);
-    };
+        setIsEditing(false);
+      } else {
+        setError('Failed to retrieve timing details.');
+      }
+    } catch (error) {
+      console.error('Error fetching timing details:', error);
+      setError('Error fetching timing details: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    const handleCloseModal = () => {
-        setShowModal(false);
-        setSelectedTiming(null);
-        setError('');
-    };
+  const handleEditChange = (field, value) => {
+    setSelectedTiming((prev) => ({ ...prev, [field]: value }));
+  };
 
-    const handleTestTiming = async (timingId, time) => {
-        setIsLoading(true);
-        setIsActiveResult(null);
-        try {
-            const query = {
-                method: 'APIerSv1.TimingIsActiveAt',
-                params: [{ TimingID: timingId, Time: time }],
-                id: 4,
-            };
+  const handleSaveTiming = async () => {
+    setIsLoading(true);
+    setError('');
 
-            const response = await fetch(cgratesConfig.url + '/jsonrpc', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(query),
-            });
+    try {
+      // We store everything in a single "Time" field, separated by semicolons if needed.
+      // For instance: '08:00:00;17:00:00' for StartTime = 08:00:00 and EndTime = 17:00:00.
+      // The server splits them internally or expects them in this format.
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+      const query = {
+        method: 'ApierV2.SetTPTiming',
+        params: [
+          {
+            TPid: searchParams.tpid,
+            ID: selectedTiming.ID,
+            Years: selectedTiming.Years || '*any',
+            Months: selectedTiming.Months || '*any',
+            MonthDays: selectedTiming.MonthDays || '*any',
+            WeekDays: selectedTiming.WeekDays || '*any',
+            Time: selectedTiming.Time || '*any',
+          },
+        ],
+      };
 
-            const data = await response.json();
-            if (data.result) {
-                setIsActiveResult(data.result);
-            } else {
-                setError('Failed to test timing activity.');
-            }
-        } catch (error) {
-            console.error('Error testing timing activity:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+      const response = await fetch(`${cgratesConfig.url}/jsonrpc`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(query),
+      });
 
-    return (
-        <Container>
-            <h2>Manage Timings</h2>
-            <Form onSubmit={(e) => { e.preventDefault(); fetchTimings(); }} className="mt-4">
-                <Row>
-                    <Col md={6}>
-                        <Form.Group controlId="formTPID">
-                            <Form.Label>TPID</Form.Label>
-                            <Form.Control
-                                as="select"
-                                value={searchParams.tpid}
-                                onChange={handleTPIDChange}
-                            >
-                                <option value="">Select TPID</option>
-                                {tpids.map((tpid, index) => (
-                                    <option key={index} value={tpid}>{tpid}</option>
-                                ))}
-                            </Form.Control>
-                        </Form.Group>
-                    </Col>
-                    <Col md={12} className="d-flex align-items-end">
-                        <Button type="submit" className="w-100">Fetch Timings</Button>
-                    </Col>
-                </Row>
-            </Form>
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
-            <Button className="mt-3" variant="primary" onClick={handleCreateNewTiming}>
-                Create New Timing
+      const data = await response.json();
+      if (data.result) {
+        console.log('Timing saved successfully.');
+        fetchTimings(); // Refresh timings list
+        setShowModal(false); // Close modal
+      } else {
+        throw new Error(data.error?.message || 'Failed to save timing');
+      }
+    } catch (error) {
+      console.error('Error saving timing:', error);
+      setError('Error saving timing: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateNewTiming = () => {
+    setSelectedTiming({
+      ID: '',
+      Years: '*any',
+      Months: '*any',
+      MonthDays: '*any',
+      WeekDays: '*any',
+      // If you want a default time, you can do something like '00:00:00;08:59:59'
+      // for demonstration; else just '*any' is fine.
+      Time: '*any',
+    });
+    setShowModal(true);
+    setIsEditing(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setSelectedTiming(null);
+    setError('');
+  };
+
+  const handleTestTiming = async (timingId, time) => {
+    setIsLoading(true);
+    setIsActiveResult(null);
+    setError('');
+    try {
+      const query = {
+        method: 'APIerSv1.TimingIsActiveAt',
+        params: [{ TimingID: timingId, Time: time }],
+        id: 4,
+      };
+
+      const response = await fetch(`${cgratesConfig.url}/jsonrpc`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(query),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.result) {
+        setIsActiveResult(data.result);
+      } else {
+        setError('Failed to test timing activity.');
+      }
+    } catch (error) {
+      console.error('Error testing timing activity:', error);
+      setError('Error testing timing activity: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Container>
+      <h2>Manage Timings</h2>
+      <Form
+        onSubmit={(e) => {
+          e.preventDefault();
+          fetchTimings();
+        }}
+        className="mt-4"
+      >
+        <Row>
+          <Col md={6}>
+            <Form.Group controlId="formTPID">
+              <Form.Label>TPID</Form.Label>
+              <Form.Control as="select" value={searchParams.tpid} onChange={handleTPIDChange}>
+                <option value="">Select TPID</option>
+                {tpids.map((tpid, index) => (
+                  <option key={index} value={tpid}>
+                    {tpid}
+                  </option>
+                ))}
+              </Form.Control>
+            </Form.Group>
+          </Col>
+          <Col md={12} className="d-flex align-items-end mt-3">
+            <Button type="submit" className="w-100">
+              Fetch Timings
             </Button>
+          </Col>
+        </Row>
+      </Form>
 
-            {isLoading ? (
-                <div className="text-center mt-4">
-                    <Spinner animation="border" role="status">
-                        <span className="sr-only">Loading...</span>
-                    </Spinner>
-                </div>
-            ) : (
-                error && <p className="text-danger mt-3">{error}</p>
-            )}
+      <Button className="mt-3" variant="primary" onClick={handleCreateNewTiming}>
+        Create New Timing
+      </Button>
 
-            {timings.length > 0 && (
-                <Table striped bordered hover className="mt-4">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Timing ID</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {timings.map((timingId, index) => (
-                            <tr key={index}>
-                                <td>{index + 1}</td>
-                                <td onClick={() => handleRowClick(timingId)} style={{ cursor: 'pointer' }}>{timingId}</td>
-                                <td>
-                                    <Button
-                                        variant="info"
-                                        onClick={() => handleTestTiming(timingId, '*now')}
-                                        className="me-2"
-                                    >
-                                        Test Now
-                                    </Button>
-                                    <Button
-                                        variant="secondary"
-                                        onClick={() => handleTestTiming(timingId, '2024-09-17T12:00:00Z')}
-                                    >
-                                        Test Specific Time
-                                    </Button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </Table>
-            )}
+      {isLoading ? (
+        <div className="text-center mt-4">
+          <Spinner animation="border" role="status">
+            <span className="sr-only">Loading...</span>
+          </Spinner>
+        </div>
+      ) : (
+        error && <p className="text-danger mt-3">{error}</p>
+      )}
 
-            {isActiveResult && (
-                <div className="mt-4">
-                    <h4>Timing Test Result</h4>
-                    <pre>{JSON.stringify(isActiveResult, null, 2)}</pre>
-                </div>
-            )}
+      {timings.length > 0 && (
+        <Table striped bordered hover className="mt-4">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Timing ID</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {timings.map((timingId, index) => (
+              <tr key={index}>
+                <td>{index + 1}</td>
+                <td
+                  onClick={() => handleRowClick(timingId)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {timingId}
+                </td>
+                <td>
+                  <Button
+                    variant="info"
+                    onClick={() => handleTestTiming(timingId, '*now')}
+                    className="me-2"
+                  >
+                    Test Now
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() =>
+                      handleTestTiming(timingId, '2024-09-17T12:00:00Z')
+                    }
+                  >
+                    Test Specific Time
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
 
-            <Modal show={showModal} onHide={handleCloseModal} size="lg">
-                <Modal.Header closeButton>
-                    <Modal.Title>
-                        {isEditing ? 'Edit Timing' : 'Timing Details'}
-                        {selectedTiming?.ID ? ` for ${selectedTiming.ID}` : ''}
-                    </Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    {selectedTiming && (
-                        <ListGroup>
-                            <ListGroup.Item>
-                                <strong>ID:</strong>
-                                {isEditing ? (
-                                    <Form.Control
-                                        type="text"
-                                        value={selectedTiming.ID}
-                                        onChange={(e) => handleEditChange('ID', e.target.value)}
-                                    />
-                                ) : (
-                                    selectedTiming.ID
-                                )}
-                            </ListGroup.Item>
-                            <ListGroup.Item>
-                                <strong>Years:</strong>
-                                {isEditing ? (
-                                    <Form.Control
-                                        type="text"
-                                        value={selectedTiming.Years}
-                                        onChange={(e) => handleEditChange('Years', e.target.value)}
-                                    />
-                                ) : (
-                                    selectedTiming.Years
-                                )}
-                            </ListGroup.Item>
-                            <ListGroup.Item>
-                                <strong>Months:</strong>
-                                {isEditing ? (
-                                    <Form.Control
-                                        type="text"
-                                        value={selectedTiming.Months}
-                                        onChange={(e) => handleEditChange('Months', e.target.value)}
-                                    />
-                                ) : (
-                                    selectedTiming.Months
-                                )}
-                            </ListGroup.Item>
-                            <ListGroup.Item>
-                                <strong>Month Days:</strong>
-                                {isEditing ? (
-                                    <Form.Control
-                                        type="text"
-                                        value={selectedTiming.MonthDays}
-                                        onChange={(e) => handleEditChange('MonthDays', e.target.value)}
-                                    />
-                                ) : (
-                                    selectedTiming.MonthDays
-                                )}
-                            </ListGroup.Item>
-                            <ListGroup.Item>
-                                <strong>Week Days:</strong>
-                                {isEditing ? (
-                                    <Form.Control
-                                        type="text"
-                                        value={selectedTiming.WeekDays}
-                                        onChange={(e) => handleEditChange('WeekDays', e.target.value)}
-                                    />
-                                ) : (
-                                    selectedTiming.WeekDays
-                                )}
-                            </ListGroup.Item>
-                            <ListGroup.Item>
-                                <strong>Time:</strong>
-                                {isEditing ? (
-                                    <Form.Control
-                                        type="text"
-                                        value={selectedTiming.Time}
-                                        onChange={(e) => handleEditChange('Time', e.target.value)}
-                                    />
-                                ) : (
-                                    selectedTiming.Time
-                                )}
-                            </ListGroup.Item>
-                        </ListGroup>
-                    )}
-                </Modal.Body>
-                <Modal.Footer>
-                    {isEditing ? (
-                        <Button variant="primary" onClick={handleSaveTiming}>
-                            Save Changes
-                        </Button>
-                    ) : (
-                        <Button variant="secondary" onClick={() => setIsEditing(true)}>
-                            Edit
-                        </Button>
-                    )}
-                    <Button variant="secondary" onClick={handleCloseModal}>
-                        Close
-                    </Button>
-                </Modal.Footer>
-            </Modal>
-        </Container>
-    );
+      {isActiveResult && (
+        <div className="mt-4">
+          <h4>Timing Test Result</h4>
+          <pre>{JSON.stringify(isActiveResult, null, 2)}</pre>
+        </div>
+      )}
+
+      <Modal show={showModal} onHide={handleCloseModal} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>
+            {isEditing ? 'Edit Timing' : 'Timing Details'}
+            {selectedTiming?.ID ? ` for ${selectedTiming.ID}` : ''}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {selectedTiming && (
+            <ListGroup>
+              <ListGroup.Item>
+                <strong>ID:</strong>
+                {isEditing ? (
+                  <Form.Control
+                    type="text"
+                    value={selectedTiming.ID}
+                    onChange={(e) => handleEditChange('ID', e.target.value)}
+                  />
+                ) : (
+                  selectedTiming.ID
+                )}
+              </ListGroup.Item>
+              <ListGroup.Item>
+                <strong>Years:</strong>
+                {isEditing ? (
+                  <Form.Control
+                    type="text"
+                    value={selectedTiming.Years}
+                    onChange={(e) => handleEditChange('Years', e.target.value)}
+                  />
+                ) : (
+                  selectedTiming.Years
+                )}
+              </ListGroup.Item>
+              <ListGroup.Item>
+                <strong>Months:</strong>
+                {isEditing ? (
+                  <Form.Control
+                    type="text"
+                    value={selectedTiming.Months}
+                    onChange={(e) => handleEditChange('Months', e.target.value)}
+                  />
+                ) : (
+                  selectedTiming.Months
+                )}
+              </ListGroup.Item>
+              <ListGroup.Item>
+                <strong>Month Days:</strong>
+                {isEditing ? (
+                  <Form.Control
+                    type="text"
+                    value={selectedTiming.MonthDays}
+                    onChange={(e) =>
+                      handleEditChange('MonthDays', e.target.value)
+                    }
+                  />
+                ) : (
+                  selectedTiming.MonthDays
+                )}
+              </ListGroup.Item>
+              <ListGroup.Item>
+                <strong>Week Days:</strong>
+                {isEditing ? (
+                  <Form.Control
+                    type="text"
+                    value={selectedTiming.WeekDays}
+                    onChange={(e) => handleEditChange('WeekDays', e.target.value)}
+                  />
+                ) : (
+                  selectedTiming.WeekDays
+                )}
+              </ListGroup.Item>
+              <ListGroup.Item>
+                <strong>Time:</strong> (StartTime and EndTime separated by <code>;</code>)
+                {isEditing ? (
+                  <Form.Control
+                    type="text"
+                    value={selectedTiming.Time}
+                    onChange={(e) => handleEditChange('Time', e.target.value)}
+                    placeholder="e.g. 00:00:00;08:59:59"
+                  />
+                ) : (
+                  selectedTiming.Time
+                )}
+              </ListGroup.Item>
+            </ListGroup>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          {isEditing ? (
+            <Button variant="primary" onClick={handleSaveTiming}>
+              Save Changes
+            </Button>
+          ) : (
+            <Button variant="secondary" onClick={() => setIsEditing(true)}>
+              Edit
+            </Button>
+          )}
+          <Button variant="secondary" onClick={handleCloseModal}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+    </Container>
+  );
 };
 
 export default Timings;
