@@ -1,18 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Button, Container, Row, Col, Table, Modal, Spinner, ListGroup } from 'react-bootstrap';
+import {
+  Form,
+  Button,
+  Container,
+  Row,
+  Col,
+  Table,
+  Modal,
+  Spinner,
+  ListGroup,
+} from 'react-bootstrap';
 
 const Timings = ({ cgratesConfig }) => {
-  const [tpids, setTPIDs] = useState([]); // Store TPIDs for dropdown
-  const [searchParams, setSearchParams] = useState({
-    tpid: '', // Selected TPID for Timings
-  });
-  const [timings, setTimings] = useState([]); // Store the list of timings
-  const [selectedTiming, setSelectedTiming] = useState(null); // Store the selected timing's details
-  const [isEditing, setIsEditing] = useState(false); // Track if editing is active
-  const [showModal, setShowModal] = useState(false); // Control the modal display
-  const [isLoading, setIsLoading] = useState(false); // Handle loading state
-  const [error, setError] = useState(''); // Handle error messages
-  const [isActiveResult, setIsActiveResult] = useState(null); // Store the result of TimingIsActiveAt test
+  const [tpids, setTPIDs] = useState([]);
+  const [searchParams, setSearchParams] = useState({ tpid: '' });
+  const [timings, setTimings] = useState([]);
+  const [selectedTiming, setSelectedTiming] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showModal, setShowModal] = useState(false); // For Timing Details modal
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // For "Test Now" result
+  const [showTestResultModal, setShowTestResultModal] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  // For "Test Specific Time"
+  const [showTestTimeModal, setShowTestTimeModal] = useState(false);
+  const [testTime, setTestTime] = useState('');
+  const [testTimeResult, setTestTimeResult] = useState(null);
+  const [timingToTest, setTimingToTest] = useState(null);
 
   useEffect(() => {
     const fetchTPIDs = async () => {
@@ -55,10 +72,11 @@ const Timings = ({ cgratesConfig }) => {
     setIsLoading(true);
     setError('');
     setTimings([]);
+
     try {
       const query = {
         method: 'ApierV1.GetTPTimingIds',
-        params: searchParams.tpid ? [{ TPid: searchParams.tpid }] : [{}], // or add Tenant, etc., if needed
+        params: searchParams.tpid ? [{ TPid: searchParams.tpid }] : [{}],
       };
 
       const response = await fetch(`${cgratesConfig.url}/jsonrpc`, {
@@ -90,10 +108,11 @@ const Timings = ({ cgratesConfig }) => {
   const handleRowClick = async (timingId) => {
     setIsLoading(true);
     setError('');
+
     try {
       const query = {
         method: 'ApierV1.GetTiming',
-        params: [{ TPid: searchParams.tpid, ID: timingId }], // or add Tenant if needed
+        params: [{ TPid: searchParams.tpid, ID: timingId }],
       };
 
       const response = await fetch(`${cgratesConfig.url}/jsonrpc`, {
@@ -110,7 +129,6 @@ const Timings = ({ cgratesConfig }) => {
 
       const data = await response.json();
       if (data.result) {
-        // If API returns StartTime/EndTime, combine them into a single Time string.
         let combinedTime = '*any';
         if (data.result.StartTime && data.result.EndTime) {
           combinedTime = `${data.result.StartTime};${data.result.EndTime}`;
@@ -120,10 +138,18 @@ const Timings = ({ cgratesConfig }) => {
 
         const mergedTiming = {
           ID: data.result.ID || '',
-          Years: data.result.Years?.length ? data.result.Years.join(',') : '*any',
-          Months: data.result.Months?.length ? data.result.Months.join(',') : '*any',
-          MonthDays: data.result.MonthDays?.length ? data.result.MonthDays.join(',') : '*any',
-          WeekDays: data.result.WeekDays?.length ? data.result.WeekDays.join(',') : '*any',
+          Years: data.result.Years?.length
+            ? data.result.Years.join(',')
+            : '*any',
+          Months: data.result.Months?.length
+            ? data.result.Months.join(',')
+            : '*any',
+          MonthDays: data.result.MonthDays?.length
+            ? data.result.MonthDays.join(',')
+            : '*any',
+          WeekDays: data.result.WeekDays?.length
+            ? data.result.WeekDays.join(',')
+            : '*any',
           Time: combinedTime,
         };
 
@@ -150,10 +176,6 @@ const Timings = ({ cgratesConfig }) => {
     setError('');
 
     try {
-      // We store everything in a single "Time" field, separated by semicolons if needed.
-      // For instance: '08:00:00;17:00:00' for StartTime = 08:00:00 and EndTime = 17:00:00.
-      // The server splits them internally or expects them in this format.
-
       const query = {
         method: 'ApierV2.SetTPTiming',
         params: [
@@ -184,8 +206,8 @@ const Timings = ({ cgratesConfig }) => {
       const data = await response.json();
       if (data.result) {
         console.log('Timing saved successfully.');
-        fetchTimings(); // Refresh timings list
-        setShowModal(false); // Close modal
+        fetchTimings();
+        setShowModal(false);
       } else {
         throw new Error(data.error?.message || 'Failed to save timing');
       }
@@ -204,8 +226,6 @@ const Timings = ({ cgratesConfig }) => {
       Months: '*any',
       MonthDays: '*any',
       WeekDays: '*any',
-      // If you want a default time, you can do something like '00:00:00;08:59:59'
-      // for demonstration; else just '*any' is fine.
       Time: '*any',
     });
     setShowModal(true);
@@ -218,22 +238,24 @@ const Timings = ({ cgratesConfig }) => {
     setError('');
   };
 
-  const handleTestTiming = async (timingId, time) => {
+  // --- Test Timing Logic ---
+
+  // 1. Test Now: calls the API with "*now", then shows a simple result popup
+  const handleTestNow = async (timingId) => {
     setIsLoading(true);
-    setIsActiveResult(null);
+    setTestResult(null);
     setError('');
+
     try {
       const query = {
         method: 'APIerSv1.TimingIsActiveAt',
-        params: [{ TimingID: timingId, Time: time }],
+        params: [{ TimingID: timingId, Time: '*now' }],
         id: 4,
       };
 
       const response = await fetch(`${cgratesConfig.url}/jsonrpc`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(query),
       });
 
@@ -242,8 +264,62 @@ const Timings = ({ cgratesConfig }) => {
       }
 
       const data = await response.json();
-      if (data.result) {
-        setIsActiveResult(data.result);
+      if (typeof data.result !== 'undefined') {
+        setTestResult(data.result); // Typically true/false
+        setShowTestResultModal(true);
+      } else {
+        setError('Failed to test timing activity.');
+      }
+    } catch (error) {
+      console.error('Error testing timing activity:', error);
+      setError('Error testing timing activity: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 2. Test Specific Time: opens a modal to let user pick a date/time
+  const handleOpenTestTimeModal = (timingId) => {
+    setTimingToTest(timingId);
+    setTestTime('');
+    setTestTimeResult(null);
+    setShowTestTimeModal(true);
+  };
+
+  const handleCloseTestTimeModal = () => {
+    setShowTestTimeModal(false);
+    setTimingToTest(null);
+    setTestTime('');
+    setTestTimeResult(null);
+    setError('');
+  };
+
+  const handleRunSpecificTimeTest = async () => {
+    // Call the same test method, but with user-provided testTime
+    setIsLoading(true);
+    setTestTimeResult(null);
+    setError('');
+
+    try {
+      const query = {
+        method: 'APIerSv1.TimingIsActiveAt',
+        params: [{ TimingID: timingToTest, Time: testTime }],
+        id: 4,
+      };
+
+      const response = await fetch(`${cgratesConfig.url}/jsonrpc`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(query),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (typeof data.result !== 'undefined') {
+        setTestTimeResult(data.result);
       } else {
         setError('Failed to test timing activity.');
       }
@@ -269,7 +345,11 @@ const Timings = ({ cgratesConfig }) => {
           <Col md={6}>
             <Form.Group controlId="formTPID">
               <Form.Label>TPID</Form.Label>
-              <Form.Control as="select" value={searchParams.tpid} onChange={handleTPIDChange}>
+              <Form.Control
+                as="select"
+                value={searchParams.tpid}
+                onChange={handleTPIDChange}
+              >
                 <option value="">Select TPID</option>
                 {tpids.map((tpid, index) => (
                   <option key={index} value={tpid}>
@@ -291,15 +371,14 @@ const Timings = ({ cgratesConfig }) => {
         Create New Timing
       </Button>
 
-      {isLoading ? (
+      {isLoading && (
         <div className="text-center mt-4">
           <Spinner animation="border" role="status">
             <span className="sr-only">Loading...</span>
           </Spinner>
         </div>
-      ) : (
-        error && <p className="text-danger mt-3">{error}</p>
       )}
+      {!isLoading && error && <p className="text-danger mt-3">{error}</p>}
 
       {timings.length > 0 && (
         <Table striped bordered hover className="mt-4">
@@ -323,16 +402,14 @@ const Timings = ({ cgratesConfig }) => {
                 <td>
                   <Button
                     variant="info"
-                    onClick={() => handleTestTiming(timingId, '*now')}
+                    onClick={() => handleTestNow(timingId)}
                     className="me-2"
                   >
                     Test Now
                   </Button>
                   <Button
                     variant="secondary"
-                    onClick={() =>
-                      handleTestTiming(timingId, '2024-09-17T12:00:00Z')
-                    }
+                    onClick={() => handleOpenTestTimeModal(timingId)}
                   >
                     Test Specific Time
                   </Button>
@@ -343,13 +420,7 @@ const Timings = ({ cgratesConfig }) => {
         </Table>
       )}
 
-      {isActiveResult && (
-        <div className="mt-4">
-          <h4>Timing Test Result</h4>
-          <pre>{JSON.stringify(isActiveResult, null, 2)}</pre>
-        </div>
-      )}
-
+      {/* ------ Timing Details Modal ------ */}
       <Modal show={showModal} onHide={handleCloseModal} size="lg">
         <Modal.Header closeButton>
           <Modal.Title>
@@ -449,6 +520,68 @@ const Timings = ({ cgratesConfig }) => {
             </Button>
           )}
           <Button variant="secondary" onClick={handleCloseModal}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* ------ Test NOW Result Modal ------ */}
+      <Modal
+        show={showTestResultModal}
+        onHide={() => setShowTestResultModal(false)}
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Timing Test Result</Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="text-center">
+          {testResult !== null
+            ? `Timing active = ${testResult}`
+            : 'No result yet.'}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowTestResultModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* ------ Test Specific Time Modal ------ */}
+      <Modal show={showTestTimeModal} onHide={handleCloseTestTimeModal} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Test Timing at Specific Time</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form.Group>
+            <Form.Label>Enter a Date/Time to Test</Form.Label>
+            {/* You can also use type="datetime-local" if you want a date/time picker */}
+            <Form.Control
+              type="text"
+              placeholder="YYYY-MM-DDTHH:mm:ssZ (e.g., 2024-09-17T12:00:00Z)"
+              value={testTime}
+              onChange={(e) => setTestTime(e.target.value)}
+            />
+          </Form.Group>
+
+          {isLoading && (
+            <div className="text-center mt-3">
+              <Spinner animation="border" role="status">
+                <span className="sr-only">Testing...</span>
+              </Spinner>
+            </div>
+          )}
+          {testTimeResult !== null && (
+            <p className="mt-3 text-center">
+              Timing active = {testTimeResult.toString()}
+            </p>
+          )}
+          {error && <p className="text-danger mt-3">{error}</p>}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="primary" onClick={handleRunSpecificTimeTest} disabled={!testTime}>
+            Test Timing
+          </Button>
+          <Button variant="secondary" onClick={handleCloseTestTimeModal}>
             Close
           </Button>
         </Modal.Footer>
