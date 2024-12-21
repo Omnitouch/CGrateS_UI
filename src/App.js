@@ -15,6 +15,7 @@ import Resources from './Resources';
 import DestinationRates from './DestinationRates';
 import RatingPlans from './RatingPlans';
 import RatingProfiles from './RatingProfile';
+import Timings from './Timing.js';
 import GetCostView from './GetCost';
 import Chargers from './Chargers.js';
 import { BrowserRouter as Router, Route, Routes, Link, useLocation } from 'react-router-dom';
@@ -215,6 +216,7 @@ function App() {
         '/destinationrates': 'DestinationRates - Omnitouch CGrateS UI',
         '/ratingplans': 'RatingPlans - Omnitouch CGrateS UI',
         '/ratingprofiles': 'RatingProfiles - Omnitouch CGrateS UI',
+        '/timings': 'Timings - Omnitouch CGrateS UI',
         '/getcost': 'GetCost - Omnitouch CGrateS UI',
         '/config': 'Config - Omnitouch CGrateS UI',
       };
@@ -250,6 +252,7 @@ function App() {
                 <NavDropdown.Item as={Link} to="/destinationrates">DestinationRates</NavDropdown.Item>
                 <NavDropdown.Item as={Link} to="/ratingplans">RatingPlans</NavDropdown.Item>
                 <NavDropdown.Item as={Link} to="/ratingprofiles">RatingProfiles</NavDropdown.Item>
+                <NavDropdown.Item as={Link} to="/timings">Timings</NavDropdown.Item>
                 <NavDropdown.Item as={Link} to="/getcost">GetCost</NavDropdown.Item>
                 <NavDropdown.Item as={Link} to="/routes">Routes</NavDropdown.Item>
               </NavDropdown>
@@ -297,6 +300,7 @@ function App() {
           <Route path="/destinationrates" element={<DestinationRates cgratesConfig={cgratesConfig} />} />
           <Route path="/ratingplans" element={<RatingPlans cgratesConfig={cgratesConfig} />} />
           <Route path="/ratingprofiles" element={<RatingProfiles cgratesConfig={cgratesConfig} />} />
+          <Route path="/timings" element={<Timings cgratesConfig={cgratesConfig} />} />
           <Route path="/getcost" element={<GetCostView cgratesConfig={cgratesConfig} />} />
           <Route path="/config" element={<Config cgratesConfig={cgratesConfig} />} />
         </Routes>
