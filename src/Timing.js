@@ -17,20 +17,25 @@ const Timings = ({ cgratesConfig }) => {
   const [timings, setTimings] = useState([]);
   const [selectedTiming, setSelectedTiming] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [showModal, setShowModal] = useState(false); // For Timing Details modal
+
+  // Timing Details Modal
+  const [showModal, setShowModal] = useState(false);
+
+  // Loading / Error
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // For "Test Now" result
+  // --- Test NOW logic
   const [showTestResultModal, setShowTestResultModal] = useState(false);
   const [testResult, setTestResult] = useState(null);
 
-  // For "Test Specific Time"
+  // --- Test Specific Time logic
   const [showTestTimeModal, setShowTestTimeModal] = useState(false);
   const [testTime, setTestTime] = useState('');
   const [testTimeResult, setTestTimeResult] = useState(null);
   const [timingToTest, setTimingToTest] = useState(null);
 
+  // Fetch TPIDs on load
   useEffect(() => {
     const fetchTPIDs = async () => {
       const newQuery = {
@@ -64,10 +69,12 @@ const Timings = ({ cgratesConfig }) => {
     fetchTPIDs();
   }, [cgratesConfig.url]);
 
+  // Handle change in TPID dropdown
   const handleTPIDChange = (event) => {
     setSearchParams({ ...searchParams, tpid: event.target.value });
   };
 
+  // Fetch Timings for the selected tpid
   const fetchTimings = async () => {
     setIsLoading(true);
     setError('');
@@ -105,6 +112,7 @@ const Timings = ({ cgratesConfig }) => {
     }
   };
 
+  // Fetch & display a single timing
   const handleRowClick = async (timingId) => {
     setIsLoading(true);
     setError('');
@@ -129,13 +137,22 @@ const Timings = ({ cgratesConfig }) => {
 
       const data = await response.json();
       if (data.result) {
-        let combinedTime = '*any';
+        // Convert the single "Time" field or StartTime/EndTime fields into separate strings
+        let startTime = '*any';
+        let endTime = '*any';
+
         if (data.result.StartTime && data.result.EndTime) {
-          combinedTime = `${data.result.StartTime};${data.result.EndTime}`;
+          // If both are already given, just use them
+          startTime = data.result.StartTime;
+          endTime = data.result.EndTime;
         } else if (data.result.Time) {
-          combinedTime = data.result.Time;
+          // If there's a single combined "Time" field, we parse it
+          const [start, end] = data.result.Time.split(';');
+          startTime = start || '*any';
+          endTime = end || '*any';
         }
 
+        // Fill out the rest
         const mergedTiming = {
           ID: data.result.ID || '',
           Years: data.result.Years?.length
@@ -150,7 +167,8 @@ const Timings = ({ cgratesConfig }) => {
           WeekDays: data.result.WeekDays?.length
             ? data.result.WeekDays.join(',')
             : '*any',
-          Time: combinedTime,
+          StartTime: startTime,
+          EndTime: endTime,
         };
 
         setSelectedTiming(mergedTiming);
@@ -167,15 +185,25 @@ const Timings = ({ cgratesConfig }) => {
     }
   };
 
+  // Update the selectedTiming state as user edits fields
   const handleEditChange = (field, value) => {
     setSelectedTiming((prev) => ({ ...prev, [field]: value }));
   };
 
+  // Save changes to a timing (creates or updates)
   const handleSaveTiming = async () => {
+    if (!selectedTiming) return;
+
     setIsLoading(true);
     setError('');
 
     try {
+      // Combine startTime & endTime back into a single Time field
+      let combinedTime = '*any';
+      if (selectedTiming.StartTime || selectedTiming.EndTime) {
+        combinedTime = `${selectedTiming.StartTime || '*any'};${selectedTiming.EndTime || '*any'}`;
+      }
+
       const query = {
         method: 'ApierV2.SetTPTiming',
         params: [
@@ -186,7 +214,7 @@ const Timings = ({ cgratesConfig }) => {
             Months: selectedTiming.Months || '*any',
             MonthDays: selectedTiming.MonthDays || '*any',
             WeekDays: selectedTiming.WeekDays || '*any',
-            Time: selectedTiming.Time || '*any',
+            Time: combinedTime,
           },
         ],
       };
@@ -219,6 +247,7 @@ const Timings = ({ cgratesConfig }) => {
     }
   };
 
+  // Create a brand-new timing
   const handleCreateNewTiming = () => {
     setSelectedTiming({
       ID: '',
@@ -226,21 +255,21 @@ const Timings = ({ cgratesConfig }) => {
       Months: '*any',
       MonthDays: '*any',
       WeekDays: '*any',
-      Time: '*any',
+      StartTime: '*any',
+      EndTime: '*any',
     });
     setShowModal(true);
     setIsEditing(true);
   };
 
+  // Close the Timing Details modal
   const handleCloseModal = () => {
     setShowModal(false);
     setSelectedTiming(null);
     setError('');
   };
 
-  // --- Test Timing Logic ---
-
-  // 1. Test Now: calls the API with "*now", then shows a simple result popup
+  // --- Test Timing (Now) ---
   const handleTestNow = async (timingId) => {
     setIsLoading(true);
     setTestResult(null);
@@ -265,7 +294,7 @@ const Timings = ({ cgratesConfig }) => {
 
       const data = await response.json();
       if (typeof data.result !== 'undefined') {
-        setTestResult(data.result); // Typically true/false
+        setTestResult(data.result);
         setShowTestResultModal(true);
       } else {
         setError('Failed to test timing activity.');
@@ -278,7 +307,7 @@ const Timings = ({ cgratesConfig }) => {
     }
   };
 
-  // 2. Test Specific Time: opens a modal to let user pick a date/time
+  // --- Test Timing (Specific Time) ---
   const handleOpenTestTimeModal = (timingId) => {
     setTimingToTest(timingId);
     setTestTime('');
@@ -295,7 +324,6 @@ const Timings = ({ cgratesConfig }) => {
   };
 
   const handleRunSpecificTimeTest = async () => {
-    // Call the same test method, but with user-provided testTime
     setIsLoading(true);
     setTestTimeResult(null);
     setError('');
@@ -494,16 +522,31 @@ const Timings = ({ cgratesConfig }) => {
                 )}
               </ListGroup.Item>
               <ListGroup.Item>
-                <strong>Time:</strong> (StartTime and EndTime separated by <code>;</code>)
+                <strong>Start Time:</strong>
                 {isEditing ? (
                   <Form.Control
                     type="text"
-                    value={selectedTiming.Time}
-                    onChange={(e) => handleEditChange('Time', e.target.value)}
-                    placeholder="e.g. 00:00:00;08:59:59"
+                    value={selectedTiming.StartTime}
+                    onChange={(e) =>
+                      handleEditChange('StartTime', e.target.value)
+                    }
+                    placeholder="e.g. 08:00:00"
                   />
                 ) : (
-                  selectedTiming.Time
+                  selectedTiming.StartTime
+                )}
+              </ListGroup.Item>
+              <ListGroup.Item>
+                <strong>End Time:</strong>
+                {isEditing ? (
+                  <Form.Control
+                    type="text"
+                    value={selectedTiming.EndTime}
+                    onChange={(e) => handleEditChange('EndTime', e.target.value)}
+                    placeholder="e.g. 17:00:00"
+                  />
+                ) : (
+                  selectedTiming.EndTime
                 )}
               </ListGroup.Item>
             </ListGroup>
@@ -540,21 +583,28 @@ const Timings = ({ cgratesConfig }) => {
             : 'No result yet.'}
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowTestResultModal(false)}>
+          <Button
+            variant="secondary"
+            onClick={() => setShowTestResultModal(false)}
+          >
             Close
           </Button>
         </Modal.Footer>
       </Modal>
 
       {/* ------ Test Specific Time Modal ------ */}
-      <Modal show={showTestTimeModal} onHide={handleCloseTestTimeModal} centered>
+      <Modal
+        show={showTestTimeModal}
+        onHide={handleCloseTestTimeModal}
+        centered
+      >
         <Modal.Header closeButton>
           <Modal.Title>Test Timing at Specific Time</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form.Group>
             <Form.Label>Enter a Date/Time to Test</Form.Label>
-            {/* You can also use type="datetime-local" if you want a date/time picker */}
+            {/* You can also use type="datetime-local" if you prefer a date/time picker */}
             <Form.Control
               type="text"
               placeholder="YYYY-MM-DDTHH:mm:ssZ (e.g., 2024-09-17T12:00:00Z)"
@@ -578,7 +628,11 @@ const Timings = ({ cgratesConfig }) => {
           {error && <p className="text-danger mt-3">{error}</p>}
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="primary" onClick={handleRunSpecificTimeTest} disabled={!testTime}>
+          <Button
+            variant="primary"
+            onClick={handleRunSpecificTimeTest}
+            disabled={!testTime}
+          >
             Test Timing
           </Button>
           <Button variant="secondary" onClick={handleCloseTestTimeModal}>
