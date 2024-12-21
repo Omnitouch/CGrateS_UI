@@ -48,6 +48,8 @@ So far what has been include is limited support for:
  * Managing FilterS
  * Viewing DestinationRates & Destinations / Rates
  * Managing RatingPlans & RatingProfiles
+ * Managing Timings & testing timing rules
+ * Managing TariffPlans
  * Simulating Costs
  * Viewing Config
 
