@@ -216,7 +216,6 @@ const ActionsPage = ({ cgratesConfig }) => {
     
         try {
             const updatedActions = selectedAction.map((part) => {
-                // Construct the minimal valid structure
                 const action = {
                     Identifier: part.Identifier || part.ActionType,
                     ExtraParameters: part.ExtraParameters || '',
@@ -224,24 +223,32 @@ const ActionsPage = ({ cgratesConfig }) => {
                     Weight: part.Weight || 0,
                 };
     
-                if (part.Identifier === '*cdrlog' || part.Identifier === '*log') {
-                    action.BalanceId = part.Balance?.ID || '';
-                    action.BalanceUuid = part.Balance?.Uuid || '';
-                    action.BalanceType = part.Balance?.Type || '*monetary';
-                    action.Directions = '*out'; // Hardcoded as in the valid example
-                    action.Units = part.Balance?.Value?.Static || 0;
-                    action.ExpiryTime = part.Balance?.ExpirationDate || '';
-                    action.Filter = '';
-                    action.TimingTags = '';
-                    action.DestinationIds = typeof part.Balance?.DestinationIDs === 'object'
+                // Add fields dynamically if they exist
+                if (part.Balance) {
+                    if (part.Balance.ID) action.BalanceId = part.Balance.ID;
+                    if (part.Balance.Uuid) action.BalanceUuid = part.Balance.Uuid;
+                    if (part.Balance.Type) action.BalanceType = part.Balance.Type;
+                    if (typeof part.BalanceBlocker === 'boolean') {
+                        action.BalanceBlocker = part.BalanceBlocker ? 'true' : 'false'; // Convert boolean to string
+                    }
+                    if (typeof part.Balance.Disabled === 'boolean') {
+                        action.BalanceDisabled = part.Balance.Disabled ? 'true' : 'false'; // Convert boolean to string
+                    }
+                    action.Directions = part.Balance.Directions || '*out';
+                    action.Units = part.Balance.Value?.Static || 0;
+                    action.DestinationIds = typeof part.Balance.DestinationIDs === 'object'
                         ? Object.keys(part.Balance.DestinationIDs).join(';')
-                        : part.Balance?.DestinationIDs || '';
-                    action.RatingSubject = part.Balance?.RatingSubject || '';
-                    action.Categories = ''; // Ensure it's a string
-                    action.SharedGroups = ''; // Ensure it's a string
-                    action.BalanceWeight = part.Balance?.Weight || 0;
-                    action.BalanceBlocker = part.BalanceBlocker ? 'true' : 'false'; // Ensure string
-                    action.BalanceDisabled = part.Balance?.Disabled ? 'true' : 'false'; // Ensure string
+                        : part.Balance.DestinationIDs || '';
+                    action.RatingSubject = part.Balance.RatingSubject || '';
+                    action.Categories = ''; // Ensure string
+                    action.SharedGroups = ''; // Ensure string
+                    action.TimingTags = '';
+                    action.TimingIDs = '';
+                    action.BalanceWeight = part.Balance.Weight || 0;
+                }
+    
+                if (part.Filters) {
+                    action.Filters = Array.isArray(part.Filters) ? part.Filters.join(';') : part.Filters || '';
                 }
     
                 return action;
@@ -547,18 +554,6 @@ const ActionsPage = ({ cgratesConfig }) => {
                                         />
                                     ) : (
                                         part.Balance?.Value?.Static || 0
-                                    )}
-                                </ListGroup.Item>
-                                <ListGroup.Item>
-                                    <strong>Balance Expiration Date:</strong>
-                                    {isEditing ? (
-                                        <Form.Control
-                                            type="text"
-                                            value={part.Balance.ExpirationDate}
-                                            onChange={(e) => handleEditChange(index, 'Balance.ExpirationDate', e.target.value)}
-                                        />
-                                    ) : (
-                                        part.Balance.ExpirationDate || 'N/A'
                                     )}
                                 </ListGroup.Item>
                                 <ListGroup.Item>
