@@ -213,37 +213,40 @@ const ActionsPage = ({ cgratesConfig }) => {
     const handleSaveAction = async () => {
         setIsLoading(true);
         setError('');
-
+    
         try {
-            const updatedActions = selectedAction.map(part => {
-                const { Balance } = part;
-
-                // Convert Balance fields for saving
-                const balanceData = Balance
-                    ? {
-                        BalanceId: Balance.ID || undefined,
-                        BalanceType: Balance.Type || undefined,
-                        Units: Balance.Value?.Static || undefined,
-                        ExpiryTime: part.ExpirationString || undefined,
-                        BalanceWeight: Balance.Weight || undefined,
-                        // Convert DestinationIDs object to semicolon-separated string if not already a string
-                        DestinationIDs: typeof Balance.DestinationIDs === 'object'
-                            ? Object.keys(Balance.DestinationIDs).join(';')
-                            : Balance.DestinationIDs || undefined,
-                    }
-                    : {};
-
-                return {
-                    Identifier: part.Identifier || part.ActionType, // Ensure Identifier is set
-                    ExtraParameters: part.ExtraParameters || undefined,
-                    Filters: part.Filters || undefined,
-                    ExpirationString: part.ExpirationString || undefined,
-                    Weight: part.Weight || undefined,
-                    BalanceBlocker: part.BalanceBlocker || false, // Save BalanceBlocker field
-                    ...balanceData, // Include formatted balance data
+            const updatedActions = selectedAction.map((part) => {
+                // Construct the minimal valid structure
+                const action = {
+                    Identifier: part.Identifier || part.ActionType,
+                    ExtraParameters: part.ExtraParameters || '',
+                    ExpiryTime: part.ExpirationString || '',
+                    Weight: part.Weight || 0,
                 };
+    
+                if (part.Identifier === '*cdrlog' || part.Identifier === '*log') {
+                    action.BalanceId = part.Balance?.ID || '';
+                    action.BalanceUuid = part.Balance?.Uuid || '';
+                    action.BalanceType = part.Balance?.Type || '*monetary';
+                    action.Directions = '*out'; // Hardcoded as in the valid example
+                    action.Units = part.Balance?.Value?.Static || 0;
+                    action.ExpiryTime = part.Balance?.ExpirationDate || '';
+                    action.Filter = '';
+                    action.TimingTags = '';
+                    action.DestinationIds = typeof part.Balance?.DestinationIDs === 'object'
+                        ? Object.keys(part.Balance.DestinationIDs).join(';')
+                        : part.Balance?.DestinationIDs || '';
+                    action.RatingSubject = part.Balance?.RatingSubject || '';
+                    action.Categories = ''; // Ensure it's a string
+                    action.SharedGroups = ''; // Ensure it's a string
+                    action.BalanceWeight = part.Balance?.Weight || 0;
+                    action.BalanceBlocker = part.BalanceBlocker ? 'true' : 'false'; // Ensure string
+                    action.BalanceDisabled = part.Balance?.Disabled ? 'true' : 'false'; // Ensure string
+                }
+    
+                return action;
             });
-
+    
             const query = {
                 method: 'ApierV1.SetActions',
                 params: [
@@ -255,7 +258,7 @@ const ActionsPage = ({ cgratesConfig }) => {
                     },
                 ],
             };
-
+    
             const response = await fetch(cgratesConfig.url + '/jsonrpc', {
                 method: 'POST',
                 headers: {
@@ -263,16 +266,18 @@ const ActionsPage = ({ cgratesConfig }) => {
                 },
                 body: JSON.stringify(query),
             });
-
+    
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-
+    
             const data = await response.json();
             if (data.result) {
                 console.log('Action saved successfully');
                 fetchActions(); // Refresh actions list
                 setShowModal(false); // Close modal
+            } else {
+                throw new Error(data.error?.message || 'Failed to save action');
             }
         } catch (error) {
             console.error('Error saving action:', error);
@@ -281,6 +286,11 @@ const ActionsPage = ({ cgratesConfig }) => {
             setIsLoading(false);
         }
     };
+    
+    
+    
+    
+    
 
     const handleCreateNewAction = () => {
         const newAction = [{
