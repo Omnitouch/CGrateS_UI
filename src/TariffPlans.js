@@ -23,7 +23,6 @@ const TariffPlans = ({ cgratesConfig }) => {
       setIsLoading(true);
       setError('');
 
-      // JSON-RPC request object
       const requestBody = {
         method: 'APIerSv1.GetTPIds',
         params: [],
@@ -61,14 +60,14 @@ const TariffPlans = ({ cgratesConfig }) => {
   }, [cgratesConfig.url]);
 
   // Common JSON-RPC call wrapper
-  const callJSONRPC = async (methodName, params, successMsg) => {
+  const callJSONRPC = async (methodName, params, successHandler) => {
     setIsLoading(true);
     setError('');
     setActionInProgress(methodName);
 
     const requestBody = {
       method: methodName,
-      params: [params], // each method typically expects an array of objects
+      params: [params],
       id: 1,
       jsonrpc: '2.0',
     };
@@ -87,9 +86,10 @@ const TariffPlans = ({ cgratesConfig }) => {
       }
 
       const data = await response.json();
-      if (data.result) {
-        setModalMessage(successMsg || `Success calling ${methodName}`);
-        setShowModal(true);
+
+      // If the caller provided a successHandler, let them handle the data
+      if (data.result && successHandler) {
+        successHandler(data.result);
       } else if (data.error) {
         setError(data.error.message || 'JSON-RPC call failed.');
       }
@@ -102,11 +102,19 @@ const TariffPlans = ({ cgratesConfig }) => {
   };
 
   // Handlers for each action
-  const handleRemTP = (tpid) => {
+  const handleRemoveTP = (tpid) => {
+    // Confirm with user first
+    if (!window.confirm(`Are you sure you want to remove Tariff Plan: ${tpid}?`)) {
+      return;
+    }
+
     callJSONRPC(
       'APIerSv1.RemTP',
       { TPid: tpid },
-      `Successfully removed Tariff Plan: ${tpid}`
+      () => {
+        setModalMessage(`Successfully removed Tariff Plan: ${tpid}`);
+        setShowModal(true);
+      }
     );
   };
 
@@ -115,16 +123,33 @@ const TariffPlans = ({ cgratesConfig }) => {
       'APIerSv1.LoadTariffPlanFromStorDb',
       // Adjust parameters if your API requires more than just TPid
       { TPid: tpid },
-      `Successfully loaded Tariff Plan from StorDB for: ${tpid}`
+      () => {
+        setModalMessage(`Successfully loaded Tariff Plan from StorDB for: ${tpid}`);
+        setShowModal(true);
+      }
     );
   };
 
   const handleExportTPToFolder = (tpid) => {
     callJSONRPC(
       'APIerSv1.ExportTPToFolder',
-      // Adjust parameters if your API requires a folder path, etc.
       { TPid: tpid, FolderPath: '/tmp' },
-      `Successfully exported Tariff Plan to folder for: ${tpid}`
+      (result) => {
+        // The JSON response likely returns something like:
+        // {
+        //   "ExportPath": "/var/spool/cgrates/tpe",
+        //   "ExportedFiles": ["Timings.csv", "Destinations.csv"],
+        //   "Compressed": false
+        // }
+        const { ExportPath, ExportedFiles = [] } = result;
+        const fileList = ExportedFiles.join(', ');
+        const message = `Successfully exported Tariff Plan "${tpid}" to folder.\n\n` +
+          `Export Path: ${ExportPath}\n` +
+          `Exported Files: ${fileList || 'None'}`;
+
+        setModalMessage(message);
+        setShowModal(true);
+      }
     );
   };
 
@@ -170,17 +195,22 @@ const TariffPlans = ({ cgratesConfig }) => {
                     variant="danger"
                     size="sm"
                     className="me-2"
-                    disabled={actionInProgress !== '' && actionInProgress !== 'APIerSv1.RemTP'}
-                    onClick={() => handleRemTP(tpid)}
+                    disabled={
+                      actionInProgress !== '' &&
+                      actionInProgress !== 'APIerSv1.RemTP'
+                    }
+                    onClick={() => handleRemoveTP(tpid)}
                   >
-                    RemTP
+                    Remove
                   </Button>
                   <Button
                     variant="info"
                     size="sm"
                     className="me-2"
                     disabled={
-                      actionInProgress !== '' && actionInProgress !== 'APIerSv1.LoadTariffPlanFromStorDb'
+                      actionInProgress !== '' &&
+                      actionInProgress !==
+                        'APIerSv1.LoadTariffPlanFromStorDb'
                     }
                     onClick={() => handleLoadTariffPlanFromStorDb(tpid)}
                   >
@@ -190,7 +220,8 @@ const TariffPlans = ({ cgratesConfig }) => {
                     variant="primary"
                     size="sm"
                     disabled={
-                      actionInProgress !== '' && actionInProgress !== 'APIerSv1.ExportTPToFolder'
+                      actionInProgress !== '' &&
+                      actionInProgress !== 'APIerSv1.ExportTPToFolder'
                     }
                     onClick={() => handleExportTPToFolder(tpid)}
                   >
@@ -209,7 +240,7 @@ const TariffPlans = ({ cgratesConfig }) => {
           <Modal.Title>Result</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <p>{modalMessage}</p>
+          <pre style={{ whiteSpace: 'pre-wrap' }}>{modalMessage}</pre>
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={handleCloseModal}>
