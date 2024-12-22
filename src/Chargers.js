@@ -15,7 +15,8 @@ const Chargers = ({ cgratesConfig }) => {
   const [editCharger, setEditCharger] = useState({}); // Store edited charger
 
   useEffect(() => {
-    setSearchParams({ tenant: cgratesConfig.tenants.split(';')[0] }); // Ensure tenant is set to default on mount
+    // Ensure tenant is set to default on mount
+    setSearchParams({ tenant: cgratesConfig.tenants.split(';')[0] });
   }, [cgratesConfig]);
 
   // Handle input change for tenant selection
@@ -163,6 +164,7 @@ const Chargers = ({ cgratesConfig }) => {
     setEditCharger({ ...editCharger, AttributeIDs: updatedAttributeIDs });
   };
 
+  // Save charger (either updating existing or creating new)
   const saveCharger = async () => {
     setIsLoading(true);
     setError(''); // Clear previous error
@@ -206,11 +208,55 @@ const Chargers = ({ cgratesConfig }) => {
     }
   };
 
-  const handleSubmit = (event) => {
-    event.preventDefault();
-    fetchChargers(); // Fetch chargers based on the selected tenant
+  // Delete charger profile
+  const deleteChargerProfile = async () => {
+    if (!selectedCharger) return;
+    setIsLoading(true);
+    setError(''); // Clear previous error
+
+    try {
+      const query = {
+        method: 'APIerSv1.RemoveChargerProfile',
+        params: [
+          {
+            Tenant: selectedCharger.Tenant,
+            ID: selectedCharger.ID,
+          },
+        ],
+      };
+
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(query),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.result) {
+        console.log('Charger deleted successfully');
+        fetchChargers(); // Refresh the charger list
+        handleCloseModal();
+      }
+    } catch (error) {
+      console.error('Error deleting charger:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
+  // Form submission for fetching chargers
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    fetchChargers();
+  };
+
+  // Handle creation of a new charger
   const handleNewCharger = () => {
     setEditCharger({
       Tenant: searchParams.tenant || '',
@@ -239,15 +285,24 @@ const Chargers = ({ cgratesConfig }) => {
             <Col md={6}>
               <Form.Group controlId="formTenant">
                 <Form.Label>Tenant</Form.Label>
-                <Form.Control as="select" name="tenant" value={searchParams.tenant} onChange={handleInputChange}>
+                <Form.Control
+                  as="select"
+                  name="tenant"
+                  value={searchParams.tenant}
+                  onChange={handleInputChange}
+                >
                   {cgratesConfig.tenants.split(';').map((tenant, index) => (
-                    <option key={index} value={tenant}>{tenant}</option>
+                    <option key={index} value={tenant}>
+                      {tenant}
+                    </option>
                   ))}
                 </Form.Control>
               </Form.Group>
             </Col>
             <Col md={6} className="d-flex align-items-end">
-              <Button type="submit" className="w-100">Fetch Chargers</Button>
+              <Button type="submit" className="w-100">
+                Fetch Chargers
+              </Button>
             </Col>
           </Row>
         </Form>
@@ -278,14 +333,22 @@ const Chargers = ({ cgratesConfig }) => {
                 </tr>
               </thead>
               <tbody>
-                {chargers.length > 0 ? chargers.map((charger, index) => (
-                  <tr key={index} onClick={() => handleRowClick(charger)} style={{ cursor: 'pointer' }}>
-                    <td>{index + 1}</td>
-                    <td>{charger}</td>
-                  </tr>
-                )) : (
+                {chargers.length > 0 ? (
+                  chargers.map((charger, index) => (
+                    <tr
+                      key={index}
+                      onClick={() => handleRowClick(charger)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td>{index + 1}</td>
+                      <td>{charger}</td>
+                    </tr>
+                  ))
+                ) : (
                   <tr>
-                    <td colSpan="2" className="text-center">No chargers available</td>
+                    <td colSpan="2" className="text-center">
+                      No chargers available
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -296,38 +359,69 @@ const Chargers = ({ cgratesConfig }) => {
         {/* Modal for displaying charger details */}
         <Modal show={showModal} onHide={handleCloseModal} size="xl">
           <Modal.Header closeButton>
-            <Modal.Title>{isEditing ? 'Edit Charger Profile' : 'Charger Profile Details'}</Modal.Title>
+            <Modal.Title>
+              {isEditing ? 'Edit Charger Profile' : 'Charger Profile Details'}
+            </Modal.Title>
           </Modal.Header>
           <Modal.Body>
             {isEditing ? (
               <>
                 <Form.Group>
                   <Form.Label>Tenant</Form.Label>
-                  <Form.Control type="text" name="Tenant" value={editCharger.Tenant} onChange={handleEditChange} readOnly={!isEditing} />
+                  <Form.Control
+                    type="text"
+                    name="Tenant"
+                    value={editCharger.Tenant}
+                    onChange={handleEditChange}
+                    readOnly={!isEditing}
+                  />
                 </Form.Group>
                 <Form.Group>
                   <Form.Label>ID</Form.Label>
-                  <Form.Control type="text" name="ID" value={editCharger.ID} onChange={handleEditChange} />
+                  <Form.Control
+                    type="text"
+                    name="ID"
+                    value={editCharger.ID}
+                    onChange={handleEditChange}
+                  />
                 </Form.Group>
                 <Form.Group>
                   <Form.Label>Weight</Form.Label>
-                  <Form.Control type="number" name="Weight" value={editCharger.Weight} onChange={handleEditChange} />
+                  <Form.Control
+                    type="number"
+                    name="Weight"
+                    value={editCharger.Weight}
+                    onChange={handleEditChange}
+                  />
                 </Form.Group>
                 <Form.Group>
                   <Form.Label>Run ID</Form.Label>
-                  <Form.Control type="text" name="RunID" value={editCharger.RunID} onChange={handleEditChange} />
+                  <Form.Control
+                    type="text"
+                    name="RunID"
+                    value={editCharger.RunID}
+                    onChange={handleEditChange}
+                  />
                 </Form.Group>
                 <Form.Group>
                   <Form.Label>Filter IDs</Form.Label>
                   {(editCharger.FilterIDs || []).map((filterID, index) => (
-                    <div key={index} style={{ display: 'flex', marginBottom: '5px' }}>
+                    <div
+                      key={index}
+                      style={{ display: 'flex', marginBottom: '5px' }}
+                    >
                       <Form.Control
                         type="text"
                         value={filterID}
                         onChange={(e) => handleFilterIDChange(index, e.target.value)}
                         style={{ marginRight: '10px' }}
                       />
-                      <Button variant="danger" onClick={() => removeFilterID(index)}>Remove</Button>
+                      <Button
+                        variant="danger"
+                        onClick={() => removeFilterID(index)}
+                      >
+                        Remove
+                      </Button>
                     </div>
                   ))}
                   <Button onClick={addFilterID}>Add FilterID</Button>
@@ -335,14 +429,24 @@ const Chargers = ({ cgratesConfig }) => {
                 <Form.Group>
                   <Form.Label>Attribute IDs</Form.Label>
                   {(editCharger.AttributeIDs || []).map((attributeID, index) => (
-                    <div key={index} style={{ display: 'flex', marginBottom: '5px' }}>
+                    <div
+                      key={index}
+                      style={{ display: 'flex', marginBottom: '5px' }}
+                    >
                       <Form.Control
                         type="text"
                         value={attributeID}
-                        onChange={(e) => handleAttributeIDChange(index, e.target.value)}
+                        onChange={(e) =>
+                          handleAttributeIDChange(index, e.target.value)
+                        }
                         style={{ marginRight: '10px' }}
                       />
-                      <Button variant="danger" onClick={() => removeAttributeID(index)}>Remove</Button>
+                      <Button
+                        variant="danger"
+                        onClick={() => removeAttributeID(index)}
+                      >
+                        Remove
+                      </Button>
                     </div>
                   ))}
                   <Button onClick={addAttributeID}>Add AttributeID</Button>
@@ -353,12 +457,30 @@ const Chargers = ({ cgratesConfig }) => {
                 <>
                   <h5>General Information</h5>
                   <ListGroup className="mb-3">
-                    <ListGroup.Item><strong>Tenant:</strong> {selectedCharger.Tenant}</ListGroup.Item>
-                    <ListGroup.Item><strong>ID:</strong> {selectedCharger.ID}</ListGroup.Item>
-                    <ListGroup.Item><strong>Weight:</strong> {selectedCharger.Weight}</ListGroup.Item>
-                    <ListGroup.Item><strong>Run ID:</strong> {selectedCharger.RunID}</ListGroup.Item>
-                    <ListGroup.Item><strong>Filter IDs:</strong> {selectedCharger.FilterIDs.length > 0 ? selectedCharger.FilterIDs.join(', ') : 'None'}</ListGroup.Item>
-                    <ListGroup.Item><strong>Attribute IDs:</strong> {selectedCharger.AttributeIDs.length > 0 ? selectedCharger.AttributeIDs.join(', ') : 'None'}</ListGroup.Item>
+                    <ListGroup.Item>
+                      <strong>Tenant:</strong> {selectedCharger.Tenant}
+                    </ListGroup.Item>
+                    <ListGroup.Item>
+                      <strong>ID:</strong> {selectedCharger.ID}
+                    </ListGroup.Item>
+                    <ListGroup.Item>
+                      <strong>Weight:</strong> {selectedCharger.Weight}
+                    </ListGroup.Item>
+                    <ListGroup.Item>
+                      <strong>Run ID:</strong> {selectedCharger.RunID}
+                    </ListGroup.Item>
+                    <ListGroup.Item>
+                      <strong>Filter IDs:</strong>{' '}
+                      {selectedCharger.FilterIDs.length > 0
+                        ? selectedCharger.FilterIDs.join(', ')
+                        : 'None'}
+                    </ListGroup.Item>
+                    <ListGroup.Item>
+                      <strong>Attribute IDs:</strong>{' '}
+                      {selectedCharger.AttributeIDs.length > 0
+                        ? selectedCharger.AttributeIDs.join(', ')
+                        : 'None'}
+                    </ListGroup.Item>
                   </ListGroup>
                 </>
               )
@@ -370,9 +492,15 @@ const Chargers = ({ cgratesConfig }) => {
                 Save Changes
               </Button>
             ) : (
-              <Button variant="secondary" onClick={() => setIsEditing(true)}>
-                Edit
-              </Button>
+              <>
+                <Button variant="secondary" onClick={() => setIsEditing(true)}>
+                  Edit
+                </Button>
+                {/* Delete button when not in edit mode */}
+                <Button variant="danger" onClick={deleteChargerProfile}>
+                  Delete
+                </Button>
+              </>
             )}
             <Button variant="secondary" onClick={handleCloseModal}>
               Close
