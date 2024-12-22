@@ -302,7 +302,7 @@ const StatsS = ({ cgratesConfig }) => {
                         </Col>
                     </Row>
                 </Form>
-                <Table striped bordered hover>
+                <Table striped bordered hover className="mt-4">
                     <thead>
                         <tr>
                             <th>ID</th>
@@ -311,13 +311,12 @@ const StatsS = ({ cgratesConfig }) => {
                     </thead>
                     <tbody>
                         {profiles.map((profile) => (
-                            <tr key={profile}>
+                            <tr key={profile} onClick={() => handleRowClick(profile)} style={{ cursor: 'pointer' }}>
                                 <td>{profile}</td>
                                 <td>
-                                    <Button onClick={() => handleRowClick(profile)}>View</Button>
-                                    <Button onClick={() => fetchMetrics(profile)}>View Metrics</Button>
-                                    <Button onClick={() => removeProfile(profile)}>Remove</Button>
-                                    <Button onClick={() => clearStat(profile)}>Clear Stat</Button>
+                                    <Button className="me-2" variant="info" onClick={() => fetchMetrics(profile)}>View Metrics</Button>
+                                    <Button className="me-2" variant="danger" onClick={() => removeProfile(profile)}>Remove</Button>
+                                    <Button className="me-2" variant="warning" onClick={() => clearStat(profile)}>Clear Stat</Button>
                                 </td>
                             </tr>
                         ))}
