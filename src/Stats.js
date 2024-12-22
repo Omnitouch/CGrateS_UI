@@ -347,9 +347,36 @@ const StatsS = ({ cgratesConfig }) => {
                             <tr key={profile} onClick={() => handleRowClick(profile)} style={{ cursor: 'pointer' }}>
                                 <td>{profile}</td>
                                 <td>
-                                    <Button className="me-2" variant="info" onClick={() => fetchMetrics(profile)}>View Metrics</Button>
-                                    <Button className="me-2" variant="danger" onClick={() => removeProfile(profile)}>Remove</Button>
-                                    <Button className="me-2" variant="warning" onClick={() => clearStat(profile)}>Clear Stat</Button>
+                                    <Button
+                                        className="me-2"
+                                        variant="info"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            fetchMetrics(profile);
+                                        }}
+                                    >
+                                        View Metrics
+                                    </Button>
+                                    <Button
+                                        className="me-2"
+                                        variant="danger"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeProfile(profile);
+                                        }}
+                                    >
+                                        Remove
+                                    </Button>
+                                    <Button
+                                        className="me-2"
+                                        variant="warning"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            clearStat(profile);
+                                        }}
+                                    >
+                                        Clear Stat
+                                    </Button>
                                 </td>
                             </tr>
                         ))}
