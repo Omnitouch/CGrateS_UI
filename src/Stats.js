@@ -298,7 +298,8 @@ const StatsS = ({ cgratesConfig }) => {
                             </Form.Group>
                         </Col>
                         <Col>
-                            <Button onClick={fetchProfiles}>Fetch Profiles</Button>
+                            <Button onClick={fetchProfiles} className="me-2">Fetch Profiles</Button>
+                            <Button onClick={handleNewProfile} variant="success">Create Stat</Button>
                         </Col>
                     </Row>
                 </Form>
@@ -323,6 +324,7 @@ const StatsS = ({ cgratesConfig }) => {
                     </tbody>
                 </Table>
             </Container>
+
             {/* Profile Modal */}
             <Modal show={showModal} onHide={handleCloseModal}>
                 <Modal.Header closeButton>
