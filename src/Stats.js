@@ -194,6 +194,41 @@ const StatsS = ({ cgratesConfig }) => {
     }
   };
 
+
+
+  const fetchMetrics = async (profileId) => {
+    setIsLoading(true);
+    try {
+      const query = {
+        method: 'StatSv1.GetQueueStringMetrics',
+        params: [{ Tenant: searchParams.tenant, ID: profileId, APIOpts: {} }],
+        id: 12,
+      };
+
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(query),
+      });
+
+      const data = await response.json();
+
+      if (data.result) {
+        setSelectedProfile((prevProfile) => ({
+          ...prevProfile,
+          MetricsDetails: data.result,
+        }));
+        setShowModal(true);
+      }
+    } catch (error) {
+      console.error('Error fetching metrics:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const clearStat = async (profileId) => {
     setIsLoading(true);
     try {
@@ -275,6 +310,7 @@ const StatsS = ({ cgratesConfig }) => {
                 <td>{profile}</td>
                 <td>
                   <Button onClick={() => handleRowClick(profile)}>View</Button>
+                  <Button onClick={() => fetchMetrics(profile)}>View Metrics</Button>
                   <Button onClick={() => removeProfile(profile)}>Remove</Button>
                   <Button onClick={() => clearStat(profile)}>Clear Stat</Button>
                 </td>
