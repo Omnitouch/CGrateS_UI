@@ -19,6 +19,7 @@ import Timings from './Timing.js';
 import TariffPlans from './TariffPlans.js';
 import GetCostView from './GetCost';
 import Chargers from './Chargers.js';
+import StatsS from './Stats.js';
 import { BrowserRouter as Router, Route, Routes, Link, useLocation } from 'react-router-dom';
 import { marked } from 'marked';
 
@@ -218,6 +219,7 @@ function App() {
         '/ratingplans': 'RatingPlans - Omnitouch CGrateS UI',
         '/ratingprofiles': 'RatingProfiles - Omnitouch CGrateS UI',
         '/timings': 'Timings - Omnitouch CGrateS UI',
+        '/stats': 'Stats - Omnitouch CGrateS UI',
         '/tariffplans': 'TariffPlans - Omnitouch CGrateS UI',
         '/getcost': 'GetCost - Omnitouch CGrateS UI',
         '/config': 'Config - Omnitouch CGrateS UI',
@@ -242,6 +244,7 @@ function App() {
               <Nav.Link as={Link} to="/accounts">Accounts</Nav.Link>
               <Nav.Link as={Link} to="/sessions">Sessions</Nav.Link>
               <Nav.Link as={Link} to="/resources">Resources</Nav.Link>
+              <Nav.Link as={Link} to="/stats">Stats</Nav.Link>
               <Nav.Link as={Link} to="/filters">Filters</Nav.Link>
               <NavDropdown title="Actions & ActionPlans" id="actions-dropdown">
                 <NavDropdown.Item as={Link} to="/action-triggers">Action Triggers</NavDropdown.Item>
@@ -304,6 +307,7 @@ function App() {
           <Route path="/ratingplans" element={<RatingPlans cgratesConfig={cgratesConfig} />} />
           <Route path="/ratingprofiles" element={<RatingProfiles cgratesConfig={cgratesConfig} />} />
           <Route path="/timings" element={<Timings cgratesConfig={cgratesConfig} />} />
+          <Route path="/stats" element={<StatsS cgratesConfig={cgratesConfig} />} />
           <Route path="/getcost" element={<GetCostView cgratesConfig={cgratesConfig} />} />
           <Route path="/tariffplans" element={<TariffPlans cgratesConfig={cgratesConfig} />} />
           <Route path="/config" element={<Config cgratesConfig={cgratesConfig} />} />
