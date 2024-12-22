@@ -3,14 +3,15 @@ import { Form, Button, Container, Row, Col, Table, Modal, Spinner, ListGroup } f
 
 const StatsS = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
-    tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant
+    tenant: cgratesConfig.tenants.split(';')[0],
   });
   const [profiles, setProfiles] = useState([]);
   const [selectedProfile, setSelectedProfile] = useState(null);
+  const [editProfile, setEditProfile] = useState({});
   const [showModal, setShowModal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [responseTime, setResponseTime] = useState(null);
-  const [error, setError] = useState('');
 
   useEffect(() => {
     setSearchParams({ tenant: cgratesConfig.tenants.split(';')[0] });
@@ -41,19 +42,12 @@ const StatsS = ({ cgratesConfig }) => {
         body: JSON.stringify(query),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
       const data = await response.json();
       const endTime = Date.now();
-      const timeTaken = ((endTime - startTime) / 1000).toFixed(2);
-      setResponseTime(timeTaken);
+      setResponseTime(((endTime - startTime) / 1000).toFixed(2));
 
       if (data.result) {
         setProfiles(data.result);
-      } else {
-        console.warn('No profiles found.');
       }
     } catch (error) {
       console.error('Error fetching profiles:', error);
@@ -79,15 +73,13 @@ const StatsS = ({ cgratesConfig }) => {
         body: JSON.stringify(query),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
       const data = await response.json();
 
       if (data.result) {
         setSelectedProfile(data.result);
+        setEditProfile({ ...data.result });
         setShowModal(true);
+        setIsEditing(false);
       }
     } catch (error) {
       console.error('Error fetching profile details:', error);
@@ -103,21 +95,142 @@ const StatsS = ({ cgratesConfig }) => {
   const handleCloseModal = () => {
     setShowModal(false);
     setSelectedProfile(null);
+    setIsEditing(false);
   };
 
-  const handleSubmit = (event) => {
-    event.preventDefault();
-    fetchProfiles();
+  const handleEditChange = (event) => {
+    const { name, value } = event.target;
+    setEditProfile({ ...editProfile, [name]: value });
+  };
+
+  const handleMetricChange = (index, newValue) => {
+    const updatedMetrics = [...editProfile.Metrics];
+    updatedMetrics[index].MetricID = newValue;
+    setEditProfile({ ...editProfile, Metrics: updatedMetrics });
+  };
+
+  const addMetric = () => {
+    const updatedMetrics = [...(editProfile.Metrics || [])];
+    updatedMetrics.push({ MetricID: '' });
+    setEditProfile({ ...editProfile, Metrics: updatedMetrics });
+  };
+
+  const removeMetric = (index) => {
+    const updatedMetrics = [...editProfile.Metrics];
+    updatedMetrics.splice(index, 1);
+    setEditProfile({ ...editProfile, Metrics: updatedMetrics });
+  };
+
+  const saveProfile = async () => {
+    setIsLoading(true);
+    try {
+      const query = {
+        method: 'APIerSv1.SetStatQueueProfile',
+        params: [{ ...editProfile }],
+      };
+
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(query),
+      });
+
+      const data = await response.json();
+
+      if (data.result) {
+        fetchProfiles();
+        handleCloseModal();
+      }
+    } catch (error) {
+      console.error('Error saving profile:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const removeProfile = async (profileId) => {
+    if (!window.confirm('Are you sure you want to remove this profile?')) return;
+
+    setIsLoading(true);
+    try {
+      const query = {
+        method: 'StatSv1.RemoveStatQueueProfile',
+        params: [{ Tenant: searchParams.tenant, ID: profileId }],
+        id: 3,
+      };
+
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(query),
+      });
+
+      const data = await response.json();
+
+      if (data.result) {
+        fetchProfiles();
+      }
+    } catch (error) {
+      console.error('Error removing profile:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const clearStat = async (profileId) => {
+    setIsLoading(true);
+    try {
+      const query = {
+        method: 'StatSv1.ResetStatQueue',
+        params: [{ Tenant: searchParams.tenant, ID: profileId }],
+        id: 4,
+      };
+
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(query),
+      });
+
+      const data = await response.json();
+
+      if (data.result) {
+        console.log('Stat cleared successfully.');
+      }
+    } catch (error) {
+      console.error('Error clearing stat:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleNewProfile = () => {
+    setEditProfile({
+      Tenant: searchParams.tenant,
+      ID: '',
+      QueueLength: 0,
+      TTL: -1,
+      MinItems: 0,
+      Metrics: [],
+    });
+    setIsEditing(true);
+    setShowModal(true);
   };
 
   return (
-    <div className="App">
+    <div>
       <Container>
         <h2>Stat Queue Profiles</h2>
-        <Form onSubmit={handleSubmit} className="mt-4">
+        <Form onSubmit={(e) => e.preventDefault()}>
           <Row>
-            <Col md={6}>
-              <Form.Group controlId="formTenant">
+            <Col>
+              <Form.Group controlId="tenant">
                 <Form.Label>Tenant</Form.Label>
                 <Form.Control
                   as="select"
@@ -125,79 +238,88 @@ const StatsS = ({ cgratesConfig }) => {
                   value={searchParams.tenant}
                   onChange={handleInputChange}
                 >
-                  {cgratesConfig.tenants.split(';').map((tenant, index) => (
-                    <option key={index} value={tenant}>
-                      {tenant}
-                    </option>
+                  {cgratesConfig.tenants.split(';').map((tenant) => (
+                    <option key={tenant}>{tenant}</option>
                   ))}
                 </Form.Control>
               </Form.Group>
             </Col>
-            <Col md={6} className="d-flex align-items-end">
-              <Button type="submit" className="w-100">
-                Fetch Profiles
-              </Button>
+            <Col>
+              <Button onClick={fetchProfiles}>Fetch Profiles</Button>
             </Col>
           </Row>
         </Form>
-
-        {isLoading ? (
-          <div className="text-center mt-4">
-            <Spinner animation="border" role="status">
-              <span className="sr-only">Loading...</span>
-            </Spinner>
-            <p>Loading profiles, please wait...</p>
-          </div>
-        ) : (
-          <>
-            {responseTime && (
-              <p className="mt-3">
-                Response from CGrateS at <b>{cgratesConfig.url}</b> in {responseTime} seconds
-              </p>
-            )}
-            <Table striped bordered hover className="mt-4">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Profile ID</th>
-                </tr>
-              </thead>
-              <tbody>
-                {profiles.length > 0 ? (
-                  profiles.map((profile, index) => (
-                    <tr
-                      key={index}
-                      onClick={() => handleRowClick(profile)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <td>{index + 1}</td>
-                      <td>{profile}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="2" className="text-center">
-                      No profiles available
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </Table>
-          </>
-        )}
-
-        <Modal show={showModal} onHide={handleCloseModal} size="lg">
-          <Modal.Header closeButton>
-            <Modal.Title>Profile Details</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            {selectedProfile && (
+        <Table striped bordered hover>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {profiles.map((profile) => (
+              <tr key={profile}>
+                <td>{profile}</td>
+                <td>
+                  <Button onClick={() => handleRowClick(profile)}>View</Button>
+                  <Button onClick={() => removeProfile(profile)}>Remove</Button>
+                  <Button onClick={() => clearStat(profile)}>Clear Stat</Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      </Container>
+      {/* Profile Modal */}
+      <Modal show={showModal} onHide={handleCloseModal}>
+        <Modal.Header closeButton>
+          <Modal.Title>
+            {isEditing ? 'Edit Profile' : 'View Profile'}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {isEditing ? (
+            <>
+              <Form.Group>
+                <Form.Label>ID</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="ID"
+                  value={editProfile.ID}
+                  onChange={handleEditChange}
+                />
+              </Form.Group>
+              <Form.Group>
+                <Form.Label>Queue Length</Form.Label>
+                <Form.Control
+                  type="number"
+                  name="QueueLength"
+                  value={editProfile.QueueLength}
+                  onChange={handleEditChange}
+                />
+              </Form.Group>
+              <Form.Group>
+                <Form.Label>Metrics</Form.Label>
+                {(editProfile.Metrics || []).map((metric, index) => (
+                  <div key={index} style={{ display: 'flex', marginBottom: '5px' }}>
+                    <Form.Control
+                      type="text"
+                      value={metric.MetricID}
+                      onChange={(e) => handleMetricChange(index, e.target.value)}
+                      style={{ marginRight: '10px' }}
+                    />
+                    <Button variant="danger" onClick={() => removeMetric(index)}>
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+                <Button onClick={addMetric}>Add Metric</Button>
+              </Form.Group>
+            </>
+          ) : (
+            selectedProfile && (
               <>
-                <h5>General Information</h5>
                 <ListGroup>
-                  <ListGroup.Item>
-                    <strong>Tenant:</strong> {selectedProfile.Tenant}
-                  </ListGroup.Item>
                   <ListGroup.Item>
                     <strong>ID:</strong> {selectedProfile.ID}
                   </ListGroup.Item>
@@ -205,23 +327,33 @@ const StatsS = ({ cgratesConfig }) => {
                     <strong>Queue Length:</strong> {selectedProfile.QueueLength}
                   </ListGroup.Item>
                   <ListGroup.Item>
-                    <strong>Metrics:</strong>{' '}
-                    {selectedProfile.Metrics.map((metric) => metric.MetricID).join(', ')}
-                  </ListGroup.Item>
-                  <ListGroup.Item>
-                    <strong>Stored:</strong> {selectedProfile.Stored ? 'Yes' : 'No'}
+                    <strong>Metrics:</strong>
+                    <ul>
+                      {selectedProfile.Metrics.map((metric, index) => (
+                        <li key={index}>{metric.MetricID}</li>
+                      ))}
+                    </ul>
                   </ListGroup.Item>
                 </ListGroup>
               </>
-            )}
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={handleCloseModal}>
-              Close
+            )
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          {isEditing ? (
+            <Button variant="primary" onClick={saveProfile}>
+              Save
             </Button>
-          </Modal.Footer>
-        </Modal>
-      </Container>
+          ) : (
+            <Button variant="secondary" onClick={() => setIsEditing(true)}>
+              Edit
+            </Button>
+          )}
+          <Button variant="secondary" onClick={handleCloseModal}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };
