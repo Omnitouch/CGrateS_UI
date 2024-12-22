@@ -445,7 +445,6 @@ const StatsS = ({ cgratesConfig }) => {
                                 ))}
                                 <Button onClick={addMetric}>Add Metric</Button>
                             </Form.Group>
-
                         </>
                     ) : (
                         selectedProfile && (
@@ -461,16 +460,29 @@ const StatsS = ({ cgratesConfig }) => {
                                         <strong>TTL:</strong> {selectedProfile.TTL}
                                     </ListGroup.Item>
                                     <ListGroup.Item>
-                                        <strong>Filters:</strong> {selectedProfile.Filters || 'N/A'}
+                                        <strong>Filters:</strong>
+                                        <ul>
+                                            {(selectedProfile.FilterIDs || []).length > 0 ? (
+                                                selectedProfile.FilterIDs.map((filter, index) => (
+                                                    <li key={index}>{filter}</li>
+                                                ))
+                                            ) : (
+                                                <li>No filters available</li>
+                                            )}
+                                        </ul>
                                     </ListGroup.Item>
                                     <ListGroup.Item>
                                         <strong>Metrics:</strong>
                                         <ul>
                                             {selectedProfile.Metrics.map((metric, index) => (
                                                 <li key={index}>
-                                                    <strong>Metric:</strong> {metric.MetricID}
-                                                    <br />
-                                                    <strong>Filters:</strong> {metric.Filters || 'N/A'}
+                                                    <strong>Metric ID:</strong> {metric.MetricID}<br />
+                                                    <strong>Filters:</strong>
+                                                    <ul>
+                                                        {(metric.FilterIDs || []).map((filter, idx) => (
+                                                            <li key={idx}>{filter}</li>
+                                                        ))}
+                                                    </ul>
                                                 </li>
                                             ))}
                                         </ul>
@@ -494,10 +506,7 @@ const StatsS = ({ cgratesConfig }) => {
                         Close
                     </Button>
                 </Modal.Footer>
-            </Modal>
-
-
-            {/* Metrics Modal */}
+            </Modal>}
             <Modal show={showMetricsModal} onHide={handleCloseMetricsModal}>
                 <Modal.Header closeButton>
                     <Modal.Title>Metrics Details</Modal.Title>
