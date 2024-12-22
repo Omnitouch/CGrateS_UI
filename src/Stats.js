@@ -139,9 +139,20 @@ const StatsS = ({ cgratesConfig }) => {
     const saveProfile = async () => {
         setIsLoading(true);
         try {
+            // Ensure TTL is a number and Filters are properly mapped to FilterIDs
+            const sanitizedProfile = {
+                ...editProfile,
+                TTL: parseInt(editProfile.TTL, 10), // Convert TTL to a number
+                FilterIDs: editProfile.FilterIDs || [], // Ensure FilterIDs is an array
+                Metrics: (editProfile.Metrics || []).map((metric) => ({
+                    ...metric,
+                    FilterIDs: metric.FilterIDs || [], // Ensure FilterIDs for metrics is an array
+                })),
+            };
+
             const query = {
                 method: 'APIerSv1.SetStatQueueProfile',
-                params: [{ ...editProfile }],
+                params: [sanitizedProfile],
             };
 
             const response = await fetch(cgratesConfig.url + '/jsonrpc', {
@@ -164,6 +175,7 @@ const StatsS = ({ cgratesConfig }) => {
             setIsLoading(false);
         }
     };
+
 
     const removeProfile = async (profileId) => {
         if (!window.confirm('Are you sure you want to remove this profile?')) return;
@@ -354,31 +366,86 @@ const StatsS = ({ cgratesConfig }) => {
                                 />
                             </Form.Group>
                             <Form.Group>
+                                <Form.Label>TTL</Form.Label>
+                                <Form.Control
+                                    type="number"
+                                    name="TTL"
+                                    value={editProfile.TTL}
+                                    onChange={(e) => {
+                                        const ttlValue = parseInt(e.target.value, 10);
+                                        setEditProfile({ ...editProfile, TTL: isNaN(ttlValue) ? '' : ttlValue });
+                                    }}
+                                />
+                            </Form.Group>
+
+                            <Form.Group>
+                                <Form.Label>Filters (Profile)</Form.Label>
+                                <Form.Control
+                                    type="text"
+                                    name="Filters"
+                                    value={editProfile.Filters || ''}
+                                    onChange={(e) => setEditProfile({ ...editProfile, Filters: e.target.value })}
+                                />
+                            </Form.Group>
+
+                            <Form.Group>
                                 <Form.Label>Metrics</Form.Label>
                                 {(editProfile.Metrics || []).map((metric, index) => (
-                                    <div
-                                        key={index}
-                                        style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}
-                                    >
-                                        <Form.Control
-                                            as="select"
-                                            value={metric.MetricID}
-                                            onChange={(e) => handleMetricChange(index, e.target.value)}
-                                            style={{ marginRight: '10px' }}
+                                    <div key={index} style={{ marginBottom: '15px' }}>
+                                        <Form.Label>Metric: {metric.MetricID}</Form.Label>
+                                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
+                                            <Form.Control
+                                                as="select"
+                                                value={metric.MetricID}
+                                                onChange={(e) => handleMetricChange(index, e.target.value)}
+                                                style={{ marginRight: '10px' }}
+                                            >
+                                                {metricsOptions.map((option) => (
+                                                    <option key={option.value} value={option.value}>
+                                                        {option.label}
+                                                    </option>
+                                                ))}
+                                            </Form.Control>
+                                        </div>
+                                        {(metric.FilterIDs || []).map((filter, filterIndex) => (
+                                            <div key={filterIndex} style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
+                                                <Form.Control
+                                                    type="text"
+                                                    value={filter}
+                                                    onChange={(e) => {
+                                                        const updatedMetrics = [...editProfile.Metrics];
+                                                        updatedMetrics[index].FilterIDs[filterIndex] = e.target.value;
+                                                        setEditProfile({ ...editProfile, Metrics: updatedMetrics });
+                                                    }}
+                                                    style={{ marginRight: '10px' }}
+                                                />
+                                                <Button
+                                                    variant="danger"
+                                                    onClick={() => {
+                                                        const updatedMetrics = [...editProfile.Metrics];
+                                                        updatedMetrics[index].FilterIDs.splice(filterIndex, 1);
+                                                        setEditProfile({ ...editProfile, Metrics: updatedMetrics });
+                                                    }}
+                                                >
+                                                    Remove
+                                                </Button>
+                                            </div>
+                                        ))}
+                                        <Button
+                                            variant="success"
+                                            onClick={() => {
+                                                const updatedMetrics = [...editProfile.Metrics];
+                                                updatedMetrics[index].FilterIDs = [...(updatedMetrics[index].FilterIDs || []), ''];
+                                                setEditProfile({ ...editProfile, Metrics: updatedMetrics });
+                                            }}
                                         >
-                                            {metricsOptions.map((option) => (
-                                                <option key={option.value} value={option.value}>
-                                                    {option.label}
-                                                </option>
-                                            ))}
-                                        </Form.Control>
-                                        <Button variant="danger" onClick={() => removeMetric(index)}>
-                                            Remove
+                                            Add Filter
                                         </Button>
                                     </div>
                                 ))}
                                 <Button onClick={addMetric}>Add Metric</Button>
                             </Form.Group>
+
                         </>
                     ) : (
                         selectedProfile && (
@@ -391,10 +458,20 @@ const StatsS = ({ cgratesConfig }) => {
                                         <strong>Queue Length:</strong> {selectedProfile.QueueLength}
                                     </ListGroup.Item>
                                     <ListGroup.Item>
+                                        <strong>TTL:</strong> {selectedProfile.TTL}
+                                    </ListGroup.Item>
+                                    <ListGroup.Item>
+                                        <strong>Filters:</strong> {selectedProfile.Filters || 'N/A'}
+                                    </ListGroup.Item>
+                                    <ListGroup.Item>
                                         <strong>Metrics:</strong>
                                         <ul>
                                             {selectedProfile.Metrics.map((metric, index) => (
-                                                <li key={index}>{metric.MetricID}</li>
+                                                <li key={index}>
+                                                    <strong>Metric:</strong> {metric.MetricID}
+                                                    <br />
+                                                    <strong>Filters:</strong> {metric.Filters || 'N/A'}
+                                                </li>
                                             ))}
                                         </ul>
                                     </ListGroup.Item>
@@ -418,6 +495,8 @@ const StatsS = ({ cgratesConfig }) => {
                     </Button>
                 </Modal.Footer>
             </Modal>
+
+
             {/* Metrics Modal */}
             <Modal show={showMetricsModal} onHide={handleCloseMetricsModal}>
                 <Modal.Header closeButton>
