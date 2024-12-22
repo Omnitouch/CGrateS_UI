@@ -143,6 +143,7 @@ const StatsS = ({ cgratesConfig }) => {
             const sanitizedProfile = {
                 ...editProfile,
                 TTL: parseInt(editProfile.TTL, 10), // Convert TTL to a number
+                QueueLength: parseInt(editProfile.QueueLength, 10), // Convert QueueLength to a number
                 FilterIDs: editProfile.FilterIDs || [], // Ensure FilterIDs is an array
                 Metrics: (editProfile.Metrics || []).map((metric) => ({
                     ...metric,
@@ -293,19 +294,19 @@ const StatsS = ({ cgratesConfig }) => {
         updatedFilters[index] = value;
         setEditProfile({ ...editProfile, FilterIDs: updatedFilters });
     };
-    
+
     const removeFilter = (index) => {
         const updatedFilters = [...editProfile.FilterIDs];
         updatedFilters.splice(index, 1);
         setEditProfile({ ...editProfile, FilterIDs: updatedFilters });
     };
-    
+
     const addFilter = () => {
         const updatedFilters = [...(editProfile.FilterIDs || [])];
         updatedFilters.push(''); // Add a new empty filter
         setEditProfile({ ...editProfile, FilterIDs: updatedFilters });
     };
-    
+
 
     return (
         <div>
@@ -509,9 +510,13 @@ const StatsS = ({ cgratesConfig }) => {
                                                     <strong>Metric ID:</strong> {metric.MetricID}<br />
                                                     <strong>Filters:</strong>
                                                     <ul>
-                                                        {(metric.FilterIDs || []).map((filter, idx) => (
-                                                            <li key={idx}>{filter}</li>
-                                                        ))}
+                                                        {(metric.FilterIDs || []).length > 0 ? (
+                                                            metric.FilterIDs.map((filter, idx) => (
+                                                                <li key={idx}>{filter}</li>
+                                                            ))
+                                                        ) : (
+                                                            <li>No filters available</li>
+                                                        )}
                                                     </ul>
                                                 </li>
                                             ))}
@@ -536,7 +541,7 @@ const StatsS = ({ cgratesConfig }) => {
                         Close
                     </Button>
                 </Modal.Footer>
-            </Modal>}
+            </Modal>
             <Modal show={showMetricsModal} onHide={handleCloseMetricsModal}>
                 <Modal.Header closeButton>
                     <Modal.Title>Metrics Details</Modal.Title>
