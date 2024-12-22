@@ -288,6 +288,25 @@ const StatsS = ({ cgratesConfig }) => {
         setShowModal(true);
     };
 
+    const handleFilterChange = (index, value) => {
+        const updatedFilters = [...editProfile.FilterIDs];
+        updatedFilters[index] = value;
+        setEditProfile({ ...editProfile, FilterIDs: updatedFilters });
+    };
+    
+    const removeFilter = (index) => {
+        const updatedFilters = [...editProfile.FilterIDs];
+        updatedFilters.splice(index, 1);
+        setEditProfile({ ...editProfile, FilterIDs: updatedFilters });
+    };
+    
+    const addFilter = () => {
+        const updatedFilters = [...(editProfile.FilterIDs || [])];
+        updatedFilters.push(''); // Add a new empty filter
+        setEditProfile({ ...editProfile, FilterIDs: updatedFilters });
+    };
+    
+
     return (
         <div>
             <Container>
@@ -379,13 +398,24 @@ const StatsS = ({ cgratesConfig }) => {
                             </Form.Group>
 
                             <Form.Group>
-                                <Form.Label>Filters (Profile)</Form.Label>
-                                <Form.Control
-                                    type="text"
-                                    name="Filters"
-                                    value={editProfile.Filters || ''}
-                                    onChange={(e) => setEditProfile({ ...editProfile, Filters: e.target.value })}
-                                />
+                                <Form.Label>Filters</Form.Label>
+                                {(editProfile.FilterIDs || []).map((filter, index) => (
+                                    <div key={index} style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
+                                        <Form.Control
+                                            type="text"
+                                            value={filter}
+                                            onChange={(e) => handleFilterChange(index, e.target.value)}
+                                            style={{ marginRight: '10px' }}
+                                        />
+                                        <Button
+                                            variant="danger"
+                                            onClick={() => removeFilter(index)}
+                                        >
+                                            Remove
+                                        </Button>
+                                    </div>
+                                ))}
+                                <Button variant="success" onClick={addFilter}>Add Filter</Button>
                             </Form.Group>
 
                             <Form.Group>
