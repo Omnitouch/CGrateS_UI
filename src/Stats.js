@@ -13,6 +13,19 @@ const StatsS = ({ cgratesConfig }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [responseTime, setResponseTime] = useState(null);
 
+  const metricsOptions = [
+    { value: '*asr', label: 'Answer-seizure ratio' },
+    { value: '*acd', label: 'Average call duration' },
+    { value: '*tcd', label: 'Total call duration' },
+    { value: '*acc', label: 'Average call cost' },
+    { value: '*tcc', label: 'Total call cost' },
+    { value: '*pdd', label: 'Post dial delay' },
+    { value: '*ddc', label: 'Distinct destination count' },
+    { value: '*sum', label: 'Generic sum (e.g., *sum#FieldName)' },
+    { value: '*average', label: 'Generic average (e.g., *average#FieldName)' },
+    { value: '*distinct', label: 'Generic distinct (e.g., *distinct#FieldName)' },
+  ];
+
   useEffect(() => {
     setSearchParams({ tenant: cgratesConfig.tenants.split(';')[0] });
   }, [cgratesConfig]);
@@ -111,7 +124,7 @@ const StatsS = ({ cgratesConfig }) => {
 
   const addMetric = () => {
     const updatedMetrics = [...(editProfile.Metrics || [])];
-    updatedMetrics.push({ MetricID: '' });
+    updatedMetrics.push({ MetricID: metricsOptions[0].value }); // Default to first metric
     setEditProfile({ ...editProfile, Metrics: updatedMetrics });
   };
 
@@ -301,13 +314,22 @@ const StatsS = ({ cgratesConfig }) => {
               <Form.Group>
                 <Form.Label>Metrics</Form.Label>
                 {(editProfile.Metrics || []).map((metric, index) => (
-                  <div key={index} style={{ display: 'flex', marginBottom: '5px' }}>
+                  <div
+                    key={index}
+                    style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}
+                  >
                     <Form.Control
-                      type="text"
+                      as="select"
                       value={metric.MetricID}
                       onChange={(e) => handleMetricChange(index, e.target.value)}
                       style={{ marginRight: '10px' }}
-                    />
+                    >
+                      {metricsOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </Form.Control>
                     <Button variant="danger" onClick={() => removeMetric(index)}>
                       Remove
                     </Button>
