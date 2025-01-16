@@ -20,6 +20,7 @@ import TariffPlans from './TariffPlans.js';
 import GetCostView from './GetCost';
 import Chargers from './Chargers.js';
 import StatsS from './Stats.js';
+import RouteProfiles from './RouteProfiles.js';
 import { BrowserRouter as Router, Route, Routes, Link, useLocation } from 'react-router-dom';
 import { marked } from 'marked';
 
@@ -220,6 +221,7 @@ function App() {
         '/ratingprofiles': 'RatingProfiles - Omnitouch CGrateS UI',
         '/timings': 'Timings - Omnitouch CGrateS UI',
         '/stats': 'Stats - Omnitouch CGrateS UI',
+        '/routeprofiles' : 'Route PRofiles - Omnitouch CGrateS UI',
         '/tariffplans': 'TariffPlans - Omnitouch CGrateS UI',
         '/getcost': 'GetCost - Omnitouch CGrateS UI',
         '/config': 'Config - Omnitouch CGrateS UI',
@@ -260,6 +262,7 @@ function App() {
                 <NavDropdown.Item as={Link} to="/timings">Timings</NavDropdown.Item>
                 <NavDropdown.Item as={Link} to="/getcost">GetCost</NavDropdown.Item>
                 <NavDropdown.Item as={Link} to="/routes">Routes</NavDropdown.Item>
+                <NavDropdown.Item as={Link} to="/routeprofiles">RouteProfiles</NavDropdown.Item>
                 <NavDropdown.Item as={Link} to="/tariffplans">TariffPlans</NavDropdown.Item>
               </NavDropdown>
               <Nav.Link as={Link} to="/config">Config</Nav.Link>
@@ -308,6 +311,7 @@ function App() {
           <Route path="/ratingprofiles" element={<RatingProfiles cgratesConfig={cgratesConfig} />} />
           <Route path="/timings" element={<Timings cgratesConfig={cgratesConfig} />} />
           <Route path="/stats" element={<StatsS cgratesConfig={cgratesConfig} />} />
+          <Route path="/routeprofiles" element={<RouteProfiles cgratesConfig={cgratesConfig} />} />
           <Route path="/getcost" element={<GetCostView cgratesConfig={cgratesConfig} />} />
           <Route path="/tariffplans" element={<TariffPlans cgratesConfig={cgratesConfig} />} />
           <Route path="/config" element={<Config cgratesConfig={cgratesConfig} />} />
