@@ -267,6 +267,85 @@ const GetAccounts = ({ cgratesConfig }) => {
     }
   };
 
+  const updateAccountState = async (tenant, account, disabled) => {
+    const updateStateQuery = {
+      method: 'ApierV2.SetAccount',
+      params: [{
+        Tenant: tenant,
+        Account: account,
+        ReloadScheduler: true,
+        ExtraOptions: {
+          Disabled: disabled, // Set Disabled state
+        },
+      }],
+      id: 7,
+    };
+
+    console.log(`Updating account state for ${account} to Disabled: ${disabled}`);
+
+    try {
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateStateQuery),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Account state updated successfully:', data);
+
+      // Refresh account details
+      fetchAccountDetails(tenant, account);
+    } catch (error) {
+      console.error('Error updating account state:', error);
+    }
+  };
+
+  const updateAccountNegative = async (tenant, account, allowNegative) => {
+    const updateNegativeQuery = {
+      method: 'ApierV2.SetAccount',
+      params: [{
+        Tenant: tenant,
+        Account: account,
+        ReloadScheduler: true,
+        ExtraOptions: {
+          AllowNegative: allowNegative, // Set AllowNegative state
+        },
+      }],
+      id: 8,
+    };
+
+    console.log(`Updating account AllowNegative for ${account} to: ${allowNegative}`);
+
+    try {
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateNegativeQuery),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Account AllowNegative updated successfully:', data);
+
+      // Refresh account details
+      fetchAccountDetails(tenant, account);
+    } catch (error) {
+      console.error('Error updating AllowNegative:', error);
+    }
+  };
+
+
   const removeActionPlan = async (tenant, actionPlanId) => {
     const removeActionPlanQuery = {
       method: 'APIerSv1.RemoveActionPlan',
@@ -394,14 +473,14 @@ const GetAccounts = ({ cgratesConfig }) => {
     setSelectedRowData(rowData);
     const [tenant, account] = rowData.ID.split(':');
     setAccountDetails({ Tenant: tenant, Account: account, ...rowData }); // Set the tenant and account details in state
-  
+
     // Fetch actions before opening the modal
     await fetchActions(tenant);
-  
+
     setShowModal(true);
     fetchAccountDetails(tenant, account); // Fetch additional account details
   };
-  
+
 
   const handleActionSelect = (event) => {
     setSelectedAction(event.target.value);
@@ -427,7 +506,7 @@ const GetAccounts = ({ cgratesConfig }) => {
     setSelectedAction(''); // Clear selected action
     setShowConfirm(false); // Hide confirmation alert
   };
-  
+
 
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber);
@@ -738,47 +817,47 @@ const GetAccounts = ({ cgratesConfig }) => {
                     </tr>
                   </thead>
                   <tbody>
-          {accountDetails.ActionTriggers.map((trigger, index) => {
-            const { prettyDate, timeUntil } = formatExpiration(trigger.LastExecutionTime);
-            return (
-              <tr key={index}>
-                <td>
-                  {trigger.ID}
-                  <br />
-                  <span style={{ color: 'gray' }}>{trigger.UniqueID}</span>
-                </td>
-                <td>{trigger.ActionsID}</td>
-                <td>
-                  {timeUntil} 
-                  <br/>
-                  <span style={{ color: 'gray' }}>
-                    {prettyDate}
-                    <br />
-                    Executed: {trigger.Executed ? 'Yes' : 'No'}
-                    </span>
-                </td>
-                <td>
-                  <Button variant="success" onClick={() => handleActionTriggerClick(trigger)}>
-                    View ActionTrigger
-                  </Button>
-                  <br />
-                  <Button
-                    variant="danger"
-                    onClick={() => removeActionTrigger(accountDetails.ID.split(':')[0], accountDetails.ID.split(':')[1], trigger.ActionsID, trigger.UniqueID)}
-                  >
-                    Remove ActionTrigger
-                  </Button>
-                  <br />
-                  <Button
-                    variant="warning"
-                    onClick={() => resetActionTrigger(accountDetails.ID.split(':')[0], accountDetails.ID.split(':')[1], trigger.ActionsID, trigger.UniqueID)}
-                  >
-                    Reset ActionTrigger
-                  </Button>
-                </td>
-              </tr>
-            );
-          })}
+                    {accountDetails.ActionTriggers.map((trigger, index) => {
+                      const { prettyDate, timeUntil } = formatExpiration(trigger.LastExecutionTime);
+                      return (
+                        <tr key={index}>
+                          <td>
+                            {trigger.ID}
+                            <br />
+                            <span style={{ color: 'gray' }}>{trigger.UniqueID}</span>
+                          </td>
+                          <td>{trigger.ActionsID}</td>
+                          <td>
+                            {timeUntil}
+                            <br />
+                            <span style={{ color: 'gray' }}>
+                              {prettyDate}
+                              <br />
+                              Executed: {trigger.Executed ? 'Yes' : 'No'}
+                            </span>
+                          </td>
+                          <td>
+                            <Button variant="success" onClick={() => handleActionTriggerClick(trigger)}>
+                              View ActionTrigger
+                            </Button>
+                            <br />
+                            <Button
+                              variant="danger"
+                              onClick={() => removeActionTrigger(accountDetails.ID.split(':')[0], accountDetails.ID.split(':')[1], trigger.ActionsID, trigger.UniqueID)}
+                            >
+                              Remove ActionTrigger
+                            </Button>
+                            <br />
+                            <Button
+                              variant="warning"
+                              onClick={() => resetActionTrigger(accountDetails.ID.split(':')[0], accountDetails.ID.split(':')[1], trigger.ActionsID, trigger.UniqueID)}
+                            >
+                              Reset ActionTrigger
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </Table>
               ) : (
@@ -860,9 +939,43 @@ const GetAccounts = ({ cgratesConfig }) => {
           )}
         </Modal.Body>
         <Modal.Footer>
+          {selectedRowData && (
+            <>
+              <Button
+                variant={accountDetails?.Disabled ? 'success' : 'warning'}
+                onClick={() =>
+                  updateAccountState(
+                    selectedRowData.ID.split(':')[0], // Extract Tenant
+                    selectedRowData.ID.split(':')[1], // Extract Account
+                    !accountDetails?.Disabled // Toggle Disabled state
+                  )
+                }
+              >
+                {accountDetails?.Disabled ? 'Enable Account' : 'Disable Account'}
+              </Button>
+
+              <Button
+                variant={accountDetails?.AllowNegative ? 'danger' : 'primary'}
+                onClick={() =>
+                  updateAccountNegative(
+                    selectedRowData.ID.split(':')[0], // Extract Tenant
+                    selectedRowData.ID.split(':')[1], // Extract Account
+                    !accountDetails?.AllowNegative // Toggle AllowNegative state
+                  )
+                }
+              >
+                {accountDetails?.AllowNegative ? 'Disallow Negative' : 'Allow Negative'}
+              </Button>
+            </>
+          )}
           <Button
             variant="danger"
-            onClick={() => removeAccount(selectedRowData.ID.split(':')[0], selectedRowData.ID.split(':')[1])}
+            onClick={() =>
+              removeAccount(
+                selectedRowData.ID.split(':')[0], // Extract Tenant
+                selectedRowData.ID.split(':')[1] // Extract Account
+              )
+            }
           >
             Delete Account
           </Button>
@@ -870,6 +983,8 @@ const GetAccounts = ({ cgratesConfig }) => {
             Close
           </Button>
         </Modal.Footer>
+
+
       </Modal>
 
       {/* Modal for Balance Details */}
