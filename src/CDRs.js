@@ -57,12 +57,16 @@ const CDRs = ({ cgratesConfig }) => {
   const [exportApiQuery, setExportApiQuery] = useState(''); // State to store the export API query
   const [exporterOptions, setExporterOptions] = useState([]); // Dynamically populated exporter list
 
-  const handleDateChange = (type, moment) => {
+  const handleDateChange = (type, value) => {
+    // Check if the value is a valid moment object
+    const momentValue = moment.isMoment(value) && value.isValid() ? value : null;
+  
     setSearchParams({
       ...searchParams,
-      [type]: moment.format('YYYY-MM-DD HH:mm:ss')
+      [type]: momentValue ? momentValue.format('YYYY-MM-DD HH:mm:ss') : '', // Format only if valid
     });
   };
+  
 
   useEffect(() => {
     // Populate exporter options dynamically from cgratesConfig.json_config
