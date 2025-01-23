@@ -56,17 +56,23 @@ const CDRs = ({ cgratesConfig }) => {
   const [isExporting, setIsExporting] = useState(false); // New state for handling export loading
   const [exportApiQuery, setExportApiQuery] = useState(''); // State to store the export API query
   const [exporterOptions, setExporterOptions] = useState([]); // Dynamically populated exporter list
+  const [isVerbose, setIsVerbose] = useState(true); // Default to true
+
+  const handleVerboseChange = (event) => {
+    setIsVerbose(event.target.value === 'true'); // Convert string to boolean
+  };
+
 
   const handleDateChange = (type, value) => {
     // Check if the value is a valid moment object
     const momentValue = moment.isMoment(value) && value.isValid() ? value : null;
-  
+
     setSearchParams({
       ...searchParams,
       [type]: momentValue ? momentValue.format('YYYY-MM-DD HH:mm:ss') : '', // Format only if valid
     });
   };
-  
+
 
   useEffect(() => {
     // Populate exporter options dynamically from cgratesConfig.json_config
@@ -151,7 +157,7 @@ const CDRs = ({ cgratesConfig }) => {
 
     setQuery(newQuery); // Store the query for later use in export
     setApiQuery(JSON.stringify(newQuery, null, 2));
-  
+
     try {
       const response = await fetch(cgratesConfig.url + '/jsonrpc', {
         method: 'POST',
@@ -160,16 +166,16 @@ const CDRs = ({ cgratesConfig }) => {
         },
         body: JSON.stringify(newQuery),
       });
-  
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-  
+
       const data = await response.json();
       const endTime = Date.now();
       const timeTaken = ((endTime - startTime) / 1000).toFixed(2);
       setResponseTime(timeTaken);
-  
+
       if (data && data.result) {
         setResults(data.result); // Handle the fetched results
       } else {
@@ -183,7 +189,7 @@ const CDRs = ({ cgratesConfig }) => {
       setIsLoading(false);
     }
   };
-  
+
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -216,33 +222,33 @@ const CDRs = ({ cgratesConfig }) => {
     setSelectedRowData(null);
   };
 
-// Utility function to format Usage based on ToR
-const formatUsage = (usage, tor) => {
-  if (tor === '*data') {
-    const mb = (usage / (1024 * 1024)).toFixed(2);
-    return (
-      <>
-        {`${mb} MB`}
-        <br />
-        {`(${usage} bytes)`}
-      </>
-    );
-  } else if (tor === '*voice') {
-    const totalSeconds = Math.floor(usage / 1e9); // Convert nanoseconds to seconds
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    const timeFormatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-    return (
-      <>
-        {timeFormatted}
-        <br />
-        {`(${usage} ns)`}
-      </>
-    );
-  }
-  return usage; // Default case, no formatting
-};
+  // Utility function to format Usage based on ToR
+  const formatUsage = (usage, tor) => {
+    if (tor === '*data') {
+      const mb = (usage / (1024 * 1024)).toFixed(2);
+      return (
+        <>
+          {`${mb} MB`}
+          <br />
+          {`(${usage} bytes)`}
+        </>
+      );
+    } else if (tor === '*voice') {
+      const totalSeconds = Math.floor(usage / 1e9); // Convert nanoseconds to seconds
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      const timeFormatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      return (
+        <>
+          {timeFormatted}
+          <br />
+          {`(${usage} ns)`}
+        </>
+      );
+    }
+    return usage; // Default case, no formatting
+  };
 
   const handleExport = async () => {
     if (!query) {
@@ -252,7 +258,7 @@ const formatUsage = (usage, tor) => {
 
     setIsExporting(true);
 
-    // Use the existing query and add the ExporterIDs
+    // Use the existing query and add the ExporterIDs and Verbose
     const exportQuery = {
       ...query,
       method: 'APIerSv1.ExportCDRs', // Change the method for export
@@ -262,7 +268,7 @@ const formatUsage = (usage, tor) => {
         Limit: undefined,
         Offset: undefined,
         ExporterIDs: [selectedExporter], // Add the ExporterIDs
-        Verbose: true
+        Verbose: isVerbose, // Add the Verbose value from the state
       }],
       id: 2
     };
@@ -270,7 +276,6 @@ const formatUsage = (usage, tor) => {
     setExportApiQuery(JSON.stringify(exportQuery, null, 2));
 
     try {
-      const selectedInstance = "test"; // Simulating instance retrieval
       const response = await fetch(cgratesConfig.url + '/jsonrpc', {
         method: 'POST',
         headers: {
@@ -286,12 +291,6 @@ const formatUsage = (usage, tor) => {
       const data = await response.json();
       console.log('Export data received:', data);
 
-      // Remove PositiveExports from the result
-      if (data.result && data.result[selectedExporter]) {
-        const { PositiveExports, ...filteredResult } = data.result[selectedExporter];
-        data.result[selectedExporter] = filteredResult;
-      }
-
       setExportResult(JSON.stringify(data, null, 2));
     } catch (error) {
       console.error('Error exporting data:', error);
@@ -300,6 +299,7 @@ const formatUsage = (usage, tor) => {
       setIsExporting(false);
     }
   };
+
 
   const handleExportModalOpen = () => {
     setShowExportModal(true);
@@ -315,7 +315,7 @@ const formatUsage = (usage, tor) => {
   return (
     <div className="App">
       <Container>
-      <Form onSubmit={handleSubmit} className="mt-4">
+        <Form onSubmit={handleSubmit} className="mt-4">
           <Row>
             <Col md={3}>
               <Form.Group controlId="formSetupTimeStart">
@@ -523,44 +523,69 @@ const formatUsage = (usage, tor) => {
         <Modal.Header closeButton>
           <Modal.Title>Export CDRs</Modal.Title>
         </Modal.Header>
-        <Modal.Body>
-          <Form.Group controlId="formExporterId">
-            <Form.Label>Exporter ID</Form.Label>
-            <Form.Control as="select" value={selectedExporter} onChange={(e) => setSelectedExporter(e.target.value)}>
-              <option value="">Select Exporter</option>
-              {exporterOptions.map((option, index) => (
-                <option key={index} value={option.value}>{option.label}</option>
-              ))}
-            </Form.Control>
-          </Form.Group>
+      <Modal.Body>
+        <Form.Group controlId="formExporterId">
+          <Form.Label>Exporter ID</Form.Label>
+          <Form.Control as="select" value={selectedExporter} onChange={(e) => setSelectedExporter(e.target.value)}>
+            <option value="">Select Exporter</option>
+            {exporterOptions.map((option, index) => (
+              <option key={index} value={option.value}>{option.label}</option>
+            ))}
+          </Form.Control>
+        </Form.Group>
 
-          {exportApiQuery && (
-            <pre className="mt-3">API Call: {exportApiQuery}</pre>
-          )}
+        <Form.Group controlId="formVerbose">
+          <Form.Label>Verbose</Form.Label>
+          <br />
+          <Form.Text muted>Enabling Verbose output is much slower - This may timeout some browsers</Form.Text>
+          <Form.Check
+            type="radio"
+            id="verbose-true"
+            name="verbose"
+            value="true"
+            label="True"
+            checked={isVerbose === true}
+            onChange={handleVerboseChange}
+          />
+          <Form.Check
+            type="radio"
+            id="verbose-false"
+            name="verbose"
+            value="false"
+            label="False"
+            checked={isVerbose === false}
+            onChange={handleVerboseChange}
+          />
+        </Form.Group>
 
-          {isExporting ? (
-            <div className="text-center mt-3">
-              <Spinner animation="border" role="status">
-                <span className="sr-only">Exporting...</span>
-              </Spinner>
-              <p>Exporting, please wait...</p>
-            </div>
-          ) : (
-            exportResult && (
-              <pre className="mt-3">API Response: {exportResult}</pre>
-            )
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="primary" onClick={handleExport} disabled={isExporting}>
-            Export
-          </Button>
-          <Button variant="secondary" onClick={handleExportModalClose} disabled={isExporting}>
-            Close
-          </Button>
-        </Modal.Footer>
-      </Modal>
-    </div>
+        {exportApiQuery && (
+          <pre className="mt-3">API Call: {exportApiQuery}</pre>
+        )}
+
+        {isExporting ? (
+          <div className="text-center mt-3">
+            <Spinner animation="border" role="status">
+              <span className="sr-only">Exporting...</span>
+            </Spinner>
+            <p>Exporting, please wait...</p>
+          </div>
+        ) : (
+          exportResult && (
+            <pre className="mt-3">API Response: {exportResult}</pre>
+          )
+        )}
+      </Modal.Body>
+
+      <Modal.Footer>
+        <Button variant="primary" onClick={handleExport} disabled={isExporting}>
+          Export
+        </Button>
+        <Button variant="secondary" onClick={handleExportModalClose} disabled={isExporting}>
+          Close
+        </Button>
+      </Modal.Footer>
+    </Modal>
+    </div >
   );
 };
 
