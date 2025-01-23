@@ -152,7 +152,7 @@ const CDRs = ({ cgratesConfig }) => {
       const destinations = searchParams.destination.includes(',')
         ? searchParams.destination.split(',').map((dest) => dest.trim())
         : [searchParams.destination];
-      newQuery.params[0].Destinations = destinations;
+      newQuery.params[0].DestinationPrefixes = destinations;
     }
 
     setQuery(newQuery); // Store the query for later use in export
