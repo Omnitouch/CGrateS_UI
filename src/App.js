@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import { Modal, Button, Navbar, Nav, Container, Form, Alert, NavDropdown } from 'react-bootstrap';
+import { Modal, Button, Navbar, Nav, Container, Form, Alert, NavDropdown, Offcanvas } from 'react-bootstrap';
 import CDRs from './CDRs';
 import Accounts from './Accounts';
 import ActionPlans from './ActionPlans';
@@ -25,6 +25,7 @@ import RouteProfiles from './RouteProfiles.js';
 import { BrowserRouter as Router, Route, Routes, Link, useLocation } from 'react-router-dom';
 import { marked } from 'marked';
 
+
 function App() {
   const [cgratesConfig, setCgratesConfig] = useState({
     url: 'http://localhost:2080',
@@ -37,7 +38,14 @@ function App() {
   const [testResult, setTestResult] = useState('');
   const [isTesting, setIsTesting] = useState(false);
   const [configError, setConfigError] = useState('');
-  const [readmeContent, setReadmeContent] = useState(''); // State for storing markdown content
+  const [readmeContent, setReadmeContent] = useState('');
+  const [showOffcanvas, setShowOffcanvas] = useState(false); // State for Offcanvas visibility
+
+  const handleCloseModal = () => setShowModal(false);
+
+
+  const handleToggleOffcanvas = () => setShowOffcanvas(!showOffcanvas);
+
 
   useEffect(() => {
     // Function to load the configuration from config.json
@@ -222,7 +230,7 @@ function App() {
         '/ratingprofiles': 'RatingProfiles - Omnitouch CGrateS UI',
         '/timings': 'Timings - Omnitouch CGrateS UI',
         '/stats': 'Stats - Omnitouch CGrateS UI',
-        '/routeprofiles' : 'Route PRofiles - Omnitouch CGrateS UI',
+        '/routeprofiles': 'Route PRofiles - Omnitouch CGrateS UI',
         '/tariffplans': 'TariffPlans - Omnitouch CGrateS UI',
         '/getcost': 'GetCost - Omnitouch CGrateS UI',
         '/event-reader': 'Event Reader - Omnitouch CGrateS UI',
@@ -238,53 +246,62 @@ function App() {
   return (
     <Router basename="/">
       <TitleUpdater /> {/* Updates the document title whenever the route changes */}
-      <Navbar bg="dark" variant="dark" expand="lg">
+      <Navbar bg="dark" variant="dark" expand={false} fixed="top">
         <Container>
           <Navbar.Brand as={Link} to="/">Omnitouch CGrateS UI</Navbar.Brand>
-          <Navbar.Toggle aria-controls="basic-navbar-nav" />
-          <Navbar.Collapse id="basic-navbar-nav">
-            <Nav className="me-auto">
-              <Nav.Link as={Link} to="/cdrs">CDRs</Nav.Link>
-              <Nav.Link as={Link} to="/accounts">Accounts</Nav.Link>
-              <Nav.Link as={Link} to="/sessions">Sessions</Nav.Link>
-              <Nav.Link as={Link} to="/resources">Resources</Nav.Link>
-              <Nav.Link as={Link} to="/stats">Stats</Nav.Link>
-              <Nav.Link as={Link} to="/filters">Filters</Nav.Link>
-              <NavDropdown title="Actions & ActionPlans" id="actions-dropdown">
-                <NavDropdown.Item as={Link} to="/action-triggers">Action Triggers</NavDropdown.Item>
-                <NavDropdown.Item as={Link} to="/action-plans">Action Plans</NavDropdown.Item>
-                <NavDropdown.Item as={Link} to="/actions">Actions</NavDropdown.Item>                
-              </NavDropdown>              
-              <Nav.Link as={Link} to="/attributes">Attributes</Nav.Link>
-              <Nav.Link as={Link} to="/event-reader">ERS</Nav.Link>
-              <NavDropdown title="Rate Plans & Profiles" id="rate-plans-dropdown">
-                <NavDropdown.Item as={Link} to="/chargers">Chargers</NavDropdown.Item>
-                <NavDropdown.Item as={Link} to="/destinationrates">DestinationRates</NavDropdown.Item>
-                <NavDropdown.Item as={Link} to="/ratingplans">RatingPlans</NavDropdown.Item>
-                <NavDropdown.Item as={Link} to="/ratingprofiles">RatingProfiles</NavDropdown.Item>
-                <NavDropdown.Item as={Link} to="/timings">Timings</NavDropdown.Item>
-                <NavDropdown.Item as={Link} to="/getcost">GetCost</NavDropdown.Item>
-                <NavDropdown.Item as={Link} to="/routes">Routes</NavDropdown.Item>
-                <NavDropdown.Item as={Link} to="/routeprofiles">RouteProfiles</NavDropdown.Item>
-                <NavDropdown.Item as={Link} to="/tariffplans">TariffPlans</NavDropdown.Item>
-              </NavDropdown>
-              <Nav.Link as={Link} to="/config">Config</Nav.Link>
-            </Nav>
-            <Button variant="outline-info" onClick={handleOpenModal}>
-              Connection to CGrateS: {testResult ? (testResult.includes('successful') ? 'Connected' : 'Disconnected') : 'Unknown'}
-              <span
-                style={{
-                  backgroundColor: testResult.includes('successful') ? 'green' : 'red',
-                  color: 'white',
-                  padding: '5px 10px',
-                  borderRadius: '10px',
-                  marginLeft: '10px',
-                }}
-              ></span>
-            </Button>
-          </Navbar.Collapse>
+          <Button variant="outline-info" onClick={handleOpenModal}>
+            Connection to CGrateS: {testResult ? (testResult.includes('successful') ? 'Connected' : 'Disconnected') : 'Unknown'}
+            <span
+              style={{
+                backgroundColor: testResult.includes('successful') ? 'green' : 'red',
+                color: 'white',
+                padding: '5px 10px',
+                borderRadius: '10px',
+                marginLeft: '10px',
+              }}
+            ></span>
+          </Button>
+          <Button variant="outline-light" onClick={handleToggleOffcanvas}>
+            ☰
+          </Button>
+
         </Container>
       </Navbar>
+
+      <Offcanvas show={showOffcanvas} onHide={handleToggleOffcanvas} placement="end">
+        <Offcanvas.Header closeButton>
+          <Offcanvas.Title>Navigation</Offcanvas.Title>
+        </Offcanvas.Header>
+        <Offcanvas.Body>
+          <Nav className="flex-column">
+            <Nav.Link as={Link} to="/" onClick={handleToggleOffcanvas}>Home</Nav.Link>
+            <Nav.Link as={Link} to="/cdrs" onClick={handleToggleOffcanvas}>CDRs</Nav.Link>
+            <Nav.Link as={Link} to="/accounts" onClick={handleToggleOffcanvas}>Accounts</Nav.Link>
+            <Nav.Link as={Link} to="/sessions" onClick={handleToggleOffcanvas}>Sessions</Nav.Link>
+            <Nav.Link as={Link} to="/resources" onClick={handleToggleOffcanvas}>Resources</Nav.Link>
+            <Nav.Link as={Link} to="/stats" onClick={handleToggleOffcanvas}>Stats</Nav.Link>
+            <NavDropdown title="Actions & ActionPlans" id="actions-dropdown">
+              <NavDropdown.Item as={Link} to="/action-triggers" onClick={handleToggleOffcanvas}>Action Triggers</NavDropdown.Item>
+              <NavDropdown.Item as={Link} to="/action-plans" onClick={handleToggleOffcanvas}>Action Plans</NavDropdown.Item>
+              <NavDropdown.Item as={Link} to="/actions" onClick={handleToggleOffcanvas}>Actions</NavDropdown.Item>
+            </NavDropdown>
+            <Nav.Link as={Link} to="/attributes" onClick={handleToggleOffcanvas}>Attributes</Nav.Link>
+            <Nav.Link as={Link} to="/event-reader" onClick={handleToggleOffcanvas}>ERS</Nav.Link>
+            <NavDropdown title="Rate Plans & Profiles" id="rate-plans-dropdown">
+              <NavDropdown.Item as={Link} to="/chargers" onClick={handleToggleOffcanvas}>Chargers</NavDropdown.Item>
+              <NavDropdown.Item as={Link} to="/destinationrates" onClick={handleToggleOffcanvas}>DestinationRates</NavDropdown.Item>
+              <NavDropdown.Item as={Link} to="/ratingplans" onClick={handleToggleOffcanvas}>RatingPlans</NavDropdown.Item>
+              <NavDropdown.Item as={Link} to="/ratingprofiles" onClick={handleToggleOffcanvas}>RatingProfiles</NavDropdown.Item>
+              <NavDropdown.Item as={Link} to="/timings" onClick={handleToggleOffcanvas}>Timings</NavDropdown.Item>
+              <NavDropdown.Item as={Link} to="/getcost" onClick={handleToggleOffcanvas}>GetCost</NavDropdown.Item>
+              <NavDropdown.Item as={Link} to="/routes" onClick={handleToggleOffcanvas}>Routes</NavDropdown.Item>
+              <NavDropdown.Item as={Link} to="/routeprofiles" onClick={handleToggleOffcanvas}>RouteProfiles</NavDropdown.Item>
+              <NavDropdown.Item as={Link} to="/tariffplans" onClick={handleToggleOffcanvas}>TariffPlans</NavDropdown.Item>
+            </NavDropdown>
+            <Nav.Link as={Link} to="/config" onClick={handleToggleOffcanvas}>Config</Nav.Link>
+          </Nav>
+        </Offcanvas.Body>
+      </Offcanvas>
 
       <Container>
         <Routes>
