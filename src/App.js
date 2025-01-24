@@ -303,7 +303,7 @@ function App() {
         </Offcanvas.Body>
       </Offcanvas>
 
-      <Container>
+      <Container style={{ paddingTop: '70px' }}>
         <Routes>
           {/* Home route showing the parsed Readme.md */}
           <Route
