@@ -256,7 +256,7 @@ function App() {
                 <NavDropdown.Item as={Link} to="/actions">Actions</NavDropdown.Item>                
               </NavDropdown>              
               <Nav.Link as={Link} to="/attributes">Attributes</Nav.Link>
-              <NavDropdown.Item as={Link} to="/event-reader">ERS</NavDropdown.Item>
+              <Nav.Link as={Link} to="/event-reader">ERS</Nav.Link>
               <NavDropdown title="Rate Plans & Profiles" id="rate-plans-dropdown">
                 <NavDropdown.Item as={Link} to="/chargers">Chargers</NavDropdown.Item>
                 <NavDropdown.Item as={Link} to="/destinationrates">DestinationRates</NavDropdown.Item>
