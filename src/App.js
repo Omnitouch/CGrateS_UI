@@ -42,6 +42,8 @@ function App() {
   const [showOffcanvas, setShowOffcanvas] = useState(false); // State for Offcanvas visibility
 
   const handleCloseModal = () => setShowModal(false);
+  const [showActionsDropdown, setShowActionsDropdown] = useState(false);
+  const [showRateDropdown, setShowRateDropdown] = useState(false);
 
 
   const handleToggleOffcanvas = () => setShowOffcanvas(!showOffcanvas);
@@ -280,24 +282,53 @@ function App() {
             <Nav.Link as={Link} to="/sessions" onClick={handleToggleOffcanvas}>Sessions</Nav.Link>
             <Nav.Link as={Link} to="/resources" onClick={handleToggleOffcanvas}>Resources</Nav.Link>
             <Nav.Link as={Link} to="/stats" onClick={handleToggleOffcanvas}>Stats</Nav.Link>
-            <NavDropdown title="Actions & ActionPlans" id="actions-dropdown">
-              <NavDropdown.Item as={Link} to="/action-triggers" onClick={handleToggleOffcanvas}>Action Triggers</NavDropdown.Item>
-              <NavDropdown.Item as={Link} to="/action-plans" onClick={handleToggleOffcanvas}>Action Plans</NavDropdown.Item>
-              <NavDropdown.Item as={Link} to="/actions" onClick={handleToggleOffcanvas}>Actions</NavDropdown.Item>
-            </NavDropdown>
+
+            {/* Custom Dropdown for Actions & ActionPlans */}
+            <div>
+              <Button
+                variant="link"
+                className="dropdown-toggle"
+                onClick={() => setShowActionsDropdown(!showActionsDropdown)}
+                aria-expanded={showActionsDropdown}
+              >
+                Actions & ActionPlans
+              </Button>
+              {showActionsDropdown && (
+                <div style={{ paddingLeft: '1rem', borderLeft: '2px solid #ccc', marginTop: '0.5rem' }}>
+                  <Nav.Link as={Link} to="/action-triggers" onClick={handleToggleOffcanvas}>Action Triggers</Nav.Link>
+                  <Nav.Link as={Link} to="/action-plans" onClick={handleToggleOffcanvas}>Action Plans</Nav.Link>
+                  <Nav.Link as={Link} to="/actions" onClick={handleToggleOffcanvas}>Actions</Nav.Link>
+                </div>
+              )}
+            </div>
+
             <Nav.Link as={Link} to="/attributes" onClick={handleToggleOffcanvas}>Attributes</Nav.Link>
             <Nav.Link as={Link} to="/event-reader" onClick={handleToggleOffcanvas}>ERS</Nav.Link>
-            <NavDropdown title="Rate Plans & Profiles" id="rate-plans-dropdown">
-              <NavDropdown.Item as={Link} to="/chargers" onClick={handleToggleOffcanvas}>Chargers</NavDropdown.Item>
-              <NavDropdown.Item as={Link} to="/destinationrates" onClick={handleToggleOffcanvas}>DestinationRates</NavDropdown.Item>
-              <NavDropdown.Item as={Link} to="/ratingplans" onClick={handleToggleOffcanvas}>RatingPlans</NavDropdown.Item>
-              <NavDropdown.Item as={Link} to="/ratingprofiles" onClick={handleToggleOffcanvas}>RatingProfiles</NavDropdown.Item>
-              <NavDropdown.Item as={Link} to="/timings" onClick={handleToggleOffcanvas}>Timings</NavDropdown.Item>
-              <NavDropdown.Item as={Link} to="/getcost" onClick={handleToggleOffcanvas}>GetCost</NavDropdown.Item>
-              <NavDropdown.Item as={Link} to="/routes" onClick={handleToggleOffcanvas}>Routes</NavDropdown.Item>
-              <NavDropdown.Item as={Link} to="/routeprofiles" onClick={handleToggleOffcanvas}>RouteProfiles</NavDropdown.Item>
-              <NavDropdown.Item as={Link} to="/tariffplans" onClick={handleToggleOffcanvas}>TariffPlans</NavDropdown.Item>
-            </NavDropdown>
+
+            {/* Custom Dropdown for Rate Plans & Profiles */}
+            <div>
+              <Button
+                variant="link"
+                className="dropdown-toggle"
+                onClick={() => setShowRateDropdown(!showRateDropdown)}
+                aria-expanded={showRateDropdown}
+              >
+                Rate Plans & Profiles
+              </Button>
+              {showRateDropdown && (
+                <div style={{ paddingLeft: '1rem', borderLeft: '2px solid #ccc', marginTop: '0.5rem' }}>
+                  <Nav.Link as={Link} to="/chargers" onClick={handleToggleOffcanvas}>Chargers</Nav.Link>
+                  <Nav.Link as={Link} to="/destinationrates" onClick={handleToggleOffcanvas}>DestinationRates</Nav.Link>
+                  <Nav.Link as={Link} to="/ratingplans" onClick={handleToggleOffcanvas}>RatingPlans</Nav.Link>
+                  <Nav.Link as={Link} to="/ratingprofiles" onClick={handleToggleOffcanvas}>RatingProfiles</Nav.Link>
+                  <Nav.Link as={Link} to="/timings" onClick={handleToggleOffcanvas}>Timings</Nav.Link>
+                  <Nav.Link as={Link} to="/getcost" onClick={handleToggleOffcanvas}>GetCost</Nav.Link>
+                  <Nav.Link as={Link} to="/routes" onClick={handleToggleOffcanvas}>Routes</Nav.Link>
+                  <Nav.Link as={Link} to="/routeprofiles" onClick={handleToggleOffcanvas}>RouteProfiles</Nav.Link>
+                  <Nav.Link as={Link} to="/tariffplans" onClick={handleToggleOffcanvas}>TariffPlans</Nav.Link>
+                </div>
+              )}
+            </div>
             <Nav.Link as={Link} to="/config" onClick={handleToggleOffcanvas}>Config</Nav.Link>
           </Nav>
         </Offcanvas.Body>

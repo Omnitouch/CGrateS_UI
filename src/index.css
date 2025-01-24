@@ -11,3 +11,29 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+.dropdown-container {
+  margin-bottom: 1rem;
+}
+
+.dropdown-toggle {
+  font-weight: bold;
+  color: #007bff;
+  text-decoration: none;
+}
+
+.dropdown-toggle:hover {
+  text-decoration: underline;
+}
+
+.dropdown-menu {
+  margin-left: 1rem;
+  padding-left: 1rem;
+  border-left: 2px solid #ccc;
+}
+
+.dropdown-content {
+  padding-left: 1rem;
+  border-left: 2px solid #ccc;
+  margin-top: 0.5rem;
+}
