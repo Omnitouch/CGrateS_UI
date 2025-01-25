@@ -22,6 +22,7 @@ import Chargers from './Chargers.js';
 import StatsS from './Stats.js';
 import EventReader from './EventReader.js';
 import RouteProfiles from './RouteProfiles.js';
+import ExportedCDRs from './ExportedCDRs.js';
 import { BrowserRouter as Router, Route, Routes, Link, useLocation } from 'react-router-dom';
 import { marked } from 'marked';
 
@@ -236,6 +237,7 @@ function App() {
         '/tariffplans': 'TariffPlans - Omnitouch CGrateS UI',
         '/getcost': 'GetCost - Omnitouch CGrateS UI',
         '/event-reader': 'Event Reader - Omnitouch CGrateS UI',
+        '/exported-cdrs': 'Exported CDRs - Omnitouch CGrateS UI',
         '/config': 'Config - Omnitouch CGrateS UI',
       };
       const defaultTitle = 'Omnitouch CGrateS UI';
@@ -329,6 +331,7 @@ function App() {
                 </div>
               )}
             </div>
+            <Nav.Link as={Link} to="/exported-cdrs" onClick={handleToggleOffcanvas}>Exported CDRs</Nav.Link>
             <Nav.Link as={Link} to="/config" onClick={handleToggleOffcanvas}>Config</Nav.Link>
           </Nav>
         </Offcanvas.Body>
@@ -366,6 +369,7 @@ function App() {
           <Route path="/getcost" element={<GetCostView cgratesConfig={cgratesConfig} />} />
           <Route path="/tariffplans" element={<TariffPlans cgratesConfig={cgratesConfig} />} />
           <Route path="/event-reader" element={<EventReader cgratesConfig={cgratesConfig} />} />
+          <Route path="/exported-cdrs" element={<ExportedCDRs cgratesConfig={cgratesConfig} />} />
           <Route path="/config" element={<Config cgratesConfig={cgratesConfig} />} />
         </Routes>
       </Container>
