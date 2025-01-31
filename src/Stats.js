@@ -14,6 +14,7 @@ const StatsS = ({ cgratesConfig }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [responseTime, setResponseTime] = useState(null);
+    const [genericMetricInput, setGenericMetricInput] = useState({});
 
     const metricsOptions = [
         { value: '*asr', label: 'Answer-seizure ratio' },
@@ -79,7 +80,7 @@ const StatsS = ({ cgratesConfig }) => {
                 params: [{ Tenant: searchParams.tenant, ID: profileId }],
                 id: 2,
             };
-
+    
             const response = await fetch(cgratesConfig.url + '/jsonrpc', {
                 method: 'POST',
                 headers: {
@@ -87,12 +88,34 @@ const StatsS = ({ cgratesConfig }) => {
                 },
                 body: JSON.stringify(query),
             });
-
+    
             const data = await response.json();
-
+    
             if (data.result) {
-                setSelectedProfile(data.result);
-                setEditProfile({ ...data.result });
+                const profile = data.result;
+    
+                // Parse metrics to separate metric type and generic value
+                const parsedMetrics = profile.Metrics.map((metric) => {
+                    const [metricType, genericValue] = metric.MetricID.split('#');
+                    return {
+                        ...metric,
+                        MetricID: metricType, // Strip the # and value
+                        genericValue: genericValue || '', // Store the generic value
+                    };
+                });
+    
+                setSelectedProfile(profile);
+                setEditProfile({ ...profile, Metrics: parsedMetrics });
+    
+                // Set generic metric input values
+                const genericInputs = parsedMetrics.reduce((acc, metric, index) => {
+                    if (metric.genericValue) {
+                        acc[index] = metric.genericValue;
+                    }
+                    return acc;
+                }, {});
+                setGenericMetricInput(genericInputs);
+    
                 setShowModal(true);
                 setIsEditing(false);
             }
@@ -118,9 +141,19 @@ const StatsS = ({ cgratesConfig }) => {
         setEditProfile({ ...editProfile, [name]: value });
     };
 
+    const handleGenericInputChange = (index, value) => {
+        setGenericMetricInput({ ...genericMetricInput, [index]: value });
+    };
+
     const handleMetricChange = (index, newValue) => {
         const updatedMetrics = [...editProfile.Metrics];
         updatedMetrics[index].MetricID = newValue;
+
+        // Reset the generic input if the metric is not generic
+        if (!newValue.startsWith('*sum') && !newValue.startsWith('*average') && !newValue.startsWith('*distinct')) {
+            setGenericMetricInput({ ...genericMetricInput, [index]: '' });
+        }
+
         setEditProfile({ ...editProfile, Metrics: updatedMetrics });
     };
 
@@ -139,16 +172,29 @@ const StatsS = ({ cgratesConfig }) => {
     const saveProfile = async () => {
         setIsLoading(true);
         try {
-            // Ensure TTL is a number and Filters are properly mapped to FilterIDs
+            // Sanitize the profile data
             const sanitizedProfile = {
                 ...editProfile,
-                TTL: parseInt(editProfile.TTL, 10), // Convert TTL to a number
-                QueueLength: parseInt(editProfile.QueueLength, 10), // Convert QueueLength to a number
-                FilterIDs: editProfile.FilterIDs || [], // Ensure FilterIDs is an array
-                Metrics: (editProfile.Metrics || []).map((metric) => ({
-                    ...metric,
-                    FilterIDs: metric.FilterIDs || [], // Ensure FilterIDs for metrics is an array
-                })),
+                TTL: parseInt(editProfile.TTL, 10),
+                QueueLength: parseInt(editProfile.QueueLength, 10),
+                FilterIDs: editProfile.FilterIDs || [],
+                Metrics: (editProfile.Metrics || []).map((metric, index) => {
+                    let metricID = metric.MetricID;
+
+                    // Append generic input value if applicable
+                    if (
+                        (metricID.startsWith('*sum') || metricID.startsWith('*average') || metricID.startsWith('*distinct')) &&
+                        genericMetricInput[index]
+                    ) {
+                        metricID = `${metricID}#${genericMetricInput[index]}`;
+                    }
+
+                    return {
+                        ...metric,
+                        MetricID: metricID,
+                        FilterIDs: metric.FilterIDs || [],
+                    };
+                }),
             };
 
             const query = {
@@ -465,6 +511,21 @@ const StatsS = ({ cgratesConfig }) => {
                                                 ))}
                                             </Form.Control>
                                         </div>
+
+                                        {/* Render input field for generic metrics */}
+                                        {(metric.MetricID.startsWith('*sum') || metric.MetricID.startsWith('*average') || metric.MetricID.startsWith('*distinct')) && (
+                                            <Form.Group>
+                                                <Form.Label>Input Value</Form.Label>
+                                                <Form.Control
+                                                    type="text"
+                                                    value={genericMetricInput[index] || ''}
+                                                    onChange={(e) => handleGenericInputChange(index, e.target.value)}
+                                                    placeholder="Enter value (e.g., 1234)"
+                                                />
+                                            </Form.Group>
+                                        )}
+
+                                        {/* Render filters for the metric */}
                                         {(metric.FilterIDs || []).map((filter, filterIndex) => (
                                             <div key={filterIndex} style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
                                                 <Form.Control
