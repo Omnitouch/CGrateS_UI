@@ -42,14 +42,14 @@ const StatsS = ({ cgratesConfig }) => {
         setIsLoading(true);
         setProfiles([]);
         const startTime = Date.now();
-
+    
         try {
             const query = {
                 method: 'APIerSv1.GetStatQueueProfileIDs',
                 params: [{ Tenant: searchParams.tenant, Limit: null, Offset: null }],
                 id: 1,
             };
-
+    
             const response = await fetch(cgratesConfig.url + '/jsonrpc', {
                 method: 'POST',
                 headers: {
@@ -57,13 +57,15 @@ const StatsS = ({ cgratesConfig }) => {
                 },
                 body: JSON.stringify(query),
             });
-
+    
             const data = await response.json();
             const endTime = Date.now();
             setResponseTime(((endTime - startTime) / 1000).toFixed(2));
-
+    
             if (data.result) {
-                setProfiles(data.result);
+                // Sort profiles alphabetically
+                const sortedProfiles = data.result.sort((a, b) => a.localeCompare(b));
+                setProfiles(sortedProfiles);
             }
         } catch (error) {
             console.error('Error fetching profiles:', error);
