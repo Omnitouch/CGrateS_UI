@@ -24,9 +24,9 @@ const StatsS = ({ cgratesConfig }) => {
         { value: '*tcc', label: 'Total call cost' },
         { value: '*pdd', label: 'Post dial delay' },
         { value: '*ddc', label: 'Distinct destination count' },
-        { value: '*sum', label: 'Generic sum (e.g., *sum#FieldName)' },
-        { value: '*average', label: 'Generic average (e.g., *average#FieldName)' },
-        { value: '*distinct', label: 'Generic distinct (e.g., *distinct#FieldName)' },
+        { value: '*sum', label: 'Generic sum' },
+        { value: '*average', label: 'Generic average' },
+        { value: '*distinct', label: 'Generic distinct' },
     ];
 
     useEffect(() => {
@@ -38,18 +38,23 @@ const StatsS = ({ cgratesConfig }) => {
         setSearchParams({ ...searchParams, [name]: value });
     };
 
+    const getMetricLabel = (metricID) => {
+        const metric = metricsOptions.find((option) => option.value === metricID);
+        return metric ? metric.label : metricID; // Fallback to the raw MetricID if not found
+    };
+
     const fetchProfiles = async () => {
         setIsLoading(true);
         setProfiles([]);
         const startTime = Date.now();
-    
+
         try {
             const query = {
                 method: 'APIerSv1.GetStatQueueProfileIDs',
                 params: [{ Tenant: searchParams.tenant, Limit: null, Offset: null }],
                 id: 1,
             };
-    
+
             const response = await fetch(cgratesConfig.url + '/jsonrpc', {
                 method: 'POST',
                 headers: {
@@ -57,11 +62,11 @@ const StatsS = ({ cgratesConfig }) => {
                 },
                 body: JSON.stringify(query),
             });
-    
+
             const data = await response.json();
             const endTime = Date.now();
             setResponseTime(((endTime - startTime) / 1000).toFixed(2));
-    
+
             if (data.result) {
                 // Sort profiles alphabetically
                 const sortedProfiles = data.result.sort((a, b) => a.localeCompare(b));
@@ -82,7 +87,7 @@ const StatsS = ({ cgratesConfig }) => {
                 params: [{ Tenant: searchParams.tenant, ID: profileId }],
                 id: 2,
             };
-    
+
             const response = await fetch(cgratesConfig.url + '/jsonrpc', {
                 method: 'POST',
                 headers: {
@@ -90,12 +95,12 @@ const StatsS = ({ cgratesConfig }) => {
                 },
                 body: JSON.stringify(query),
             });
-    
+
             const data = await response.json();
-    
+
             if (data.result) {
                 const profile = data.result;
-    
+
                 // Parse metrics to separate metric type and generic value
                 const parsedMetrics = profile.Metrics.map((metric) => {
                     const [metricType, genericValue] = metric.MetricID.split('#');
@@ -105,10 +110,10 @@ const StatsS = ({ cgratesConfig }) => {
                         genericValue: genericValue || '', // Store the generic value
                     };
                 });
-    
+
                 setSelectedProfile(profile);
                 setEditProfile({ ...profile, Metrics: parsedMetrics });
-    
+
                 // Set generic metric input values
                 const genericInputs = parsedMetrics.reduce((acc, metric, index) => {
                     if (metric.genericValue) {
@@ -117,7 +122,7 @@ const StatsS = ({ cgratesConfig }) => {
                     return acc;
                 }, {});
                 setGenericMetricInput(genericInputs);
-    
+
                 setShowModal(true);
                 setIsEditing(false);
             }
@@ -639,11 +644,20 @@ const StatsS = ({ cgratesConfig }) => {
                 <Modal.Body>
                     {metricsDetails ? (
                         <ListGroup>
-                            {Object.entries(metricsDetails).map(([key, value], index) => (
-                                <ListGroup.Item key={index}>
-                                    <strong>{key}:</strong> {value}
-                                </ListGroup.Item>
-                            ))}
+                            {Object.entries(metricsDetails).map(([key, value], index) => {
+                                // Extract the metric type and value (e.g., "*sum#1" => ["*sum", "1"])
+                                const [metricType, metricValue] = key.split('#');
+                                const metricLabel = getMetricLabel(metricType);
+
+                                // Format the display string (e.g., "Generic Sum: 1")
+                                const displayText = metricValue ? `${metricLabel} of field #${metricValue}` : metricLabel;
+
+                                return (
+                                    <ListGroup.Item key={index}>
+                                        <strong>{displayText}:</strong> {value}
+                                    </ListGroup.Item>
+                                );
+                            })}
                         </ListGroup>
                     ) : (
                         <p>No metrics available.</p>
