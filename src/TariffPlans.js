@@ -18,44 +18,44 @@ const TariffPlans = ({ cgratesConfig }) => {
   const [modalMessage, setModalMessage] = useState('');
 
   // Fetch TPIDs on load
-  useEffect(() => {
-    const fetchTPIDs = async () => {
-      setIsLoading(true);
-      setError('');
+  const fetchTPIDs = async () => {
+    setIsLoading(true);
+    setError('');
 
-      const requestBody = {
-        method: 'APIerSv1.GetTPIds',
-        params: [],
-        id: 1,
-        jsonrpc: '2.0',
-      };
-
-      try {
-        const response = await fetch(`${cgratesConfig.url}/jsonrpc`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        if (data.result) {
-          setTPIDs(data.result);
-        } else if (data.error) {
-          setError(data.error.message || 'Failed to fetch TPIDs.');
-        }
-      } catch (err) {
-        setError('Error fetching TPIDs: ' + err.message);
-      } finally {
-        setIsLoading(false);
-      }
+    const requestBody = {
+      method: 'APIerSv1.GetTPIds',
+      params: [],
+      id: 1,
+      jsonrpc: '2.0',
     };
 
+    try {
+      const response = await fetch(`${cgratesConfig.url}/jsonrpc`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.result) {
+        setTPIDs(data.result);
+      } else if (data.error) {
+        setError(data.error.message || 'Failed to fetch TPIDs.');
+      }
+    } catch (err) {
+      setError('Error fetching TPIDs: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchTPIDs();
   }, [cgratesConfig.url]);
 
@@ -114,6 +114,7 @@ const TariffPlans = ({ cgratesConfig }) => {
       () => {
         setModalMessage(`Successfully removed Tariff Plan: ${tpid}`);
         setShowModal(true);
+        fetchTPIDs(); // Reload data after removal
       }
     );
   };
