@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Form, Button, Container, Row, Col, Table, Modal, Spinner, Alert } from 'react-bootstrap';
 
 const RatingProfiles = ({ cgratesConfig }) => {
-    const [searchParams, setSearchParams] = useState({ tenant: '' });
     const [ratingProfiles, setRatingProfiles] = useState([]);
     const [selectedProfile, setSelectedProfile] = useState(null);
     const [showModal, setShowModal] = useState(false);
@@ -19,6 +18,7 @@ const RatingProfiles = ({ cgratesConfig }) => {
 
     useEffect(() => {
         fetchTPIdsAndRatingPlans();
+        fetchRatingProfiles();
     }, []);
 
     const fetchTPIdsAndRatingPlans = async () => {
@@ -63,11 +63,6 @@ const RatingProfiles = ({ cgratesConfig }) => {
         }
     };
 
-    const handleInputChange = (event) => {
-        const { name, value } = event.target;
-        setSearchParams({ ...searchParams, [name]: value });
-    };
-
     const handleFormChange = (event) => {
         const { name, value } = event.target;
         setFormData({ ...formData, [name]: value });
@@ -103,7 +98,7 @@ const RatingProfiles = ({ cgratesConfig }) => {
         try {
             const query = {
                 method: 'ApierV1.GetRatingProfileIDs',
-                params: [{ tenant: searchParams.tenant }]
+                params: []
             };
 
             const response = await fetch(cgratesConfig.url + '/jsonrpc', {
@@ -134,7 +129,7 @@ const RatingProfiles = ({ cgratesConfig }) => {
         try {
             const query = {
                 method: 'ApierV1.GetRatingProfile',
-                params: [{ Tenant: searchParams.tenant, Category: category, Subject: subject }],
+                params: [{ Category: category, Subject: subject }],
                 id: 0
             };
 
@@ -170,7 +165,6 @@ const RatingProfiles = ({ cgratesConfig }) => {
                 method: 'APIerSv1.SetRatingProfile',
                 params: [{
                     Overwrite: true,
-                    Tenant: searchParams.tenant,
                     Category: formData.Category,
                     Subject: formData.Subject,
                     RatingPlanActivations: formData.RatingPlanActivations
@@ -198,6 +192,37 @@ const RatingProfiles = ({ cgratesConfig }) => {
         }
     };
 
+    const removeRatingProfile = async (profileString) => {
+        setIsLoading(true);
+        const [category, subject] = profileString.split(':');
+
+        try {
+            const query = {
+                method: 'APIerSv1.RemoveRatingProfile',
+                params: [{ Category: category, Subject: subject }]
+            };
+
+            const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(query),
+            });
+
+            const data = await response.json();
+
+            if (data.error) {
+                setErrorMessage(data.error.message);
+            } else {
+                fetchRatingProfiles();
+            }
+        } catch (error) {
+            console.error('Error removing rating profile:', error);
+            setErrorMessage('An unexpected error occurred while removing the profile.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const handleRowClick = (profileString) => {
         setIsEditing(true);
         fetchRatingProfileDetails(profileString);
@@ -214,32 +239,10 @@ const RatingProfiles = ({ cgratesConfig }) => {
         setSelectedProfile(null);
     };
 
-    const handleSubmit = (event) => {
-        event.preventDefault();
-        fetchRatingProfiles();
-    };
-
     return (
         <div className="App">
             <Container>
                 <h2>Rating Profiles</h2>
-                <Form onSubmit={(e) => { e.preventDefault(); fetchRatingProfiles(); }} className="mt-4">
-                    <Row>
-                        <Col md={6}>
-                            <Form.Group controlId="formTenant">
-                                <Form.Label>Tenant</Form.Label>
-                                <Form.Control as="select" name="tenant" value={searchParams.tenant} onChange={handleInputChange}>
-                                    {cgratesConfig.tenants.split(';').map((tenant, index) => (
-                                        <option key={index} value={tenant}>{tenant}</option>
-                                    ))}
-                                </Form.Control>
-                            </Form.Group>
-                        </Col>
-                        <Col md={6} className="d-flex align-items-end">
-                            <Button type="submit" className="w-100">Fetch Rating Profiles</Button>
-                        </Col>
-                    </Row>
-                </Form>
 
                 <Button variant="primary" className="mt-4" onClick={handleCreateNew}>Create New Rating Profile</Button>
 
@@ -255,17 +258,21 @@ const RatingProfiles = ({ cgratesConfig }) => {
                             <tr>
                                 <th>#</th>
                                 <th>Rating Profile ID</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {ratingProfiles.length > 0 ? ratingProfiles.map((profile, index) => (
-                                <tr key={index} onClick={() => handleRowClick(profile)} style={{ cursor: 'pointer' }}>
+                                <tr key={index}>
                                     <td>{index + 1}</td>
-                                    <td>{profile}</td>
+                                    <td onClick={() => handleRowClick(profile)} style={{ cursor: 'pointer' }}>{profile}</td>
+                                    <td>
+                                        <Button variant="danger" onClick={() => removeRatingProfile(profile)}>Delete</Button>
+                                    </td>
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td colSpan="2" className="text-center">No rating profiles available</td>
+                                    <td colSpan="3" className="text-center">No rating profiles available</td>
                                 </tr>
                             )}
                         </tbody>
