@@ -28,8 +28,19 @@ const GetCostView = ({ cgratesConfig }) => {
 
     const handleInputChange = (event) => {
         const { name, value } = event.target;
-        setFormData({ ...formData, [name]: value });
-    };
+    
+        let formattedValue = value;
+    
+        if (name === "AnswerTime") {
+            // Ensure AnswerTime is in the format YYYY-MM-DDTHH:MM:SSZ
+            const match = value.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(:\d{2})?$/);
+            if (match) {
+                formattedValue = match[1] + (match[2] ? match[2] : ":00"); // Add ':00' seconds if missing
+            }
+        }
+    
+        setFormData({ ...formData, [name]: formattedValue });
+    };    
 
     const fetchCost = async () => {
         setIsLoading(true);
