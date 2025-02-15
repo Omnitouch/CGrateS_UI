@@ -168,11 +168,11 @@ const Chargers = ({ cgratesConfig }) => {
             RunID: editCharger.RunID,
             FilterIDs: editCharger.FilterIDs,
             AttributeIDs: editCharger.AttributeIDs,
-            Weight: editCharger.Weight,
+            Weight: parseInt(editCharger.Weight, 10), // Ensure Weight is an integer
           },
         ],
       };
-
+  
       const response = await fetch(cgratesConfig.url + '/jsonrpc', {
         method: 'POST',
         headers: {
@@ -180,11 +180,11 @@ const Chargers = ({ cgratesConfig }) => {
         },
         body: JSON.stringify(query),
       });
-
+  
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-
+  
       const data = await response.json();
       if (data.result) {
         console.log('Charger updated successfully');
@@ -197,6 +197,7 @@ const Chargers = ({ cgratesConfig }) => {
       setIsLoading(false);
     }
   };
+  
 
   // Delete charger profile
   const deleteChargerProfile = async () => {
