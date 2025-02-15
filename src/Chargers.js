@@ -2,9 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Form, Button, Container, Row, Col, Table, Modal, Spinner, ListGroup } from 'react-bootstrap';
 
 const Chargers = ({ cgratesConfig }) => {
-  const [searchParams, setSearchParams] = useState({
-    tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant
-  });
   const [chargers, setChargers] = useState([]); // Store the list of chargers
   const [selectedCharger, setSelectedCharger] = useState(null); // Store the selected charger's details
   const [showModal, setShowModal] = useState(false); // Control the modal display
@@ -15,15 +12,8 @@ const Chargers = ({ cgratesConfig }) => {
   const [editCharger, setEditCharger] = useState({}); // Store edited charger
 
   useEffect(() => {
-    // Ensure tenant is set to default on mount
-    setSearchParams({ tenant: cgratesConfig.tenants.split(';')[0] });
+    fetchChargers();
   }, [cgratesConfig]);
-
-  // Handle input change for tenant selection
-  const handleInputChange = (event) => {
-    const { name, value } = event.target;
-    setSearchParams({ ...searchParams, [name]: value });
-  };
 
   // Fetch all charger profile IDs based on the selected tenant
   const fetchChargers = async () => {
@@ -34,7 +24,7 @@ const Chargers = ({ cgratesConfig }) => {
     try {
       const query = {
         method: 'APIerSv1.GetChargerProfileIDs',
-        params: [{ Tenant: searchParams.tenant, Limit: null, Offset: null }],
+        params: [{ Tenant: cgratesConfig.tenants.split(';')[0], Limit: null, Offset: null }],
         id: 1,
       };
 
@@ -73,7 +63,7 @@ const Chargers = ({ cgratesConfig }) => {
     try {
       const chargerProfileQuery = {
         method: 'APIerSv1.GetChargerProfile',
-        params: [{ Tenant: searchParams.tenant, ID: chargerId }],
+        params: [{ Tenant: cgratesConfig.tenants.split(';')[0], ID: chargerId }],
         id: 3,
       };
 
@@ -250,16 +240,10 @@ const Chargers = ({ cgratesConfig }) => {
     }
   };
 
-  // Form submission for fetching chargers
-  const handleSubmit = (event) => {
-    event.preventDefault();
-    fetchChargers();
-  };
-
   // Handle creation of a new charger
   const handleNewCharger = () => {
     setEditCharger({
-      Tenant: searchParams.tenant || '',
+      Tenant: cgratesConfig.tenants.split(';')[0] || '',
       ID: '',
       FilterIDs: [],
       UsageTTL: -1,
@@ -280,32 +264,6 @@ const Chargers = ({ cgratesConfig }) => {
     <div className="App">
       <Container>
         <h2>Charger Profiles</h2>
-        <Form onSubmit={handleSubmit} className="mt-4">
-          <Row>
-            <Col md={6}>
-              <Form.Group controlId="formTenant">
-                <Form.Label>Tenant</Form.Label>
-                <Form.Control
-                  as="select"
-                  name="tenant"
-                  value={searchParams.tenant}
-                  onChange={handleInputChange}
-                >
-                  {cgratesConfig.tenants.split(';').map((tenant, index) => (
-                    <option key={index} value={tenant}>
-                      {tenant}
-                    </option>
-                  ))}
-                </Form.Control>
-              </Form.Group>
-            </Col>
-            <Col md={6} className="d-flex align-items-end">
-              <Button type="submit" className="w-100">
-                Fetch Chargers
-              </Button>
-            </Col>
-          </Row>
-        </Form>
 
         <Button variant="success" className="mt-3" onClick={handleNewCharger}>
           Add New Charger
