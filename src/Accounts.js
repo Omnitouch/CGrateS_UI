@@ -37,8 +37,7 @@ const GetAccounts = ({ cgratesConfig }) => {
 
   const fetchResults = async (page = 1) => {
     setIsLoading(true);
-    setResults([]); // Clear the current results
-    const offset = (page - 1) * itemsPerPage; // Calculate the offset based on page and items per page
+    const offset = (page - 1) * itemsPerPage; // Calculate offset based on page number
 
     const newQuery = {
       method: 'APIerSv2.GetAccounts',
@@ -47,12 +46,10 @@ const GetAccounts = ({ cgratesConfig }) => {
         AccountIDs: searchParams.account ? [searchParams.account] : null,
         Offset: offset,
         Limit: itemsPerPage,
-        Filter: null
+        Filter: null,
       }],
-      id: 1
+      id: 1,
     };
-
-    console.log(`Fetching accounts from: ${cgratesConfig.url}`);
 
     try {
       const response = await fetch(cgratesConfig.url + '/jsonrpc', {
@@ -72,18 +69,13 @@ const GetAccounts = ({ cgratesConfig }) => {
 
       if (data && data.result) {
         setResults(data.result); // Store the fetched results
-        setTotalItems(data.result.length); // Set the total items for pagination
-        if (searchParams.tenant) {
-          fetchActions(searchParams.tenant); // Fetch actions after fetching accounts
-        }
+        setCurrentPage(page); // Update the current page
       } else {
         setResults([]);
-        setTotalItems(0);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
       setResults([]);
-      setTotalItems(0);
     } finally {
       setIsLoading(false);
     }
@@ -509,7 +501,6 @@ const GetAccounts = ({ cgratesConfig }) => {
 
 
   const handlePageChange = (pageNumber) => {
-    setCurrentPage(pageNumber);
     fetchResults(pageNumber);
   };
 
@@ -703,10 +694,11 @@ const GetAccounts = ({ cgratesConfig }) => {
     setSelectedActionTrigger(null); // Clear balance details when modal is closed
   };
 
+
   return (
     <div className="App">
       <Container>
-        <Form onSubmit={handleSubmit} className="mt-4">
+      <Form onSubmit={handleSubmit} className="mt-4">
           <Row>
             <Col md={3}>
               <Form.Group controlId="formTenant">
@@ -746,7 +738,7 @@ const GetAccounts = ({ cgratesConfig }) => {
         ) : (
           <div>
             <Table striped bordered hover className="mt-4">
-              <thead>
+            <thead>
                 <tr>
                   <th>#</th>
                   <th>Tenant</th>
@@ -771,18 +763,19 @@ const GetAccounts = ({ cgratesConfig }) => {
             </Table>
 
             <Pagination className="justify-content-center mt-4">
-              {[...Array(Math.ceil(totalItems / itemsPerPage)).keys()].map(page => (
-                <Pagination.Item
-                  key={page + 1}
-                  active={page + 1 === currentPage}
-                  onClick={() => handlePageChange(page + 1)}
-                >
-                  {page + 1}
-                </Pagination.Item>
-              ))}
-              {results.length === itemsPerPage && (
-                <Pagination.Next onClick={() => handlePageChange(currentPage + 1)} />
-              )}
+              <Pagination.Prev
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1} // Disable "Back" on the first page
+              >
+                Back
+              </Pagination.Prev>
+              <Pagination.Item active>{currentPage}</Pagination.Item>
+              <Pagination.Next
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={results.length < itemsPerPage} // Disable "Next" if fewer results than limit
+              >
+                Next
+              </Pagination.Next>
             </Pagination>
           </div>
         )}
