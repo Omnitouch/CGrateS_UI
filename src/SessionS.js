@@ -239,6 +239,7 @@ const SessionS = ({ cgratesConfig }) => {
                 <th>Category</th>
                 <th>Setup Time</th>
                 <th>Destination</th>
+                <th>Subject</th>
                 <th>Usage</th>
                 <th>LoopIndex</th>
               </tr>
@@ -256,6 +257,7 @@ const SessionS = ({ cgratesConfig }) => {
                     <small>({moment().diff(moment(result.SetupTime), 'minutes')} minutes ago)</small>
                   </td>
                   <td>{result.Destination}</td>
+                  <td>{result.Subject}</td>
                   <td>{formatUsage(result.Usage, result.ToR)}</td>
                   <td>{result.LoopIndex}</td>
                 </tr>
