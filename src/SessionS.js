@@ -12,6 +12,7 @@ const SessionS = ({ cgratesConfig }) => {
   const [showModal, setShowModal] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
   const [terminateLoading, setTerminateLoading] = useState(false);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
 
   // Utility function to format Usage based on ToR
   const formatUsage = (usage, tor) => {
@@ -40,7 +41,6 @@ const SessionS = ({ cgratesConfig }) => {
     }
     return usage; // Default case, no formatting
   };
-
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
@@ -201,6 +201,30 @@ const SessionS = ({ cgratesConfig }) => {
     );
   };
 
+  const handleSort = (key) => {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedResults = React.useMemo(() => {
+    let sortableResults = [...results];
+    if (sortConfig.key !== null) {
+      sortableResults.sort((a, b) => {
+        if (a[sortConfig.key] < b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (a[sortConfig.key] > b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableResults;
+  }, [results, sortConfig]);
+
   return (
     <div className="App">
       <Container>
@@ -233,19 +257,19 @@ const SessionS = ({ cgratesConfig }) => {
           <Table striped bordered hover className="mt-4">
             <thead>
               <tr>
-                <th>#</th>
-                <th>Tenant</th>
-                <th>Account</th>
-                <th>Category</th>
-                <th>Setup Time</th>
-                <th>Destination</th>
-                <th>Subject</th>
-                <th>Usage</th>
-                <th>LoopIndex</th>
+                <th onClick={() => handleSort('#')}>#</th>
+                <th onClick={() => handleSort('Tenant')}>Tenant</th>
+                <th onClick={() => handleSort('Account')}>Account</th>
+                <th onClick={() => handleSort('Category')}>Category</th>
+                <th onClick={() => handleSort('SetupTime')}>Setup Time</th>
+                <th onClick={() => handleSort('Destination')}>Destination</th>
+                <th onClick={() => handleSort('Subject')}>Subject</th>
+                <th onClick={() => handleSort('Usage')}>Usage</th>
+                <th onClick={() => handleSort('LoopIndex')}>LoopIndex</th>
               </tr>
             </thead>
             <tbody>
-              {results && results.length > 0 ? results.map((result, index) => (
+              {sortedResults && sortedResults.length > 0 ? sortedResults.map((result, index) => (
                 <tr key={index} onClick={() => handleRowClick(result)} style={{ cursor: 'pointer' }}>
                   <td>{index + 1}</td>
                   <td>{result.Tenant}</td>
