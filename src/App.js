@@ -285,6 +285,7 @@ function App() {
             <Nav.Link as={Link} to="/resources" onClick={handleToggleOffcanvas}>Resources</Nav.Link>
             <Nav.Link as={Link} to="/stats" onClick={handleToggleOffcanvas}>Stats</Nav.Link>
             <Nav.Link as={Link} to="/filters" onClick={handleToggleOffcanvas}>Filters</Nav.Link>
+            <Nav.Link as={Link} to="/event-reader" onClick={handleToggleOffcanvas}>Event Reader</Nav.Link>
             {/* Custom Dropdown for Actions & ActionPlans */}
             <div>
               <Button
