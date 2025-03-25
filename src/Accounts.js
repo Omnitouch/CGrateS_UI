@@ -29,6 +29,12 @@ const GetAccounts = ({ cgratesConfig }) => {
       fetchActions(searchParams.tenant);
     }
   }, [searchParams.tenant]);
+  
+  useEffect(() => {
+    if (searchParams.tenant) {
+      fetchResults(1); // Fetch results for the first page whenever the tenant changes
+    }
+  }, [searchParams.tenant]);
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
