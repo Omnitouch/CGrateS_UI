@@ -210,48 +210,55 @@ const GetRoutes = ({ cgratesConfig }) => {
       </Container>
 
       {/* Modal for Row Details */}
-      <Modal show={showModal} onHide={handleCloseModal}>
-  <Modal.Header closeButton>
-    <Modal.Title>
-      Route Details{selectedRowData ? `: ${selectedRowData.ProfileID}` : ''}
-    </Modal.Title>
-  </Modal.Header>
-  <Modal.Body>
-    {selectedRowData ? (
-      <div>
-        <p><strong>Profile ID:</strong> {selectedRowData.ProfileID}</p>
-        <p><strong>Sorting:</strong> {selectedRowData.Sorting}</p>
-        <table className="table table-bordered mt-3">
-          <thead>
-            <tr>
-              <th>Route ID</th>
-              <th>Route Parameters</th>
-              <th>Cost</th>
-              <th>Rating Plan ID</th>
-            </tr>
-          </thead>
-          <tbody>
-            {selectedRowData.Routes.map((route, routeIndex) => (
-              <tr key={routeIndex}>
-                <td>{route.RouteID}</td>
-                <td><pre>{route.RouteParameters}</pre></td>
-                <td>{route.SortingData.Cost}</td>
-                <td>{route.SortingData.RatingPlanID}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    ) : (
-      <p>No data available</p>
-    )}
-  </Modal.Body>
-  <Modal.Footer>
-    <Button variant="secondary" onClick={handleCloseModal}>
-      Close
-    </Button>
-  </Modal.Footer>
-</Modal>
+      <Modal show={showModal} onHide={handleCloseModal} size="lg" centered>
+        <Modal.Header closeButton>
+          <Modal.Title>
+            Route Details{selectedRowData ? `: ${selectedRowData.ProfileID}` : ''}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+          <p>
+            To blacklist a given route for a specific operator, <a href="/filters" target="_blank" rel="noopener noreferrer">add it to the FilterS page for that operator.</a>
+          </p>
+          {selectedRowData ? (
+            <div>
+              <p><strong>Profile ID:</strong> {selectedRowData.ProfileID}</p>
+              <p><strong>Sorting:</strong> {selectedRowData.Sorting}</p>
+              <table className="table table-bordered mt-3">
+                <thead>
+                  <tr>
+                    <th>Route ID</th>
+                    <th>Cost</th>
+                    <th>Rating Plan ID</th>
+                    <th>Route Parameters</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedRowData.Routes.map((route, routeIndex) => (
+                    <tr key={routeIndex}>
+                      <td>{route.RouteID}</td>
+                      <td>{route.SortingData.Cost}</td>
+                      <td>{route.SortingData.RatingPlanID}</td>
+                      <td>
+                        <pre style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
+                          {route.RouteParameters}
+                        </pre>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p>No data available</p>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleCloseModal}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
     </div>
   );
