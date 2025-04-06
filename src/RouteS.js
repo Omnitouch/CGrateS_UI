@@ -42,7 +42,7 @@ const GetRoutes = ({ cgratesConfig }) => {
           Subject: searchParams.account,
           SetupTime: today,
           Destination: searchParams.destination,
-          Usage: '1h'
+          Usage: '1m'
         },
       }],
       id: 1
@@ -116,6 +116,81 @@ const GetRoutes = ({ cgratesConfig }) => {
   const handleCloseModal = () => {
     setShowModal(false);
     setSelectedRowData(null);
+  };
+  const blockRouteForDestination = async (destination, ratingPlanID) => {
+    try {
+      // Extract the operator name from the Rating Plan ID
+      const operatorName = ratingPlanID.split('_').pop();
+
+      // Fetch the existing filter
+      const fetchResponse = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          method: 'APIerSv1.GetFilter',
+          params: [{
+            Tenant: 'cgrates.org',
+            Id: `Filter_Operator_Route_Blacklist_${operatorName}`,
+          }],
+        }),
+      });
+
+      if (!fetchResponse.ok) {
+        throw new Error(`HTTP error! status: ${fetchResponse.status}`);
+      }
+
+      const fetchData = await fetchResponse.json();
+      if (fetchData.error) {
+        throw new Error(`Error fetching filter: ${fetchData.error.message}`);
+      }
+
+      const existingFilter = fetchData.result;
+
+      // Add the new rule for the destination
+      const updatedRules = [
+        ...existingFilter.Rules,
+        {
+          Type: '*notprefix',
+          Element: '~*req.Destination',
+          Values: [destination],
+        },
+      ];
+
+      // Push the updated filter back to the server
+      const updateResponse = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          method: 'ApierV1.SetFilter',
+          params: [{
+            ID: `Filter_Operator_Route_Blacklist_${operatorName}`,
+            Rules: updatedRules,
+            ActivationInterval: {
+              ActivationTime: '0001-01-01T00:00:00Z',
+              ExpiryTime: '0001-01-01T00:00:00Z',
+            },
+          }],
+        }),
+      });
+
+      if (!updateResponse.ok) {
+        throw new Error(`HTTP error! status: ${updateResponse.status}`);
+      }
+
+      const updateData = await updateResponse.json();
+      if (updateData.error) {
+        throw new Error(`Error updating filter: ${updateData.error.message}`);
+      }
+
+      alert(`Route for destination ${destination} has been successfully blocked for operator ${operatorName}.`);
+    } catch (error) {
+      console.error('Error blocking route:', error);
+      alert(`Failed to block route for destination ${destination}: ${error.message}`);
+    }
   };
 
   return (
@@ -218,7 +293,7 @@ const GetRoutes = ({ cgratesConfig }) => {
         </Modal.Header>
         <Modal.Body style={{ maxHeight: '70vh', overflowY: 'auto' }}>
           <p>
-            To blacklist a given route for a specific operator, <a href="/filters" target="_blank" rel="noopener noreferrer">add it to the FilterS page for that operator.</a>
+            To blacklist a given route for a specific operator, <a href="/filters" target="_blank" rel="noopener noreferrer">add it to the FilterS page for that operator.</a> or click the "Blacklist" button below.
           </p>
           {selectedRowData ? (
             <div>
@@ -230,7 +305,7 @@ const GetRoutes = ({ cgratesConfig }) => {
                     <th>Route ID</th>
                     <th>Cost</th>
                     <th>Rating Plan ID</th>
-                    <th>Route Parameters</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -240,9 +315,16 @@ const GetRoutes = ({ cgratesConfig }) => {
                       <td>{route.SortingData.Cost}</td>
                       <td>{route.SortingData.RatingPlanID}</td>
                       <td>
-                        <pre style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
-                          {route.RouteParameters}
-                        </pre>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent triggering row click
+                            blockRouteForDestination(searchParams.destination, route.SortingData.RatingPlanID);
+                          }}
+                        >
+                          Block this Route for this Destination
+                        </Button>
                       </td>
                     </tr>
                   ))}
