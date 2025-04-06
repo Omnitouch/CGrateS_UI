@@ -175,8 +175,8 @@ const Filters = ({ cgratesConfig }) => {
   // Handle saving the updated filter
   const saveFilter = async () => {
     // Validation: Ensure mandatory fields are filled
-    if (!editFilter.ID || !editFilter.Tenant || editFilter.Rules.length === 0) {
-      setError('ID, Tenant, and at least one rule are mandatory.');
+    if (!editFilter.ID || !editFilter.Tenant) {
+      setError('ID, Tenant are mandatory.');
       return;
     }
 
