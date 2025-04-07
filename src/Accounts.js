@@ -36,6 +36,75 @@ const GetAccounts = ({ cgratesConfig }) => {
     }
   }, [searchParams.tenant]);
 
+  useEffect(() => {
+    let intervalId;
+  
+    if (showModal && selectedRowData) {
+      const [tenant, account] = selectedRowData.ID.split(':');
+  
+      // Set up an interval to refresh account details every 5 seconds
+      intervalId = setInterval(() => {
+        fetchAccountDetails(tenant, account, true); // Only fetch account details during auto-refresh
+      }, 5000);
+    }
+  
+    // Clear the interval when the modal is closed or the component unmounts
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [showModal, selectedRowData]);
+  
+  const fetchAccountDetails = async (tenant, account, autoRefresh = false) => {
+    if (!autoRefresh) {
+      setModalLoading(true); // Show loading only if not auto-refreshing
+    }
+  
+    const accountDetailsQuery = {
+      method: 'APIerSv2.GetAccounts',
+      params: [{
+        Tenant: tenant,
+        AccountIDs: [account],
+        Offset: 0,
+        Limit: 999,
+        Filter: null
+      }],
+      id: 1
+    };
+  
+    try {
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(accountDetailsQuery),
+      });
+  
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+  
+      const accountDetailsData = await response.json();
+  
+      if (accountDetailsData && accountDetailsData.result) {
+        setAccountDetails((prevDetails) => ({
+          ...prevDetails,
+          ...accountDetailsData.result[0], // Update only account details
+        }));
+      } else {
+        setAccountDetails(null);
+      }
+    } catch (error) {
+      console.error('Error fetching account details:', error);
+    } finally {
+      if (!autoRefresh) {
+        setModalLoading(false); // End loading only if not auto-refreshing
+      }
+    }
+  };
+
   const handleInputChange = (event) => {
     const { name, value } = event.target;
     setSearchParams({ ...searchParams, [name]: value });
@@ -87,71 +156,6 @@ const GetAccounts = ({ cgratesConfig }) => {
     }
   };
 
-  const fetchAccountDetails = async (tenant, account) => {
-    setModalLoading(true); // Set modal loading
-    const accountDetailsQuery = {
-      method: 'APIerSv2.GetAccounts',
-      params: [{
-        Tenant: tenant,
-        AccountIDs: [account],
-        Offset: 0,
-        Limit: 999,
-        Filter: null
-      }],
-      id: 1
-    };
-
-    const actionPlanQuery = {
-      method: 'ApierV2.GetAccountActionPlan',
-      params: [{
-        Account: account,
-        Tenant: tenant
-      }],
-      id: 5
-    };
-
-    console.log(`Fetching account details for account: ${account}`);
-
-    try {
-      const [accountDetailsResponse, actionPlanResponse] = await Promise.all([
-        fetch(cgratesConfig.url + '/jsonrpc', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(accountDetailsQuery),
-        }),
-        fetch(cgratesConfig.url + '/jsonrpc', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(actionPlanQuery),
-        })
-      ]);
-
-      if (!accountDetailsResponse.ok || !actionPlanResponse.ok) {
-        throw new Error(`HTTP error! status: ${accountDetailsResponse.status} or ${actionPlanResponse.status}`);
-      }
-
-      const accountDetailsData = await accountDetailsResponse.json();
-      const actionPlanData = await actionPlanResponse.json();
-
-      console.log('Detailed account data:', accountDetailsData);
-      console.log('Action plan data:', actionPlanData);
-
-      if (accountDetailsData && accountDetailsData.result) {
-        setAccountDetails({ ...accountDetailsData.result[0], actionPlans: actionPlanData.result || [] }); // Store account details and action plans in state
-      } else {
-        setAccountDetails(null);
-      }
-    } catch (error) {
-      console.error('Error fetching account details or action plans:', error);
-      setAccountDetails(null);
-    } finally {
-      setModalLoading(false); // End modal loading
-    }
-  };
 
   const fetchActions = async (tenant) => {
     const actionsQuery = {
