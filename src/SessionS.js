@@ -96,7 +96,7 @@ const SessionS = ({ cgratesConfig }) => {
 
   useEffect(() => {
     let interval;
-  
+
     if (showModal && selectedSession) {
       interval = setInterval(async () => {
         try {
@@ -113,7 +113,7 @@ const SessionS = ({ cgratesConfig }) => {
             }],
             id: 3
           };
-  
+
           const response = await fetch(cgratesConfig.url + '/jsonrpc', {
             method: 'POST',
             headers: {
@@ -121,11 +121,11 @@ const SessionS = ({ cgratesConfig }) => {
             },
             body: JSON.stringify(fetchSingleSessionQuery),
           });
-  
+
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
           }
-  
+
           const data = await response.json();
           if (data && data.result && data.result.length > 0) {
             setSelectedSession(data.result[0]);
@@ -135,12 +135,12 @@ const SessionS = ({ cgratesConfig }) => {
         }
       }, 2000);
     }
-  
+
     return () => {
       if (interval) clearInterval(interval);
     };
   }, [showModal, selectedSession, cgratesConfig.url]);
-  
+
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -242,7 +242,10 @@ const SessionS = ({ cgratesConfig }) => {
           {Object.entries(session).map(([key, value], index) => (
             <tr key={index}>
               <td>{key}</td>
-              <td>{typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : String(value)}</td>
+              <td>
+                {key === 'Usage' ? formatUsage(value, session.ToR) :
+                  (typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : String(value))}
+              </td>
             </tr>
           ))}
         </tbody>
