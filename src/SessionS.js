@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Form, Button, Container, Row, Col, Table, Modal, Spinner } from 'react-bootstrap';
 import Datetime from 'react-datetime';
 import moment from 'moment';
+import { useEffect } from 'react';
 
 const SessionS = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
@@ -92,6 +93,54 @@ const SessionS = ({ cgratesConfig }) => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    let interval;
+  
+    if (showModal && selectedSession) {
+      interval = setInterval(async () => {
+        try {
+          const fetchSingleSessionQuery = {
+            method: 'SessionSv1.GetActiveSessions',
+            params: [{
+              Limit: null,
+              Filters: [
+                "*string:~*req.CGRID:" + selectedSession.CGRID,
+              ],
+              Tenant: selectedSession.Tenant,
+              Tenant: selectedSession.Tenant,
+              APIOpts: {}
+            }],
+            id: 3
+          };
+  
+          const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(fetchSingleSessionQuery),
+          });
+  
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+  
+          const data = await response.json();
+          if (data && data.result && data.result.length > 0) {
+            setSelectedSession(data.result[0]);
+          }
+        } catch (error) {
+          console.error('Error fetching session details in modal:', error);
+        }
+      }, 2000);
+    }
+  
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [showModal, selectedSession, cgratesConfig.url]);
+  
 
   const handleSubmit = (event) => {
     event.preventDefault();
