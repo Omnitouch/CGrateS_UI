@@ -19,6 +19,7 @@ const GetAccounts = ({ cgratesConfig }) => {
   const [selectedBalance, setSelectedBalance] = useState(null); // Store clicked balance data
   const [selectedActionTrigger, setSelectedActionTrigger] = useState(null); // Store clicked action trigger data
   const [accountDetails, setAccountDetails] = useState(null); // State to store detailed account data
+  const [actionPlans, setActionPlans] = useState([]); // State to store action plans
   const [modalLoading, setModalLoading] = useState(false); // Loading state for modal API call
   const [actions, setActions] = useState([]); // Actions available for the selected account
   const [selectedAction, setSelectedAction] = useState(''); // Selected action for execution
@@ -29,7 +30,7 @@ const GetAccounts = ({ cgratesConfig }) => {
       fetchActions(searchParams.tenant);
     }
   }, [searchParams.tenant]);
-  
+
   useEffect(() => {
     if (searchParams.tenant) {
       fetchResults(1); // Fetch results for the first page whenever the tenant changes
@@ -38,16 +39,16 @@ const GetAccounts = ({ cgratesConfig }) => {
 
   useEffect(() => {
     let intervalId;
-  
+
     if (showModal && selectedRowData) {
       const [tenant, account] = selectedRowData.ID.split(':');
-  
+
       // Set up an interval to refresh account details every 5 seconds
       intervalId = setInterval(() => {
         fetchAccountDetails(tenant, account, true); // Only fetch account details during auto-refresh
       }, 5000);
     }
-  
+
     // Clear the interval when the modal is closed or the component unmounts
     return () => {
       if (intervalId) {
@@ -55,12 +56,12 @@ const GetAccounts = ({ cgratesConfig }) => {
       }
     };
   }, [showModal, selectedRowData]);
-  
+
   const fetchAccountDetails = async (tenant, account, autoRefresh = false) => {
     if (!autoRefresh) {
       setModalLoading(true); // Show loading only if not auto-refreshing
     }
-  
+
     const accountDetailsQuery = {
       method: 'APIerSv2.GetAccounts',
       params: [{
@@ -72,7 +73,7 @@ const GetAccounts = ({ cgratesConfig }) => {
       }],
       id: 1
     };
-  
+
     try {
       const response = await fetch(cgratesConfig.url + '/jsonrpc', {
         method: 'POST',
@@ -81,13 +82,13 @@ const GetAccounts = ({ cgratesConfig }) => {
         },
         body: JSON.stringify(accountDetailsQuery),
       });
-  
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-  
+
       const accountDetailsData = await response.json();
-  
+
       if (accountDetailsData && accountDetailsData.result) {
         setAccountDetails((prevDetails) => ({
           ...prevDetails,
@@ -102,6 +103,45 @@ const GetAccounts = ({ cgratesConfig }) => {
       if (!autoRefresh) {
         setModalLoading(false); // End loading only if not auto-refreshing
       }
+    }
+  };
+
+  const fetchActionPlans = async (tenant, account) => {
+    const actionPlanQuery = {
+      method: 'ApierV2.GetAccountActionPlan',
+      params: [{
+        Account: account,
+        Tenant: tenant,
+      }],
+      id: 2,
+    };
+
+    console.log(`Fetching action plans for account: ${account} in tenant: ${tenant}`);
+
+    try {
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(actionPlanQuery),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Action plans fetched successfully:', data);
+
+      if (data && data.result) {
+        return data.result; // Return the fetched action plans
+      } else {
+        return [];
+      }
+    } catch (error) {
+      console.error('Error fetching action plans:', error);
+      return [];
     }
   };
 
@@ -479,6 +519,10 @@ const GetAccounts = ({ cgratesConfig }) => {
     // Fetch actions before opening the modal
     await fetchActions(tenant);
 
+    // Fetch action plans and update the state
+    const actionPlans = await fetchActionPlans(tenant, account);
+    setActionPlans(actionPlans);
+
     setShowModal(true);
     fetchAccountDetails(tenant, account); // Fetch additional account details
   };
@@ -708,7 +752,7 @@ const GetAccounts = ({ cgratesConfig }) => {
   return (
     <div className="App">
       <Container>
-      <Form onSubmit={handleSubmit} className="mt-4">
+        <Form onSubmit={handleSubmit} className="mt-4">
           <Row>
             <Col md={3}>
               <Form.Group controlId="formTenant">
@@ -748,7 +792,7 @@ const GetAccounts = ({ cgratesConfig }) => {
         ) : (
           <div>
             <Table striped bordered hover className="mt-4">
-            <thead>
+              <thead>
                 <tr>
                   <th>#</th>
                   <th>Tenant</th>
@@ -867,7 +911,7 @@ const GetAccounts = ({ cgratesConfig }) => {
                 <p>No ActionTriggers available for this account.</p>
               )}
               <h5>Action Plans</h5>
-              {accountDetails.actionPlans && accountDetails.actionPlans.length > 0 ? (
+              {actionPlans && actionPlans.length > 0 ? (
                 <Table striped bordered hover>
                   <thead>
                     <tr>
@@ -879,9 +923,11 @@ const GetAccounts = ({ cgratesConfig }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {accountDetails.actionPlans.map((plan, index) => (
+                    {actionPlans.map((plan, index) => (
                       <tr key={index}>
-                        <td>{plan.ActionPlanId}</td>
+                        <td style={{ maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {plan.ActionPlanId}
+                        </td>
                         <td>{plan.Uuid}</td>
                         <td>{plan.ActionsId}</td>
                         <td>{plan.NextExecTime}</td>
