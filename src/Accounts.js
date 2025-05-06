@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Button, Container, Row, Col, Table, Pagination, Modal, Spinner, Alert } from 'react-bootstrap';
+import { Form, Button, Container, Row, Col, Table, Pagination, Modal, Spinner } from 'react-bootstrap';
 
 const GetAccounts = ({ cgratesConfig }) => {
+  const firstTenant = (cgratesConfig.tenants || '').split(';')[0] || '';
   const [searchParams, setSearchParams] = useState({
-    tenant: cgratesConfig.tenants.split(';')[0] || '', // Set default tenant
+    tenant: firstTenant,
     account: '',
   });
 
