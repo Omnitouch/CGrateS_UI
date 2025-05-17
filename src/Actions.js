@@ -88,6 +88,9 @@ const ActionsPage = ({ cgratesConfig }) => {
                     : '', // Default to an empty string if null or undefined
             } : null; // Default to null if Balance itself is null or undefined
     
+            // Set BalanceBlocker based on Blocker field
+            const balanceBlocker = Balance?.Blocker === true;
+    
             // Safely handle ExtraParameters: parse if it's JSON, otherwise keep as a string
             let parsedExtraParameters = ExtraParameters;
             if (isValidJson(ExtraParameters)) {
@@ -99,6 +102,7 @@ const ActionsPage = ({ cgratesConfig }) => {
             return {
                 ...part,
                 Balance: updatedBalance,
+                BalanceBlocker: balanceBlocker, // Set BalanceBlocker
                 ExtraParameters: parsedExtraParameters,
             };
         });
@@ -107,7 +111,6 @@ const ActionsPage = ({ cgratesConfig }) => {
         setShowModal(true);
         setIsEditing(false); // Start in view mode
     };
-    
 
     const handleExecuteAction = async () => {
         if (!selectedAccount || !selectedAction) {
