@@ -1,6 +1,6 @@
 {
-    "url": "http://localhost:2080",
-    "tenants": "cgrates.org;test",
+    "url": "http://10.64.12.160:2080",
+    "tenants": "mnc380.mcc313.3gppnetwork.org",
     "username": "admin",
     "password": "password123"
 }
