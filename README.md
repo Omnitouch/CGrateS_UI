@@ -52,6 +52,7 @@ So far what has been include is limited support for:
  * Managing TariffPlans
  * Simulating Costs
  * Viewing Config
+ * Send random JSON bodies and view the responses
 
 
 ## Contributions

@@ -15,7 +15,7 @@ import {
 } from 'react-bootstrap';
 
 const HISTORY_KEY = 'executeJsonHistory';
-const HISTORY_LIMIT = 25;
+const HISTORY_LIMIT = 50;
 
 function loadHistory() {
   try {
@@ -43,7 +43,6 @@ function pretty(obj) {
 function makeLabelFromPayload(obj) {
   try {
     const method = obj?.method ?? '(no method)';
-    // If params is an array with a Tenant, include it in the label
     const tenant =
       Array.isArray(obj?.params) && obj.params[0] && typeof obj.params[0] === 'object'
         ? (obj.params[0].Tenant || obj.params[0].tenant || '')
@@ -66,7 +65,7 @@ const ExecuteJSON = ({ cgratesConfig }) => {
   "params": [{}]
 }`);
   const [responseText, setResponseText] = useState('');
-  const [status, setStatus] = useState('idle'); // 'idle' | 'sending' | 'done' | 'error'
+  const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
   const [history, setHistory] = useState(() => loadHistory());
   const [selectedHistoryId, setSelectedHistoryId] = useState(null);
@@ -74,7 +73,6 @@ const ExecuteJSON = ({ cgratesConfig }) => {
   const apiUrl = useMemo(() => `${cgratesConfig.url}/jsonrpc`, [cgratesConfig.url]);
 
   useEffect(() => {
-    // Ensure we never keep more than limit
     if (history.length > HISTORY_LIMIT) {
       const trimmed = history.slice(0, HISTORY_LIMIT);
       setHistory(trimmed);
@@ -128,14 +126,12 @@ const ExecuteJSON = ({ cgratesConfig }) => {
       try {
         parsed = JSON.parse(text);
       } catch {
-        // Not JSON? show raw text
         parsed = { raw: text };
       }
 
       setResponseText(pretty(parsed));
       setStatus(res.ok ? 'done' : 'error');
 
-      // Update history (dedupe by exact payload string)
       const bodyString = JSON.stringify(payload);
       const existingIndex = history.findIndex((h) => h.bodyString === bodyString);
       const entry = {
@@ -148,7 +144,6 @@ const ExecuteJSON = ({ cgratesConfig }) => {
       let newHistory;
       if (existingIndex >= 0) {
         const existing = history[existingIndex];
-        // Move existing to top with updated timestamp
         const updated = { ...existing, createdAt: nowIso() };
         newHistory = [updated, ...history.slice(0, existingIndex), ...history.slice(existingIndex + 1)];
       } else {
@@ -193,37 +188,30 @@ const ExecuteJSON = ({ cgratesConfig }) => {
     if (status === 'done') return <Badge bg="success">Success</Badge>;
     if (status === 'error') return <Badge bg="danger">Error</Badge>;
     return <Badge bg="light" text="dark">Idle</Badge>;
-    };
+  };
 
   return (
-    <Container className="py-4">
-      <Row className="mb-3">
-        <Col>
+    <Container fluid className="py-4">
+      <Row>
+        <Col md={9}>
           <h2>Execute JSON</h2>
-          <div className="text-muted">
+          <div className="text-muted mb-3">
             Endpoint:&nbsp;<code>{apiUrl}</code> &nbsp; {latestStatusBadge()}
           </div>
-        </Col>
-      </Row>
 
-      <Row className="g-3">
-        <Col md={8}>
-          <Card>
+          {/* Request */}
+          <Card className="mb-3">
             <Card.Header>Request JSON</Card.Header>
             <Card.Body>
               <Form.Control
                 as="textarea"
-                rows={18}
+                rows={14}
                 value={requestText}
                 onChange={(e) => setRequestText(e.target.value)}
                 spellCheck={false}
-                style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}
+                style={{ fontFamily: 'monospace' }}
               />
-              {error && (
-                <div className="text-danger mt-2">
-                  {error}
-                </div>
-              )}
+              {error && <div className="text-danger mt-2">{error}</div>}
               <div className="d-flex gap-2 mt-3">
                 <Button variant="secondary" onClick={handleFormat} disabled={status === 'sending'}>
                   Format JSON
@@ -240,10 +228,53 @@ const ExecuteJSON = ({ cgratesConfig }) => {
               </div>
             </Card.Body>
           </Card>
+
+          {/* Response */}
+          <Card>
+            <Card.Header>Response</Card.Header>
+            <Card.Body>
+              <Form.Control
+                as="textarea"
+                rows={14}
+                value={responseText}
+                readOnly
+                spellCheck={false}
+                placeholder="Send a request to see the response here…"
+                style={{ fontFamily: 'monospace' }}
+              />
+              {!!responseText && (
+                <div className="d-flex gap-2 mt-2">
+                  <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    onClick={() => navigator.clipboard.writeText(responseText)}
+                  >
+                    Copy
+                  </Button>
+                  <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    onClick={() => {
+                      const blob = new Blob([responseText], { type: 'application/json;charset=utf-8' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `jsonrpc-response-${Date.now()}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    Download
+                  </Button>
+                </div>
+              )}
+            </Card.Body>
+          </Card>
         </Col>
 
-        <Col md={4}>
-          <Card className="mb-3">
+        {/* History on the side */}
+        <Col md={3}>
+<Card className="mb-3">
             <Card.Header className="d-flex justify-content-between align-items-center">
               <span>History</span>
               <Button size="sm" variant="outline-danger" onClick={handleClearHistory} disabled={!history.length}>
@@ -287,49 +318,8 @@ const ExecuteJSON = ({ cgratesConfig }) => {
               </InputGroup>
 
               <div className="small text-muted">
-                Most recent shown first. Up to {HISTORY_LIMIT} entries are saved in your browser.
+                Most recent shown first. <br/>Up to {HISTORY_LIMIT} entries are saved in your browser.
               </div>
-            </Card.Body>
-          </Card>
-
-          <Card>
-            <Card.Header>Response</Card.Header>
-            <Card.Body>
-              <Form.Control
-                as="textarea"
-                rows={18}
-                value={responseText}
-                readOnly
-                spellCheck={false}
-                placeholder="Send a request to see the response here…"
-                style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}
-              />
-              {!!responseText && (
-                <div className="d-flex gap-2 mt-2">
-                  <Button
-                    variant="outline-secondary"
-                    size="sm"
-                    onClick={() => navigator.clipboard.writeText(responseText)}
-                  >
-                    Copy
-                  </Button>
-                  <Button
-                    variant="outline-secondary"
-                    size="sm"
-                    onClick={() => {
-                      const blob = new Blob([responseText], { type: 'application/json;charset=utf-8' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `jsonrpc-response-${Date.now()}.json`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                  >
-                    Download
-                  </Button>
-                </div>
-              )}
             </Card.Body>
           </Card>
         </Col>
