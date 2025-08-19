@@ -26,6 +26,7 @@ import StatsS from './Stats.js';
 import EventReader from './EventReader.js';
 import RouteProfiles from './RouteProfiles.js';
 import ExportedCDRs from './ExportedCDRs.js';
+import ExecuteJSON from './ExecuteJSON.js';
 import ChargingTester from './ChargeTester.js';
 
 // --- helpers ---
@@ -71,6 +72,7 @@ function TitleUpdater() {
       '/event-reader': 'Event Reader - Omnitouch CGrateS UI',
       '/exported-cdrs': 'Exported CDRs - Omnitouch CGrateS UI',
       '/charging_tester': 'Charge Tester - Omnitouch CGrateS UI',
+      '/execute-json': 'Execute JSON - Omnitouch CGrateS UI',
       '/config': 'Config - Omnitouch CGrateS UI',
       '/CGrateS_UI/': 'Home - Omnitouch CGrateS UI',
     };
@@ -360,6 +362,7 @@ function App() {
               )}
             </div>
             <Nav.Link as={Link} to="/exported-cdrs" onClick={() => setShowOffcanvas(false)}>Exported CDRs</Nav.Link>
+            <Nav.Link as={Link} to="/execute-json" onClick={() => setShowOffcanvas(false)}>Execute JSON</Nav.Link>
             <Nav.Link as={Link} to="/config" onClick={() => setShowOffcanvas(false)}>Config</Nav.Link>
           </Nav>
         </Offcanvas.Body>
@@ -391,6 +394,7 @@ function App() {
           <Route path="/tariffplans" element={<TariffPlans cgratesConfig={cgratesConfig} />} />
           <Route path="/event-reader" element={<EventReader cgratesConfig={cgratesConfig} />} />
           <Route path="/exported-cdrs" element={<ExportedCDRs cgratesConfig={cgratesConfig} />} />
+          <Route path="/execute-json" element={<ExecuteJSON cgratesConfig={cgratesConfig} />} />
           <Route path="/charging_tester" element={<ChargingTester cgratesConfig={cgratesConfig} />} />
           <Route path="/config" element={<Config cgratesConfig={cgratesConfig} />} />
         </Routes>
