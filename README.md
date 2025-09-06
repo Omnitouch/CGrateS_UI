@@ -14,7 +14,7 @@ By default this tool tries to connect to a CGrateS instance running on `localhos
 
 In order to use this tool your version of CGrateS must be later than [this commit](https://github.com/cgrates/cgrates/pull/4430/commits/1b6942397ee7e7211d0d597dba65b2e9721782f1) which adds support for CORS to React can talk to CGrateS.
 
-If you are talking to a CGrateS instance other than `localhost`, the remote host must have HTTP TLS enabled, as if this page is rendered via HTTPS, all resources it accesses must be via HTTPS also.
+If you are talking to a CGrateS instance other than `localhost`, the remote host must have HTTP TLS enabled, as if this page is rendered via HTTPS, all resources it accesses must be via HTTPS also. This is a browser limitation - you can bypass this by running this Node app on your local machine.
 
 ## Saving your CGrateS instances, Tenants and Credentials
 You might want to skip specifying the connection details every time you start the utility, if you're running a copy locally, you can modify [the config.json file in the public directory](https://github.com/Omnitouch/CGrateS_UI/blob/main/public/config.json) to specify what is set when the page is loaded.
