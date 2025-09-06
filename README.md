@@ -10,13 +10,23 @@ There's nothing to install - [Simply visit the Github Pages link here to start u
 
 You don't need to install anything, just visit the above link.
 
-By default this tool tries to connect to a CGrateS instance running on `localhost:2080` but you can change this to point at other instances, as well as setting the `Tenants` used in your environment, and any HTTP Basic auth parameters you use, by clicking __Link to CGrateS__ in the top right.
+By default this tool tries to connect to a CGrateS instance running on `localhost:2080` (assuming the computer you're visiting the page from is also running CGrateS) but you can change this to point at other CGrateS instances, as well as setting the `Tenants` used in your environment, and any HTTP Basic auth parameters you use, by clicking __Connection to CGrateS__ in the middle of the screen right.
 
 In order to use this tool your version of CGrateS must be later than [this commit](https://github.com/cgrates/cgrates/pull/4430/commits/1b6942397ee7e7211d0d597dba65b2e9721782f1) which adds support for CORS to React can talk to CGrateS.
 
-If you are talking to a CGrateS instance other than `localhost`, the remote host must have HTTP TLS enabled, as if this page is rendered via HTTPS, all resources it accesses must be via HTTPS also. This is a browser limitation - you can bypass this by running this Node app on your local machine.
+If you are talking to a CGrateS instance other than `localhost`, the remote CGrateS instance *must* have HTTP TLS enabled, as if this page is rendered via HTTPS, all resources it accesses must be via HTTPS also. This is a browser limitation - you can bypass this by running this Node app on your local machine.
+
+## Self Hosting
+
+If you're not using TLS on CGrateS, you want to save the settings or you want to host this yourself, it's really easy to run locally.
+
+Clone the repo, install Node (if you don't already have it), run `npm install` and then `npm start`, and Node will open the UI in a new browser tab.
+
+If you want to run this on a web server like Nginx or Apache, same steps but run `npm build` and point the outputted `/build` directory in your root web directory.
+
 
 ## Saving your CGrateS instances, Tenants and Credentials
+
 You might want to skip specifying the connection details every time you start the utility, if you're running a copy locally, you can modify [the config.json file in the public directory](https://github.com/Omnitouch/CGrateS_UI/blob/main/public/config.json) to specify what is set when the page is loaded.
 
 
@@ -58,4 +68,4 @@ So far what has been include is limited support for:
 ## Contributions
 Contributions welcome via the [Github page](https://github.com/Omnitouch/CGrateS_UI).
 
-Changes can be pushed to live with `npm run deploy`
+Changes to the Github pages can be pushed to live with `npm run deploy`
