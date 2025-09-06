@@ -10,7 +10,7 @@ const ChargingTester = ({ cgratesConfig }) => {
   const [account, setAccount] = useState(null); // { tenant, account } from AccountDropdown
   const [direction, setDirection] = useState('*out');
   const [category, setCategory] = useState('sms');
-  const [tor, setTor] = useState('*sms');
+  const [tor, setTor] = useState('');
   const [destination, setDestination] = useState('');
   const [subject, setSubject] = useState('');
   const [usage, setUsage] = useState(1);
@@ -46,7 +46,6 @@ const ChargingTester = ({ cgratesConfig }) => {
 
   const handleCategoryChange = (value) => {
     setCategory(value);
-    setTor(`*${value}`);
     setUsage(usagePresets[value][0]);
   };
 
@@ -58,6 +57,7 @@ const ChargingTester = ({ cgratesConfig }) => {
   useEffect(() => {
     setAccount(null);
     setSubject('');
+    setTor('');
     setResponse(null);
   }, [tenant]);
 
@@ -73,7 +73,7 @@ const ChargingTester = ({ cgratesConfig }) => {
             OriginID: uuidv4(),
             Direction: direction,
             Category: category,
-            ToR: tor,
+             ...(tor ? { ToR: tor } : {}),
             Destination: destination,
             Source: 'CGrateS_UI',
             Subject: subject || account?.account || '',
@@ -219,14 +219,10 @@ const ChargingTester = ({ cgratesConfig }) => {
             <Form.Group>
               <Form.Label>ToR</Form.Label>
               <Form.Control
-                as="select"
+                type="text"
                 value={tor}
                 onChange={(e) => setTor(e.target.value)}
-              >
-                <option value="*sms">*sms</option>
-                <option value="*data">*data</option>
-                <option value="*call">*call</option>
-              </Form.Control>
+              />
             </Form.Group>
           </Col>
           <Col md={4}>
