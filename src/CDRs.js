@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Form,
   Button,
@@ -38,6 +38,19 @@ const categoryOptions = [
   { label: "Data", value: "data" },
 ];
 
+const formatNsToHMS = (nanoseconds) => {
+  const totalSeconds = Math.floor((Number(nanoseconds) || 0) / 1e9);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+    2,
+    "0"
+  )}:${String(seconds).padStart(2, "0")}`;
+};
+
+const bytesToMB = (bytes) => (Number(bytes) || 0) / (1024 * 1024);
+
 const CDRs = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
     setupTimeStart: "",
@@ -47,11 +60,12 @@ const CDRs = ({ cgratesConfig }) => {
     past: "",
     cgratesInstance: "",
     subject: "",
-    category: [], // Update to an array to hold multiple categories
-    destination: "", // New state for Destination
+    category: [], // multiple categories
+    destination: "",
+    limit: 50, // NEW: default Limit
   });
 
-  const [query, setQuery] = useState(null); // State to store the API query object
+  const [query, setQuery] = useState(null); // API query object
   const [apiQuery, setApiQuery] = useState("");
   const [results, setResults] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -63,26 +77,26 @@ const CDRs = ({ cgratesConfig }) => {
   const [responseTime, setResponseTime] = useState(null);
   const [exportResult, setExportResult] = useState(null);
   const [selectedExporter, setSelectedExporter] = useState("");
-  const [isExporting, setIsExporting] = useState(false); // New state for handling export loading
-  const [exportApiQuery, setExportApiQuery] = useState(""); // State to store the export API query
-  const [exporterOptions, setExporterOptions] = useState([]); // Dynamically populated exporter list
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportApiQuery, setExportApiQuery] = useState("");
+  const [exporterOptions, setExporterOptions] = useState([]);
   const [isVerbose, setIsVerbose] = useState(true); // Default to true
 
   const handleVerboseChange = (event) => {
-    setIsVerbose(event.target.value === "true"); // Convert string to boolean
+    setIsVerbose(event.target.value === "true");
   };
 
   const formatWithTimezone = (momentObj) => {
-    return momentObj ? momentObj.toISOString(true) : ""; // true keeps the timezone offset (Z or ±HH:mm)
+    return momentObj ? momentObj.toISOString(true) : "";
   };
 
   const handleDateChange = (type, value) => {
     const momentValue =
       moment.isMoment(value) && value.isValid() ? value : null;
-    setSearchParams({
-      ...searchParams,
+    setSearchParams((prev) => ({
+      ...prev,
       [type]: formatWithTimezone(momentValue),
-    });
+    }));
   };
 
   useEffect(() => {
@@ -97,92 +111,99 @@ const CDRs = ({ cgratesConfig }) => {
         label: exporter.id,
         value: exporter.id,
       }));
-      setExporterOptions(options); // Set dynamic exporter options
+      setExporterOptions(options);
     }
   }, [cgratesConfig]);
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
-    setSearchParams({ ...searchParams, [name]: value });
+    setSearchParams((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleLimitChange = (event) => {
+    const value = event.target.value;
+    const numeric = parseInt(value, 10);
+    setSearchParams((prev) => ({
+      ...prev,
+      limit: Number.isFinite(numeric) && numeric > 0 ? numeric : "",
+    }));
   };
 
   const handleCategoryChange = (event) => {
     const selectedOptions = Array.from(event.target.selectedOptions).map(
       (option) => option.value
     );
-    setSearchParams({ ...searchParams, category: selectedOptions });
+    setSearchParams((prev) => ({ ...prev, category: selectedOptions }));
   };
 
   const handlePastChange = (event) => {
     const value = event.target.value;
     const end = moment();
     const start = moment().subtract(value, "minutes");
-    setSearchParams({
-      ...searchParams,
+    setSearchParams((prev) => ({
+      ...prev,
       setupTimeStart: formatWithTimezone(start),
       setupTimeEnd: formatWithTimezone(end),
       past: value,
-    });
+    }));
   };
 
   const fetchResults = async (page = 1, offsetValue = 0) => {
     setIsLoading(true);
-    setResults([]); // Clear the current results
+    setResults([]); // Clear current results
     const startTime = Date.now();
+
+    const effectiveLimit =
+      Number.isFinite(Number(searchParams.limit)) &&
+      Number(searchParams.limit) > 0
+        ? Number(searchParams.limit)
+        : 50;
+
     const newQuery = {
       method: "CDRsV2.GetCDRs",
       params: [
         {
           SetupTimeStart: searchParams.setupTimeStart,
           SetupTimeEnd: searchParams.setupTimeEnd,
-          //RequestType: '*postpaid',
-          Limit: 50,
+          Limit: effectiveLimit, // <-- use UI Limit
           Offset: offsetValue,
         },
       ],
       id: 0,
     };
 
-    // Set Tenants
     if (searchParams.tenant) {
       newQuery.params[0].Tenants = [searchParams.tenant];
     }
-    // Handle comma-separated Accounts
     if (searchParams.account) {
       const accounts = searchParams.account.includes(",")
         ? searchParams.account.split(",").map((acc) => acc.trim())
         : [searchParams.account];
       newQuery.params[0].Accounts = accounts;
     }
-    // Handle comma-separated Subjects
     if (searchParams.subject) {
       const subjects = searchParams.subject.includes(",")
-        ? searchParams.subject.split(",").map((subj) => subj.trim())
+        ? searchParams.subject.split(",").map((s) => s.trim())
         : [searchParams.subject];
       newQuery.params[0].Subjects = subjects;
     }
-
-    // Set Categories
     if (searchParams.category && searchParams.category.length > 0) {
       newQuery.params[0].Categories = searchParams.category;
     }
-    // Set Destination
     if (searchParams.destination) {
       const destinations = searchParams.destination.includes(",")
-        ? searchParams.destination.split(",").map((dest) => dest.trim())
+        ? searchParams.destination.split(",").map((d) => d.trim())
         : [searchParams.destination];
       newQuery.params[0].DestinationPrefixes = destinations;
     }
 
-    setQuery(newQuery); // Store the query for later use in export
+    setQuery(newQuery);
     setApiQuery(JSON.stringify(newQuery, null, 2));
 
     try {
       const response = await fetch(cgratesConfig.url + "/jsonrpc", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newQuery),
       });
 
@@ -196,14 +217,14 @@ const CDRs = ({ cgratesConfig }) => {
       setResponseTime(timeTaken);
 
       if (data && data.result) {
-        setResults(data.result); // Handle the fetched results
+        setResults(data.result);
       } else {
         console.warn("Data format unexpected:", data);
-        setResults([]); // Reset results if data format is unexpected
+        setResults([]);
       }
     } catch (error) {
       console.error("Error fetching data:", error);
-      setResults([]); // Reset results on error
+      setResults([]);
     } finally {
       setIsLoading(false);
     }
@@ -217,17 +238,29 @@ const CDRs = ({ cgratesConfig }) => {
   };
 
   const handleNextPage = () => {
-    const newOffset = offset + 50;
+    const effectiveLimit =
+      Number.isFinite(Number(searchParams.limit)) &&
+      Number(searchParams.limit) > 0
+        ? Number(searchParams.limit)
+        : 50;
+
+    const newOffset = offset + effectiveLimit;
     setOffset(newOffset);
-    setCurrentPage(currentPage + 1);
+    setCurrentPage((p) => p + 1);
     fetchResults(currentPage + 1, newOffset);
   };
 
   const handlePreviousPage = () => {
-    const newOffset = offset - 50;
+    const effectiveLimit =
+      Number.isFinite(Number(searchParams.limit)) &&
+      Number(searchParams.limit) > 0
+        ? Number(searchParams.limit)
+        : 50;
+
+    const newOffset = Math.max(0, offset - effectiveLimit);
     setOffset(newOffset);
-    setCurrentPage(currentPage - 1);
-    fetchResults(currentPage - 1, newOffset);
+    setCurrentPage((p) => Math.max(1, p - 1));
+    fetchResults(Math.max(1, currentPage - 1), newOffset);
   };
 
   const handleRowClick = (rowData) => {
@@ -240,10 +273,10 @@ const CDRs = ({ cgratesConfig }) => {
     setSelectedRowData(null);
   };
 
-  // Utility function to format Usage based on ToR
+  // Utility function to format Usage based on ToR (row-wise)
   const formatUsage = (usage, tor) => {
     if (tor === "*data") {
-      const mb = (usage / (1024 * 1024)).toFixed(2);
+      const mb = bytesToMB(usage).toFixed(2);
       return (
         <>
           {`${mb} MB`}
@@ -252,13 +285,7 @@ const CDRs = ({ cgratesConfig }) => {
         </>
       );
     } else if (tor === "*voice") {
-      const totalSeconds = Math.floor(usage / 1e9); // Convert nanoseconds to seconds
-      const hours = Math.floor(totalSeconds / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      const seconds = totalSeconds % 60;
-      const timeFormatted = `${String(hours).padStart(2, "0")}:${String(
-        minutes
-      ).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+      const timeFormatted = formatNsToHMS(usage);
       return (
         <>
           {timeFormatted}
@@ -267,7 +294,7 @@ const CDRs = ({ cgratesConfig }) => {
         </>
       );
     }
-    return usage; // Default case, no formatting
+    return usage; // default
   };
 
   const handleExport = async () => {
@@ -275,21 +302,19 @@ const CDRs = ({ cgratesConfig }) => {
       console.error("No query available for export");
       return;
     }
-
     setIsExporting(true);
 
-    // Use the existing query and add the ExporterIDs and Verbose
+    // Remove Limit/Offset for export but keep the rest, add exporter + verbose
     const exportQuery = {
       ...query,
-      method: "APIerSv1.ExportCDRs", // Change the method for export
+      method: "APIerSv1.ExportCDRs",
       params: [
         {
-          ...query.params[0], // Keep the same parameters
-          // Remove Limit and Offset from the query
+          ...query.params[0],
           Limit: undefined,
           Offset: undefined,
-          ExporterIDs: [selectedExporter], // Add the ExporterIDs
-          Verbose: isVerbose, // Add the Verbose value from the state
+          ExporterIDs: [selectedExporter],
+          Verbose: isVerbose,
         },
       ],
       id: 2,
@@ -300,9 +325,7 @@ const CDRs = ({ cgratesConfig }) => {
     try {
       const response = await fetch(cgratesConfig.url + "/jsonrpc", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(exportQuery),
       });
 
@@ -311,8 +334,6 @@ const CDRs = ({ cgratesConfig }) => {
       }
 
       const data = await response.json();
-      console.log("Export data received:", data);
-
       setExportResult(JSON.stringify(data, null, 2));
     } catch (error) {
       console.error("Error exporting data:", error);
@@ -322,16 +343,64 @@ const CDRs = ({ cgratesConfig }) => {
     }
   };
 
-  const handleExportModalOpen = () => {
-    setShowExportModal(true);
-  };
-
+  const handleExportModalOpen = () => setShowExportModal(true);
   const handleExportModalClose = () => {
     setShowExportModal(false);
     setExportResult(null);
     setSelectedExporter("");
-    setExportApiQuery(""); // Reset the export API query
+    setExportApiQuery("");
   };
+
+  const categoryTotals = useMemo(() => {
+    // Structure: { [category]: { cost: number, usage: number } }
+    const acc = {};
+    for (const row of results || []) {
+      const cat = (row.Category || "unknown").toString();
+      const cost = Number(row.Cost) || 0;
+      const usage = Number(row.Usage) || 0;
+
+      if (!acc[cat]) {
+        acc[cat] = { cost: 0, usage: 0 };
+      }
+      // Only add cost if it's non-negative
+      if (cost >= 0) {
+        acc[cat].cost += cost;
+      }
+      acc[cat].usage += usage;
+    }
+    return acc;
+  }, [results]);
+
+  const formatCategoryUsageTotal = (category, totalUsage) => {
+    const lc = category.toLowerCase();
+    if (lc === "data") {
+      const mb = bytesToMB(totalUsage).toFixed(2);
+      return `${mb} MB (${totalUsage} bytes)`;
+    }
+    if (lc.includes("call")) {
+      return `${formatNsToHMS(totalUsage)} (${totalUsage} ns)`;
+    }
+    // For SMS / SMS A2P or others, show raw number
+    return String(totalUsage);
+  };
+
+  const grandTotals = useMemo(() => {
+    let totalCost = 0;
+    let totalUsage = 0;
+    for (const cat of Object.keys(categoryTotals)) {
+      totalCost += categoryTotals[cat].cost;
+      totalUsage += categoryTotals[cat].usage;
+    }
+    return { totalCost, totalUsage };
+  }, [categoryTotals]);
+
+  const effectiveLimit =
+    Number.isFinite(Number(searchParams.limit)) &&
+    Number(searchParams.limit) > 0
+      ? Number(searchParams.limit)
+      : 50;
+
+  const nextDisabled = results.length < effectiveLimit; // if fewer than limit fetched, likely no next page
 
   return (
     <div className="App">
@@ -343,9 +412,7 @@ const CDRs = ({ cgratesConfig }) => {
                 <Form.Label>Setup Time Start</Form.Label>
                 <Datetime
                   value={searchParams.setupTimeStart}
-                  onChange={(moment) =>
-                    handleDateChange("setupTimeStart", moment)
-                  }
+                  onChange={(m) => handleDateChange("setupTimeStart", m)}
                   dateFormat="YYYY-MM-DD"
                   timeFormat="HH:mm:ss"
                 />
@@ -356,9 +423,7 @@ const CDRs = ({ cgratesConfig }) => {
                 <Form.Label>Setup Time End</Form.Label>
                 <Datetime
                   value={searchParams.setupTimeEnd}
-                  onChange={(moment) =>
-                    handleDateChange("setupTimeEnd", moment)
-                  }
+                  onChange={(m) => handleDateChange("setupTimeEnd", m)}
                   dateFormat="YYYY-MM-DD"
                   timeFormat="HH:mm:ss"
                 />
@@ -399,6 +464,7 @@ const CDRs = ({ cgratesConfig }) => {
                 </Form.Control>
               </Form.Group>
             </Col>
+
             <Col md={3}>
               <Form.Group controlId="formAccount">
                 <Form.Label>Account</Form.Label>
@@ -413,6 +479,7 @@ const CDRs = ({ cgratesConfig }) => {
                 </Form.Text>
               </Form.Group>
             </Col>
+
             <Col md={3}>
               <Form.Group controlId="formSubject">
                 <Form.Label>Subject</Form.Label>
@@ -427,8 +494,9 @@ const CDRs = ({ cgratesConfig }) => {
                 </Form.Text>
               </Form.Group>
             </Col>
+
             <Col md={3}>
-              <Form.Group controlId="formSubject">
+              <Form.Group controlId="formDestination">
                 <Form.Label>Destination</Form.Label>
                 <Form.Control
                   type="text"
@@ -441,6 +509,7 @@ const CDRs = ({ cgratesConfig }) => {
                 </Form.Text>
               </Form.Group>
             </Col>
+
             <Col md={3}>
               <Form.Group controlId="formCategory">
                 <Form.Label>Category</Form.Label>
@@ -449,7 +518,7 @@ const CDRs = ({ cgratesConfig }) => {
                   name="category"
                   value={searchParams.category}
                   onChange={handleCategoryChange}
-                  multiple // Enable multiple selection
+                  multiple
                 >
                   {categoryOptions.map((option, index) => (
                     <option key={index} value={option.value}>
@@ -462,6 +531,25 @@ const CDRs = ({ cgratesConfig }) => {
                 </Form.Text>
               </Form.Group>
             </Col>
+
+            {/* NEW: Limit control */}
+            <Col md={3}>
+              <Form.Group controlId="formLimit">
+                <Form.Label>Limit</Form.Label>
+                <Form.Control
+                  type="number"
+                  name="limit"
+                  min={1}
+                  step={1}
+                  value={searchParams.limit}
+                  onChange={handleLimitChange}
+                />
+                <Form.Text muted>
+                  Number of CDRs per page (default 50).
+                </Form.Text>
+              </Form.Group>
+            </Col>
+
             <Col md={12} className="d-flex align-items-end mt-3">
               <Button type="submit" className="w-100">
                 Search
@@ -509,7 +597,7 @@ const CDRs = ({ cgratesConfig }) => {
                   onClick={() => handleRowClick(result)}
                   style={{ cursor: "pointer" }}
                 >
-                  <td>{index + 1 + (currentPage - 1) * 50}</td>
+                  <td>{index + 1 + (currentPage - 1) * effectiveLimit}</td>
                   <td>
                     {moment(result.SetupTime).format("YYYY-MM-DD HH:mm:ss")}
                   </td>
@@ -537,10 +625,13 @@ const CDRs = ({ cgratesConfig }) => {
 
         <Pagination className="justify-content-center mt-4">
           <Pagination.Prev
-            disabled={offset === 0}
+            disabled={offset === 0 || isLoading}
             onClick={handlePreviousPage}
           />
-          <Pagination.Next onClick={handleNextPage} />
+          <Pagination.Next
+            disabled={nextDisabled || isLoading}
+            onClick={handleNextPage}
+          />
         </Pagination>
 
         {results.length > 0 && (
@@ -551,6 +642,49 @@ const CDRs = ({ cgratesConfig }) => {
           >
             Export
           </Button>
+        )}
+
+        {results.length > 0 && (
+          <div className="mt-4">
+            <h5>Totals by Category (current page)</h5>
+            <Table bordered hover size="sm">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Total Cost</th>
+                  <th>Total Usage</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.keys(categoryTotals)
+                  .sort((a, b) => a.localeCompare(b))
+                  .map((cat) => (
+                    <tr key={cat}>
+                      <td>{cat}</td>
+                      <td>{categoryTotals[cat].cost}</td>
+                      <td>
+                        {formatCategoryUsageTotal(
+                          cat,
+                          categoryTotals[cat].usage
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                <tr>
+                  <th>Grand Total</th>
+                  <th>{grandTotals.totalCost}</th>
+                  <th>
+                    {/* Grand usage is shown raw to avoid mixing units between categories */}
+                    {grandTotals.totalUsage}
+                  </th>
+                </tr>
+              </tbody>
+            </Table>
+            <p className="text-muted">
+              Note: Usage formatting per category — Data in MB (and bytes), Call
+              in HH:MM:SS (and ns), others raw.
+            </p>
+          </div>
         )}
       </Container>
 
@@ -675,7 +809,7 @@ const CDRs = ({ cgratesConfig }) => {
           <Button
             variant="primary"
             onClick={handleExport}
-            disabled={isExporting}
+            disabled={isExporting || !selectedExporter}
           >
             Export
           </Button>
