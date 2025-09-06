@@ -410,7 +410,7 @@ function App() {
               <Form.Label>API URL</Form.Label>
               <Form.Control
                 type="text"
-                placeholder={cgratesConfig.url || 'http://localhost:2080'}
+                placeholder={cgratesConfig.url || 'http://127.0.0.2:2080'}
                 value={cgratesConfig.url}
                 onChange={(e) => handleConfigChange('url', e.target.value)}
               />
