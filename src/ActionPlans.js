@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form, Button, Container, Row, Col, Table, Modal, Spinner, Accordion, ListGroup, Alert } from 'react-bootstrap';
-import AccountDropdown from './AccountDropdown'; // Import the AccountDropdown component
+import AccountDropdown from './AccountDropdown'; // Updated AccountDropdown that accepts `tenant`
 
 const Actions = ({ cgratesConfig }) => {
     const [searchParams, setSearchParams] = useState({
@@ -15,6 +15,11 @@ const Actions = ({ cgratesConfig }) => {
     const [isEditing, setIsEditing] = useState(false); // Toggle editing mode
     const [isNew, setIsNew] = useState(false); // Flag to track if creating a new action plan
     const [errorMessage, setErrorMessage] = useState(''); // Handle error messages
+
+    // Clear selected account when tenant changes (keeps AccountDropdown in sync)
+    useEffect(() => {
+        setSelectedAccount(null);
+    }, [searchParams.tenant]);
 
     // Handle input change for tenant selection
     const handleInputChange = (event) => {
@@ -496,10 +501,11 @@ const Actions = ({ cgratesConfig }) => {
                                             ))}
                                         </Accordion>
 
-
                                         <h5>Assign ActionPlan to Account</h5>
                                         <AccountDropdown
+                                            key={searchParams.tenant}                  // force remount on tenant switch
                                             cgratesConfig={cgratesConfig}
+                                            tenant={searchParams.tenant}               // pass current tenant to dropdown
                                             onSelect={setSelectedAccount}
                                         />
                                         <Button
