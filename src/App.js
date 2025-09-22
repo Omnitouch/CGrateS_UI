@@ -10,6 +10,7 @@ import ActionPlans from './ActionPlans';
 import ActionTriggers from './ActionTriggers.js';
 import Actions from './Actions';
 import Attributes from './Attributes';
+import Destinations from './Destinations.js';
 import Filters from './Filters';
 import RouteS from './RouteS';
 import Config from './Config';
@@ -67,6 +68,7 @@ function TitleUpdater() {
       '/timings': 'Timings - Omnitouch CGrateS UI',
       '/stats': 'Stats - Omnitouch CGrateS UI',
       '/routeprofiles': 'Route Profiles - Omnitouch CGrateS UI',
+      '/destinations': 'Destinations - Omnitouch CGrateS UI',
       '/tariffplans': 'TariffPlans - Omnitouch CGrateS UI',
       '/getcost': 'GetCost - Omnitouch CGrateS UI',
       '/event-reader': 'Event Reader - Omnitouch CGrateS UI',
@@ -349,6 +351,7 @@ function App() {
               {showRateDropdown && (
                 <div style={{ paddingLeft: '1rem', borderLeft: '2px solid #ccc', marginTop: '0.5rem' }}>
                   <Nav.Link as={Link} to="/chargers" onClick={() => setShowOffcanvas(false)}>Chargers</Nav.Link>
+                  <Nav.Link as={Link} to="/destinations" onClick={() => setShowOffcanvas(false)}>Destinations</Nav.Link>
                   <Nav.Link as={Link} to="/destinationrates" onClick={() => setShowOffcanvas(false)}>DestinationRates</Nav.Link>
                   <Nav.Link as={Link} to="/ratingplans" onClick={() => setShowOffcanvas(false)}>RatingPlans</Nav.Link>
                   <Nav.Link as={Link} to="/ratingprofiles" onClick={() => setShowOffcanvas(false)}>RatingProfiles</Nav.Link>
@@ -385,6 +388,7 @@ function App() {
           <Route path="/filters" element={<Filters cgratesConfig={cgratesConfig} />} />
           <Route path="/chargers" element={<Chargers cgratesConfig={cgratesConfig} />} />
           <Route path="/destinationrates" element={<DestinationRates cgratesConfig={cgratesConfig} />} />
+          <Route path="/destinations" element={<Destinations cgratesConfig={cgratesConfig} />} />
           <Route path="/ratingplans" element={<RatingPlans cgratesConfig={cgratesConfig} />} />
           <Route path="/ratingprofiles" element={<RatingProfiles cgratesConfig={cgratesConfig} />} />
           <Route path="/timings" element={<Timings cgratesConfig={cgratesConfig} />} />
