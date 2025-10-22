@@ -29,6 +29,7 @@ import RouteProfiles from './RouteProfiles.js';
 import ExportedCDRs from './ExportedCDRs.js';
 import ExecuteJSON from './ExecuteJSON.js';
 import ChargingTester from './ChargeTester.js';
+import UpcomingActionPlans from './UpcomingActionPlans.js';
 
 // --- helpers ---
 function normalizeTenants(tenants) {
@@ -56,6 +57,7 @@ function TitleUpdater() {
       '/sessions': 'Sessions - Omnitouch CGrateS UI',
       '/resources': 'Resources - Omnitouch CGrateS UI',
       '/action-plans': 'Action Plans - Omnitouch CGrateS UI',
+      '/upcoming-action-plans': 'Upcoming ActionPlans - Omnitouch CGrateS UI',
       '/action-triggers': 'Action Triggers - Omnitouch CGrateS UI',
       '/actions': 'Actions - Omnitouch CGrateS UI',
       '/routes': 'Routes - Omnitouch CGrateS UI',
@@ -331,6 +333,7 @@ function App() {
                 <div style={{ paddingLeft: '1rem', borderLeft: '2px solid #ccc', marginTop: '0.5rem' }}>
                   <Nav.Link as={Link} to="/action-triggers" onClick={() => setShowOffcanvas(false)}>Action Triggers</Nav.Link>
                   <Nav.Link as={Link} to="/action-plans" onClick={() => setShowOffcanvas(false)}>Action Plans</Nav.Link>
+                  <Nav.Link as={Link} to="/upcoming-action-plans" onClick={() => setShowOffcanvas(false)}>Upcoming ActionPlans</Nav.Link>
                   <Nav.Link as={Link} to="/actions" onClick={() => setShowOffcanvas(false)}>Actions</Nav.Link>
                 </div>
               )}
@@ -382,6 +385,7 @@ function App() {
           <Route path="/resources" element={<Resources cgratesConfig={cgratesConfig} />} />
           <Route path="/action-triggers" element={<ActionTriggers cgratesConfig={cgratesConfig} />} />
           <Route path="/action-plans" element={<ActionPlans cgratesConfig={cgratesConfig} />} />
+          <Route path="/upcoming-action-plans" element={<UpcomingActionPlans cgratesConfig={cgratesConfig} />} />
           <Route path="/actions" element={<Actions cgratesConfig={cgratesConfig} />} />
           <Route path="/routes" element={<RouteS cgratesConfig={cgratesConfig} />} />
           <Route path="/attributes" element={<Attributes cgratesConfig={cgratesConfig} />} />
