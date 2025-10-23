@@ -30,6 +30,7 @@ import ExportedCDRs from './ExportedCDRs.js';
 import ExecuteJSON from './ExecuteJSON.js';
 import ChargingTester from './ChargeTester.js';
 import UpcomingActionPlans from './UpcomingActionPlans.js';
+import Thresholds from './Thresholds.js';
 
 // --- helpers ---
 function normalizeTenants(tenants) {
@@ -69,6 +70,7 @@ function TitleUpdater() {
       '/ratingprofiles': 'RatingProfiles - Omnitouch CGrateS UI',
       '/timings': 'Timings - Omnitouch CGrateS UI',
       '/stats': 'Stats - Omnitouch CGrateS UI',
+      '/thresholds': 'Thresholds - Omnitouch CGrateS UI',
       '/routeprofiles': 'Route Profiles - Omnitouch CGrateS UI',
       '/destinations': 'Destinations - Omnitouch CGrateS UI',
       '/tariffplans': 'TariffPlans - Omnitouch CGrateS UI',
@@ -317,6 +319,7 @@ function App() {
             <Nav.Link as={Link} to="/sessions" onClick={() => setShowOffcanvas(false)}>Sessions</Nav.Link>
             <Nav.Link as={Link} to="/resources" onClick={() => setShowOffcanvas(false)}>Resources</Nav.Link>
             <Nav.Link as={Link} to="/stats" onClick={() => setShowOffcanvas(false)}>Stats</Nav.Link>
+            <Nav.Link as={Link} to="/thresholds" onClick={() => setShowOffcanvas(false)}>Thresholds</Nav.Link>
             <Nav.Link as={Link} to="/filters" onClick={() => setShowOffcanvas(false)}>Filters</Nav.Link>
             <Nav.Link as={Link} to="/event-reader" onClick={() => setShowOffcanvas(false)}>Event Reader</Nav.Link>
 
@@ -397,6 +400,7 @@ function App() {
           <Route path="/ratingprofiles" element={<RatingProfiles cgratesConfig={cgratesConfig} />} />
           <Route path="/timings" element={<Timings cgratesConfig={cgratesConfig} />} />
           <Route path="/stats" element={<StatsS cgratesConfig={cgratesConfig} />} />
+          <Route path="/thresholds" element={<Thresholds cgratesConfig={cgratesConfig} />} />
           <Route path="/routeprofiles" element={<RouteProfiles cgratesConfig={cgratesConfig} />} />
           <Route path="/getcost" element={<GetCostView cgratesConfig={cgratesConfig} />} />
           <Route path="/tariffplans" element={<TariffPlans cgratesConfig={cgratesConfig} />} />
