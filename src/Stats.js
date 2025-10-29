@@ -329,6 +329,54 @@ const StatsS = ({ cgratesConfig }) => {
         }
     };
 
+    const clearAllStats = async () => {
+        if (!window.confirm('Are you sure you want to clear ALL stats? This will reset all stat queues.')) {
+            return;
+        }
+
+        setIsLoading(true);
+        let successCount = 0;
+        let failCount = 0;
+
+        try {
+            for (const profile of profiles) {
+                try {
+                    const query = {
+                        method: 'StatSv1.ResetStatQueue',
+                        params: [{ Tenant: searchParams.tenant, ID: profile }],
+                        id: 4,
+                    };
+
+                    const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(query),
+                    });
+
+                    const data = await response.json();
+
+                    if (data.result) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
+                } catch (error) {
+                    console.error(`Error clearing stat ${profile}:`, error);
+                    failCount++;
+                }
+            }
+
+            alert(`Cleared ${successCount} stats successfully. ${failCount > 0 ? `Failed to clear ${failCount} stats.` : ''}`);
+        } catch (error) {
+            console.error('Error clearing all stats:', error);
+            alert('An error occurred while clearing stats.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const handleNewProfile = () => {
         setEditProfile({
             Tenant: searchParams.tenant,
@@ -384,7 +432,15 @@ const StatsS = ({ cgratesConfig }) => {
                         </Col>
                         <Col>
                             <Button onClick={fetchProfiles} className="me-2">Fetch Profiles</Button>
-                            <Button onClick={handleNewProfile} variant="success">Create Stat</Button>
+                            <Button onClick={handleNewProfile} variant="success" className="me-2">Create Stat</Button>
+                            <Button
+                                onClick={clearAllStats}
+                                variant="danger"
+                                className="me-2"
+                                disabled={profiles.length === 0 || isLoading}
+                            >
+                                Clear All Stats
+                            </Button>
                         </Col>
                     </Row>
                 </Form>
@@ -409,6 +465,17 @@ const StatsS = ({ cgratesConfig }) => {
                                         }}
                                     >
                                         View Metrics
+                                    </Button>
+                                    <Button
+                                        className="me-2"
+                                        variant="primary"
+                                        onClick={async (e) => {
+                                            e.stopPropagation();
+                                            await fetchProfileDetails(profile);
+                                            setIsEditing(true);
+                                        }}
+                                    >
+                                        Edit Stats
                                     </Button>
                                     <Button
                                         className="me-2"
