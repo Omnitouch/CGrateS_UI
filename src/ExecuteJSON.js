@@ -98,6 +98,7 @@ const ExecuteJSON = ({ cgratesConfig }) => {
   const [error, setError] = useState('');
   const [history, setHistory] = useState(() => loadHistory());
   const [selectedHistoryId, setSelectedHistoryId] = useState(null);
+  const [executionTime, setExecutionTime] = useState(null);
 
   // caret position state
   const [caretPos, setCaretPos] = useState(0);
@@ -184,6 +185,7 @@ const ExecuteJSON = ({ cgratesConfig }) => {
     setStatus('sending');
     setError('');
     setResponseText('');
+    setExecutionTime(null);
     setErrorPos(null);
     setErrorLineCol(null);
     setErrorLinePreview('');
@@ -197,6 +199,7 @@ const ExecuteJSON = ({ cgratesConfig }) => {
       return;
     }
 
+    const startTime = Date.now();
     try {
       const res = await fetch(apiUrl, {
         method: 'POST',
@@ -205,6 +208,10 @@ const ExecuteJSON = ({ cgratesConfig }) => {
       });
 
       const text = await res.text();
+      const endTime = Date.now();
+      const execTime = ((endTime - startTime) / 1000).toFixed(3);
+      setExecutionTime(execTime);
+
       let parsed;
       try {
         parsed = JSON.parse(text);
@@ -318,6 +325,11 @@ const ExecuteJSON = ({ cgratesConfig }) => {
           <h2>Execute JSON</h2>
           <div className="text-muted mb-3">
             Endpoint:&nbsp;<code>{apiUrl}</code> &nbsp; {latestStatusBadge()}
+            {executionTime !== null && (
+              <span className="ms-2">
+                <Badge bg="info">Execution time: {executionTime}s</Badge>
+              </span>
+            )}
           </div>
 
           {/* Request */}
