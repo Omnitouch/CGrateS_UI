@@ -389,17 +389,18 @@ const GetAccounts = ({ cgratesConfig }) => {
   };
 
 
-  const removeActionPlan = async (tenant, actionPlanId) => {
+  const removeActionPlanFromAccount = async (tenant, account, actionPlanId) => {
     const removeActionPlanQuery = {
-      method: 'APIerSv1.RemoveActionPlan',
+      method: 'APIerSv1.RemoveAccountActionPlans',
       params: [{
         Tenant: tenant,
-        Id: actionPlanId
+        Account: account,
+        ActionPlanIDs: [actionPlanId]
       }],
       id: 6
     };
 
-    console.log(`Removing action plan: ${actionPlanId}`);
+    console.log(`Removing action plan ${actionPlanId} from account: ${account}`);
 
     try {
       const response = await fetch(cgratesConfig.url + '/jsonrpc', {
@@ -415,15 +416,61 @@ const GetAccounts = ({ cgratesConfig }) => {
       }
 
       const data = await response.json();
-      console.log('Action plan removed successfully:', data);
+      console.log('Action plan removed from account successfully:', data);
 
       // Refresh modal content after removing the action plan
       if (selectedRowData) {
         const [tenant, account] = selectedRowData.ID.split(':');
         fetchAccountDetails(tenant, account); // Refresh account details
+        const actionPlans = await fetchActionPlans(tenant, account);
+        setActionPlans(actionPlans);
       }
     } catch (error) {
-      console.error('Error removing action plan:', error);
+      console.error('Error removing action plan from account:', error);
+    }
+  };
+
+  const deleteActionPlanGlobal = async (tenant, actionPlanId) => {
+    if (!window.confirm(`Are you sure you want to DELETE the action plan "${actionPlanId}" globally? This will remove it from all accounts.`)) {
+      return;
+    }
+
+    const deleteActionPlanQuery = {
+      method: 'APIerSv1.RemoveActionPlan',
+      params: [{
+        Tenant: tenant,
+        Id: actionPlanId
+      }],
+      id: 6
+    };
+
+    console.log(`Deleting action plan globally: ${actionPlanId}`);
+
+    try {
+      const response = await fetch(cgratesConfig.url + '/jsonrpc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(deleteActionPlanQuery),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Action plan deleted globally successfully:', data);
+
+      // Refresh modal content after deleting the action plan
+      if (selectedRowData) {
+        const [tenant, account] = selectedRowData.ID.split(':');
+        fetchAccountDetails(tenant, account); // Refresh account details
+        const actionPlans = await fetchActionPlans(tenant, account);
+        setActionPlans(actionPlans);
+      }
+    } catch (error) {
+      console.error('Error deleting action plan globally:', error);
     }
   };
 
@@ -913,37 +960,61 @@ const GetAccounts = ({ cgratesConfig }) => {
               )}
               <h5>Action Plans</h5>
               {actionPlans && actionPlans.length > 0 ? (
-                <Table striped bordered hover>
-                  <thead>
-                    <tr>
-                      <th>Action Plan ID</th>
-                      <th>UUID</th>
-                      <th>Actions ID</th>
-                      <th>Next Execution Time</th>
-                      <th>Remove</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {actionPlans.map((plan, index) => (
-                      <tr key={index}>
-                        <td style={{ maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {plan.ActionPlanId}
-                        </td>
-                        <td>{plan.Uuid}</td>
-                        <td>{plan.ActionsId}</td>
-                        <td>{plan.NextExecTime}</td>
-                        <td>
-                          <Button
-                            variant="danger"
-                            onClick={() => removeActionPlan(accountDetails.Tenant, plan.ActionPlanId)}
-                          >
-                            Remove
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
+                <div>
+                  {actionPlans.map((plan, index) => {
+                    const { prettyDate, timeUntil } = formatExpiration(plan.NextExecTime);
+                    return (
+                      <div key={index} style={{
+                        border: '1px solid #dee2e6',
+                        borderRadius: '5px',
+                        padding: '15px',
+                        marginBottom: '15px',
+                        backgroundColor: '#f8f9fa'
+                      }}>
+                        <Row>
+                          <Col md={12}>
+                            <p><strong>Action Plan ID:</strong><br />{plan.ActionPlanId}</p>
+                          </Col>
+                        </Row>
+                        <Row>
+                          <Col md={6}>
+                            <p><strong>UUID:</strong> {plan.Uuid}</p>
+                            <p><strong>Actions ID:</strong><br />{plan.ActionsId}</p>
+                          </Col>
+                          <Col md={6}>
+                            <p>
+                              <strong>Next Execution Time:</strong><br />
+                              {prettyDate}
+                              <br />
+                              <span style={{ color: 'gray' }}>Time until execution: {timeUntil}</span>
+                            </p>
+                          </Col>
+                        </Row>
+                        <Row className="mt-2">
+                          <Col>
+                            <Button
+                              variant="warning"
+                              onClick={() => removeActionPlanFromAccount(
+                                accountDetails.Tenant,
+                                accountDetails.ID.split(':')[1],
+                                plan.ActionPlanId
+                              )}
+                              className="me-2"
+                            >
+                              Remove Action from Account
+                            </Button>
+                            <Button
+                              variant="danger"
+                              onClick={() => deleteActionPlanGlobal(accountDetails.Tenant, plan.ActionPlanId)}
+                            >
+                              Delete ActionPlan Global
+                            </Button>
+                          </Col>
+                        </Row>
+                      </div>
+                    );
+                  })}
+                </div>
               ) : (
                 <p>No action plans available for this account.</p>
               )}

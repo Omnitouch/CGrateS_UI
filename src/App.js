@@ -289,7 +289,7 @@ function App() {
       <TitleUpdater />
 
       <Navbar bg="dark" variant="dark" expand={false} fixed="top">
-        <Container>
+        <Container fluid className="d-flex justify-content-between align-items-center">
           <Navbar.Brand as={Link} to="/">Omnitouch CGrateS UI</Navbar.Brand>
           <Button variant="outline-info" onClick={handleOpenModal}>
             Connection to CGrateS: {testResult ? (testResult.includes('successful') ? 'Connected' : 'Disconnected') : 'Unknown'}
@@ -303,7 +303,7 @@ function App() {
               }}
             />
           </Button>
-          <Button variant="outline-light" onClick={() => setShowOffcanvas((s) => !s)}>☰</Button>
+          <Button variant="outline-light" onClick={() => setShowOffcanvas((s) => !s)} className="ms-auto">☰</Button>
         </Container>
       </Navbar>
 
