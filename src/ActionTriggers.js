@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form, Button, Container, Row, Col, Table, Modal, Spinner, Alert } from 'react-bootstrap';
 
 const ActionTriggers = ({ cgratesConfig }) => {
     const [searchParams, setSearchParams] = useState({
-        tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant
+        tenant: cgratesConfig.tenants.split(';')[0],
     });
+
+    // Sync tenant with config when it changes
+    useEffect(() => {
+        setSearchParams(prev => ({ ...prev, tenant: cgratesConfig.tenants.split(';')[0] }));
+    }, [cgratesConfig.tenants]);
+
     const [triggers, setTriggers] = useState([]); // Store the list of action triggers
     const [editTrigger, setEditTrigger] = useState(null); // Store editable trigger details
     const [showModal, setShowModal] = useState(false); // Control the modal display

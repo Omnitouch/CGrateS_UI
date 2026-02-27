@@ -1,10 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form, Button, Container, Row, Col, Table, Modal, Spinner, Alert } from 'react-bootstrap';
 
 const Thresholds = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
-    tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant
+    tenant: cgratesConfig.tenants.split(';')[0],
   });
+
+  // Sync tenant with config when it changes
+  useEffect(() => {
+    setSearchParams(prev => ({ ...prev, tenant: cgratesConfig.tenants.split(';')[0] }));
+  }, [cgratesConfig.tenants]);
   const [thresholds, setThresholds] = useState([]); // Store the list of threshold profile IDs
   const [selectedThreshold, setSelectedThreshold] = useState(null); // Store the selected threshold profile details
   const [editThreshold, setEditThreshold] = useState(null); // Store the editable threshold details

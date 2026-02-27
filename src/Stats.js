@@ -29,9 +29,10 @@ const StatsS = ({ cgratesConfig }) => {
         { value: '*distinct', label: 'Generic distinct' },
     ];
 
+    // Sync tenant with config when it changes
     useEffect(() => {
-        setSearchParams({ tenant: cgratesConfig.tenants.split(';')[0] });
-    }, [cgratesConfig]);
+        setSearchParams(prev => ({ ...prev, tenant: cgratesConfig.tenants.split(';')[0] }));
+    }, [cgratesConfig.tenants]);
 
     const handleInputChange = (event) => {
         const { name, value } = event.target;

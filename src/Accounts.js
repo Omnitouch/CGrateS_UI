@@ -8,6 +8,12 @@ const GetAccounts = ({ cgratesConfig }) => {
     account: '',
   });
 
+  // Sync tenant with config when it changes
+  useEffect(() => {
+    const newTenant = (cgratesConfig.tenants || '').split(';')[0] || '';
+    setSearchParams(prev => ({ ...prev, tenant: newTenant }));
+  }, [cgratesConfig.tenants]);
+
   const [results, setResults] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10); // Default 10 records per page

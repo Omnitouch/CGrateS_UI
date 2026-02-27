@@ -4,10 +4,15 @@ import moment from 'moment';
 
 const GetRoutes = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
-    tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant
+    tenant: cgratesConfig.tenants.split(';')[0],
     account: '',
     destination: ''
   });
+
+  // Sync tenant with config when it changes
+  useEffect(() => {
+    setSearchParams(prev => ({ ...prev, tenant: cgratesConfig.tenants.split(';')[0] }));
+  }, [cgratesConfig.tenants]);
 
   const [query, setQuery] = useState(null); // State to store the API query object
   const [apiQuery, setApiQuery] = useState('');
@@ -131,7 +136,7 @@ const GetRoutes = ({ cgratesConfig }) => {
         body: JSON.stringify({
           method: 'APIerSv1.GetFilter',
           params: [{
-            Tenant: 'cgrates.org',
+            Tenant: searchParams.tenant,
             Id: `Filter_Operator_Route_Blacklist_${operatorName}`,
           }],
         }),

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form, Button, Container, Row, Col, Spinner, Alert } from 'react-bootstrap';
 
 const GetCostView = ({ cgratesConfig }) => {
@@ -15,13 +15,19 @@ const GetCostView = ({ cgratesConfig }) => {
     };
 
     const [formData, setFormData] = useState({
-        Tenant: 'cgrates.org',
+        Tenant: cgratesConfig.tenants.split(';')[0],
         Category: 'call',
         Subject: '',
         AnswerTime: getCurrentDateTimeUTC(), // Default AnswerTime to the current UTC date and time
         Destination: '',
         Usage: '60', // Default Usage to 60 seconds
     });
+
+    // Sync tenant with config when it changes
+    useEffect(() => {
+        setFormData(prev => ({ ...prev, Tenant: cgratesConfig.tenants.split(';')[0] }));
+    }, [cgratesConfig.tenants]);
+
     const [costResult, setCostResult] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState(null);

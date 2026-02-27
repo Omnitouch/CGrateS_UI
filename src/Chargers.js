@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Form, Button, Container, Row, Col, Table, Modal, Spinner, ListGroup } from 'react-bootstrap';
 
 const Chargers = ({ cgratesConfig }) => {
+  const [tenant, setTenant] = useState(cgratesConfig.tenants.split(';')[0]);
   const [chargers, setChargers] = useState([]); // Store the list of chargers
   const [selectedCharger, setSelectedCharger] = useState(null); // Store the selected charger's details
   const [showModal, setShowModal] = useState(false); // Control the modal display
@@ -11,9 +12,14 @@ const Chargers = ({ cgratesConfig }) => {
   const [isEditing, setIsEditing] = useState(false); // Manage edit state
   const [editCharger, setEditCharger] = useState({}); // Store edited charger
 
+  // Sync tenant with config when it changes
+  useEffect(() => {
+    setTenant(cgratesConfig.tenants.split(';')[0]);
+  }, [cgratesConfig.tenants]);
+
   useEffect(() => {
     fetchChargers();
-  }, [cgratesConfig]);
+  }, [tenant]);
 
   // Fetch all charger profile IDs based on the selected tenant
   const fetchChargers = async () => {
@@ -24,7 +30,7 @@ const Chargers = ({ cgratesConfig }) => {
     try {
       const query = {
         method: 'APIerSv1.GetChargerProfileIDs',
-        params: [{ Tenant: cgratesConfig.tenants.split(';')[0], Limit: null, Offset: null }],
+        params: [{ Tenant: tenant, Limit: null, Offset: null }],
         id: 1,
       };
 

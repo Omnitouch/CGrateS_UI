@@ -13,10 +13,10 @@ const RouteProfiles = ({ cgratesConfig }) => {
   const [isEditing, setIsEditing] = useState(false); // Manage edit state
   const [editRouteProfile, setEditRouteProfile] = useState({}); // Store edited route profile
 
+  // Sync tenant with config when it changes
   useEffect(() => {
-    // Ensure tenant is set to default on mount
-    setSearchParams({ tenant: cgratesConfig.tenants.split(';')[0] });
-  }, [cgratesConfig]);
+    setSearchParams(prev => ({ ...prev, tenant: cgratesConfig.tenants.split(';')[0] }));
+  }, [cgratesConfig.tenants]);
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;

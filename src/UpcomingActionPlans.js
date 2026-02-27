@@ -15,6 +15,12 @@ const UpcomingActionPlans = ({ cgratesConfig }) => {
   const [selectedRowData, setSelectedRowData] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
 
+  // Sync tenant with config when it changes
+  useEffect(() => {
+    const newTenant = (cgratesConfig.tenants || '').split(';')[0] || '';
+    setSearchParams(prev => ({ ...prev, tenant: newTenant }));
+  }, [cgratesConfig.tenants]);
+
   useEffect(() => {
     if (searchParams.tenant) {
       fetchResults(1); // Fetch results for the first page whenever the tenant changes

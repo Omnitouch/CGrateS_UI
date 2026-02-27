@@ -3,8 +3,13 @@ import { Form, Button, Container, Row, Col, Table, Modal, Spinner, Accordion, Li
 
 const Attributes = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
-    tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant // Tenant selection
+    tenant: cgratesConfig.tenants.split(';')[0],
   });
+
+  // Sync tenant with config when it changes
+  useEffect(() => {
+    setSearchParams(prev => ({ ...prev, tenant: cgratesConfig.tenants.split(';')[0] }));
+  }, [cgratesConfig.tenants]);
   const [attributes, setAttributes] = useState([]); // Store the list of attributes
   const [selectedAttribute, setSelectedAttribute] = useState(null); // Store the selected attribute's details
   const [editAttribute, setEditAttribute] = useState(null); // Store the editable attribute details

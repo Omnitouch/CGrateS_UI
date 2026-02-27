@@ -53,6 +53,11 @@ const ChargingTester = ({ cgratesConfig }) => {
     setFlags({ ...flags, [key]: !flags[key] });
   };
 
+  // Sync tenant with config when it changes
+  useEffect(() => {
+    setTenant(cgratesConfig.tenants.split(';')[0]);
+  }, [cgratesConfig.tenants]);
+
   // Clear account/subject/response when tenant changes so dropdown refetches cleanly
   useEffect(() => {
     setAccount(null);

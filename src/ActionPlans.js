@@ -4,7 +4,7 @@ import AccountDropdown from './AccountDropdown'; // Updated AccountDropdown that
 
 const Actions = ({ cgratesConfig }) => {
     const [searchParams, setSearchParams] = useState({
-        tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant
+        tenant: cgratesConfig.tenants.split(';')[0],
     });
     const [actions, setActions] = useState([]); // Store the list of action plans
     const [selectedAction, setSelectedAction] = useState(null); // Store the selected action plan's details
@@ -15,6 +15,11 @@ const Actions = ({ cgratesConfig }) => {
     const [isEditing, setIsEditing] = useState(false); // Toggle editing mode
     const [isNew, setIsNew] = useState(false); // Flag to track if creating a new action plan
     const [errorMessage, setErrorMessage] = useState(''); // Handle error messages
+
+    // Sync tenant with config when it changes
+    useEffect(() => {
+        setSearchParams(prev => ({ ...prev, tenant: cgratesConfig.tenants.split(';')[0] }));
+    }, [cgratesConfig.tenants]);
 
     // Clear selected account when tenant changes (keeps AccountDropdown in sync)
     useEffect(() => {

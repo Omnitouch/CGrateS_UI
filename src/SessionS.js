@@ -1,13 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form, Button, Container, Row, Col, Table, Modal, Spinner } from 'react-bootstrap';
 import Datetime from 'react-datetime';
 import moment from 'moment';
-import { useEffect } from 'react';
 
 const SessionS = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
-    tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant
+    tenant: cgratesConfig.tenants.split(';')[0],
   });
+
+  // Sync tenant with config when it changes
+  useEffect(() => {
+    setSearchParams(prev => ({ ...prev, tenant: cgratesConfig.tenants.split(';')[0] }));
+  }, [cgratesConfig.tenants]);
+
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);

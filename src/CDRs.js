@@ -55,7 +55,7 @@ const CDRs = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
     setupTimeStart: "",
     setupTimeEnd: "",
-    tenant: cgratesConfig.tenants.split(";")[0], // Default to the first tenant
+    tenant: cgratesConfig.tenants.split(";")[0],
     account: "",
     past: "",
     cgratesInstance: "",
@@ -64,6 +64,11 @@ const CDRs = ({ cgratesConfig }) => {
     destination: "",
     limit: 50, // NEW: default Limit
   });
+
+  // Sync tenant with config when it changes
+  useEffect(() => {
+    setSearchParams(prev => ({ ...prev, tenant: cgratesConfig.tenants.split(";")[0] }));
+  }, [cgratesConfig.tenants]);
 
   const [query, setQuery] = useState(null); // API query object
   const [apiQuery, setApiQuery] = useState("");

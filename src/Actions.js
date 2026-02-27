@@ -14,8 +14,14 @@ import AccountDropdown from "./AccountDropdown"; // Updated AccountDropdown expe
 
 const ActionsPage = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
-    tenant: cgratesConfig.tenants.split(";")[0], // Default to the first tenant
+    tenant: cgratesConfig.tenants.split(";")[0],
   });
+
+  // Sync tenant with config when it changes
+  useEffect(() => {
+    setSearchParams(prev => ({ ...prev, tenant: cgratesConfig.tenants.split(";")[0] }));
+  }, [cgratesConfig.tenants]);
+
   const [actions, setActions] = useState([]); // Store the list of actions
   const [selectedAction, setSelectedAction] = useState(null); // Store the selected action's details
   const [selectedAccount, setSelectedAccount] = useState(null); // Store the selected account details

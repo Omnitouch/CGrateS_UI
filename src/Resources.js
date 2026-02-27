@@ -1,10 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form, Button, Container, Row, Col, Table, Modal, Spinner, ListGroup } from 'react-bootstrap';
 
 const Resources = ({ cgratesConfig }) => {
   const [searchParams, setSearchParams] = useState({
-    tenant: cgratesConfig.tenants.split(';')[0], // Default to the first tenant // Tenant selection
+    tenant: cgratesConfig.tenants.split(';')[0],
   });
+
+  // Sync tenant with config when it changes
+  useEffect(() => {
+    setSearchParams(prev => ({ ...prev, tenant: cgratesConfig.tenants.split(';')[0] }));
+  }, [cgratesConfig.tenants]);
   const [resources, setResources] = useState([]); // Store the list of resources
   const [selectedResource, setSelectedResource] = useState(null); // Store the selected resource's details
   const [showModal, setShowModal] = useState(false); // Control the modal display
