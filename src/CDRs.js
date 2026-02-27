@@ -30,8 +30,8 @@ const pastOptions = [
   { label: "Past 2 years", value: 1051200 },
 ];
 
-// Options for the "Category" dropdown
-const categoryOptions = [
+// Default options for the "Category" dropdown (can be overridden by config)
+const defaultCategoryOptions = [
   { label: "Call", value: "call" },
   { label: "SMS", value: "sms" },
   { label: "SMS A2P", value: "sms_a2p" },
@@ -52,6 +52,11 @@ const formatNsToHMS = (nanoseconds) => {
 const bytesToMB = (bytes) => (Number(bytes) || 0) / (1024 * 1024);
 
 const CDRs = ({ cgratesConfig }) => {
+  // Use categories from config if available, otherwise fall back to defaults
+  const categoryOptions = useMemo(() => {
+    return cgratesConfig.categories || defaultCategoryOptions;
+  }, [cgratesConfig.categories]);
+
   const [searchParams, setSearchParams] = useState({
     setupTimeStart: "",
     setupTimeEnd: "",
@@ -541,7 +546,7 @@ const CDRs = ({ cgratesConfig }) => {
     <div className="App">
       <Container>
         <Form onSubmit={handleSubmit} className="mt-4">
-          <Row>
+          <Row className="gy-3">
             <Col md={3}>
               <Form.Group controlId="formSetupTimeStart">
                 <Form.Label>Setup Time Start</Form.Label>
@@ -685,7 +690,7 @@ const CDRs = ({ cgratesConfig }) => {
               </Form.Group>
             </Col>
 
-            <Col md={12} className="d-flex align-items-end mt-3">
+            <Col md={12} className="d-flex align-items-end">
               <Button type="submit" className="w-100">
                 Search
               </Button>

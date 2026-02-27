@@ -135,6 +135,7 @@ function App() {
             tenants: normalizeTenants(cfg.tenants || cfg.tenant || ''),
             username: cfg.username || '',
             password: cfg.password || '',
+            categories: cfg.categories || null,
             json_config: null,
           };
           setCgratesConfig(normalized);
@@ -155,6 +156,7 @@ function App() {
             tenants: normalizeTenants(parsed.tenants || ''),
             username: parsed.username || '',
             password: parsed.password || '',
+            categories: parsed.categories || null,
             json_config: null,
           };
           setCgratesConfig(normalized);
@@ -170,6 +172,7 @@ function App() {
         tenants: '',
         username: '',
         password: '',
+        categories: null,
         json_config: null,
       };
       setCgratesConfig(fallback);

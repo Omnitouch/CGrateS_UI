@@ -5,11 +5,26 @@ import { v4 as uuidv4 } from 'uuid';
 
 let globalRequestId = 3;
 
+// Default categories if not specified in config
+const defaultCategories = [
+  { label: 'SMS', value: 'sms' },
+  { label: 'Data', value: 'data' },
+  { label: 'Call', value: 'call' },
+];
+
 const ChargingTester = ({ cgratesConfig }) => {
+  // Use categories from config if available, otherwise fall back to defaults
+  const categoryOptions = useMemo(() => {
+    return cgratesConfig.categories || defaultCategories;
+  }, [cgratesConfig.categories]);
+
   const [tenant, setTenant] = useState(cgratesConfig.tenants.split(';')[0]);
   const [account, setAccount] = useState(null); // { tenant, account } from AccountDropdown
   const [direction, setDirection] = useState('*out');
-  const [category, setCategory] = useState('sms');
+  const [category, setCategory] = useState(() => {
+    const cats = cgratesConfig.categories || defaultCategories;
+    return cats[0]?.value || 'sms';
+  });
   const [tor, setTor] = useState('');
   const [destination, setDestination] = useState('');
   const [subject, setSubject] = useState('');
@@ -32,21 +47,30 @@ const ChargingTester = ({ cgratesConfig }) => {
 
   const usagePresets = {
     sms: [1, 2, 3],
+    sms_a2p: [1, 2, 3],
     data: [1, 1024 * 1024, 10 * 1024 * 1024, 100 * 1024 * 1024, 1024 * 1024 * 1024],
     call: [1e9, 10e9, 60e9, 600e9],
+    default: [1, 10, 100, 1000],
   };
 
   const usageLabels = {
     sms: ['1', '2', '3'],
+    sms_a2p: ['1', '2', '3'],
     data: ['1 Byte', '1 MB', '10 MB', '100 MB', '1 GB'],
     call: ['1 second', '10 seconds', '1 minute', '10 minutes'],
+    default: ['1', '10', '100', '1000'],
   };
+
+  // Get presets for current category, falling back to 'default' for unknown categories
+  const currentPresets = usagePresets[category] || usagePresets.default;
+  const currentLabels = usageLabels[category] || usageLabels.default;
 
   const requestTypes = ['*prepaid', '*postpaid', '*rated'];
 
   const handleCategoryChange = (value) => {
     setCategory(value);
-    setUsage(usagePresets[value][0]);
+    const presets = usagePresets[value] || usagePresets.default;
+    setUsage(presets[0]);
   };
 
   const handleFlagChange = (key) => {
@@ -180,9 +204,9 @@ const ChargingTester = ({ cgratesConfig }) => {
                 value={usage}
                 onChange={(e) => setUsage(Number(e.target.value))}
               >
-                {usagePresets[category].map((val, idx) => (
+                {currentPresets.map((val, idx) => (
                   <option key={idx} value={val}>
-                    {val} ({usageLabels[category][idx]})
+                    {val} ({currentLabels[idx]})
                   </option>
                 ))}
               </Form.Control>
@@ -214,9 +238,11 @@ const ChargingTester = ({ cgratesConfig }) => {
                 value={category}
                 onChange={(e) => handleCategoryChange(e.target.value)}
               >
-                <option value="sms">sms</option>
-                <option value="data">data</option>
-                <option value="call">call</option>
+                {categoryOptions.map((opt, idx) => (
+                  <option key={idx} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
               </Form.Control>
             </Form.Group>
           </Col>

@@ -29,6 +29,31 @@ If you want to run this on a web server like Nginx or Apache, same steps but run
 
 You might want to skip specifying the connection details every time you start the utility, if you're running a copy locally, you can modify [the config.json file in the public directory](https://github.com/Omnitouch/CGrateS_UI/blob/main/public/config.json) to specify what is set when the page is loaded.
 
+### Custom Categories
+
+You can define your own categories in the `config.json` file. These categories will appear in dropdowns on the CDRs search page and Charge Tester. If not specified, defaults will be used.
+
+```json
+{
+    "url": "http://127.0.0.2:2080",
+    "tenants": "cgrates.org;test",
+    "username": "admin",
+    "password": "password123",
+    "categories": [
+        { "label": "Call", "value": "call" },
+        { "label": "SMS", "value": "sms" },
+        { "label": "SMS A2P", "value": "sms_a2p" },
+        { "label": "Data", "value": "data" }
+    ]
+}
+```
+
+Each category requires:
+- `label`: The display name shown in dropdowns
+- `value`: The value sent to the CGrateS API
+
+For the Charge Tester, usage presets are available for `sms`, `sms_a2p`, `data`, and `call` categories. Other custom categories will use generic numeric presets.
+
 
 ## Usage
 
