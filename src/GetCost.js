@@ -108,7 +108,7 @@ const GetCostView = ({ cgratesConfig }) => {
                         <Col md={6}>
                             <Form.Group controlId="formTenant">
                                 <Form.Label>Tenant</Form.Label>
-                                <Form.Control as="select" name="tenant" value={formData.Tenant} onChange={handleInputChange}>
+                                <Form.Control as="select" name="Tenant" value={formData.Tenant} onChange={handleInputChange}>
                                     {cgratesConfig.tenants.split(';').map((tenant, index) => (
                                         <option key={index} value={tenant}>{tenant}</option>
                                     ))}
