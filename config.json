@@ -2,5 +2,11 @@
     "url": "http://127.0.0.2:2080",
     "tenants": "cgrates.org;test",
     "username": "admin",
-    "password": "password123"
+    "password": "password123",
+    "categories": [
+        { "label": "Call", "value": "call" },
+        { "label": "SMS", "value": "sms" },
+        { "label": "SMS A2P", "value": "sms_a2p" },
+        { "label": "Data", "value": "data" }
+    ]
 }
