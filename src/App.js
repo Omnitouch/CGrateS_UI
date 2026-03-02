@@ -31,6 +31,7 @@ import ExecuteJSON from './ExecuteJSON.js';
 import ChargingTester from './ChargeTester.js';
 import UpcomingActionPlans from './UpcomingActionPlans.js';
 import Thresholds from './Thresholds.js';
+import Analyzer from './Analyzer.js';
 
 // --- helpers ---
 function normalizeTenants(tenants) {
@@ -80,6 +81,7 @@ function TitleUpdater() {
       '/charging_tester': 'Charge Tester - Omnitouch CGrateS UI',
       '/execute-json': 'Execute JSON - Omnitouch CGrateS UI',
       '/config': 'Config - Omnitouch CGrateS UI',
+      '/analyzer': 'Analyzer - Omnitouch CGrateS UI',
       '/CGrateS_UI/': 'Home - Omnitouch CGrateS UI',
     };
     const defaultTitle = 'Omnitouch CGrateS UI';
@@ -318,6 +320,7 @@ function App() {
           <Nav className="flex-column">
             <Nav.Link as={Link} to="/" onClick={() => setShowOffcanvas(false)}>Home</Nav.Link>
             <Nav.Link as={Link} to="/cdrs" onClick={() => setShowOffcanvas(false)}>CDRs</Nav.Link>
+            <Nav.Link as={Link} to="/analyzer" onClick={() => setShowOffcanvas(false)}>Analyzer</Nav.Link>
             <Nav.Link as={Link} to="/accounts" onClick={() => setShowOffcanvas(false)}>Accounts</Nav.Link>
             <Nav.Link as={Link} to="/sessions" onClick={() => setShowOffcanvas(false)}>Sessions</Nav.Link>
             <Nav.Link as={Link} to="/resources" onClick={() => setShowOffcanvas(false)}>Resources</Nav.Link>
@@ -411,6 +414,7 @@ function App() {
           <Route path="/exported-cdrs" element={<ExportedCDRs cgratesConfig={cgratesConfig} />} />
           <Route path="/execute-json" element={<ExecuteJSON cgratesConfig={cgratesConfig} />} />
           <Route path="/charging_tester" element={<ChargingTester cgratesConfig={cgratesConfig} />} />
+          <Route path="/analyzer" element={<Analyzer cgratesConfig={cgratesConfig} />} />
           <Route path="/config" element={<Config cgratesConfig={cgratesConfig} />} />
         </Routes>
       </Container>

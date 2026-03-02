@@ -52,10 +52,38 @@ const formatNsToHMS = (nanoseconds) => {
 const bytesToMB = (bytes) => (Number(bytes) || 0) / (1024 * 1024);
 
 const CDRs = ({ cgratesConfig }) => {
-  // Use categories from config if available, otherwise fall back to defaults
+  // Custom categories added by user in this session
+  const [customCategories, setCustomCategories] = useState([]);
+  const [newCategoryInput, setNewCategoryInput] = useState("");
+
+  // Use categories from config if available, otherwise fall back to defaults, plus custom ones
   const categoryOptions = useMemo(() => {
-    return cgratesConfig.categories || defaultCategoryOptions;
-  }, [cgratesConfig.categories]);
+    const baseCategories = cgratesConfig.categories || defaultCategoryOptions;
+    return [...baseCategories, ...customCategories];
+  }, [cgratesConfig.categories, customCategories]);
+
+  const handleAddCategory = () => {
+    const trimmed = newCategoryInput.trim();
+    if (!trimmed) return;
+    // Check if already exists
+    const exists = categoryOptions.some(
+      (opt) => opt.value.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (!exists) {
+      setCustomCategories((prev) => [
+        ...prev,
+        { label: trimmed, value: trimmed },
+      ]);
+    }
+    setNewCategoryInput("");
+  };
+
+  const handleNewCategoryKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddCategory();
+    }
+  };
 
   const [searchParams, setSearchParams] = useState({
     setupTimeStart: "",
@@ -546,112 +574,122 @@ const CDRs = ({ cgratesConfig }) => {
     <div className="App">
       <Container>
         <Form onSubmit={handleSubmit} className="mt-4">
-          <Row className="gy-3">
-            <Col md={3}>
-              <Form.Group controlId="formSetupTimeStart">
-                <Form.Label>Setup Time Start</Form.Label>
-                <Datetime
-                  value={searchParams.setupTimeStart}
-                  onChange={(m) => handleDateChange("setupTimeStart", m)}
-                  dateFormat="YYYY-MM-DD"
-                  timeFormat="HH:mm:ss"
-                />
-              </Form.Group>
-            </Col>
-            <Col md={3}>
-              <Form.Group controlId="formSetupTimeEnd">
-                <Form.Label>Setup Time End</Form.Label>
-                <Datetime
-                  value={searchParams.setupTimeEnd}
-                  onChange={(m) => handleDateChange("setupTimeEnd", m)}
-                  dateFormat="YYYY-MM-DD"
-                  timeFormat="HH:mm:ss"
-                />
-              </Form.Group>
-            </Col>
-            <Col md={3}>
-              <Form.Group controlId="formPast">
-                <Form.Label>Past</Form.Label>
-                <Form.Control
-                  as="select"
-                  name="past"
-                  value={searchParams.past}
-                  onChange={handlePastChange}
-                >
-                  <option value="">Select Interval</option>
-                  {pastOptions.map((option, index) => (
-                    <option key={index} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Form.Control>
-              </Form.Group>
-            </Col>
-            <Col md={3}>
-              <Form.Group controlId="formTenant">
-                <Form.Label>Tenant</Form.Label>
-                <Form.Control
-                  as="select"
-                  name="tenant"
-                  value={searchParams.tenant}
-                  onChange={handleInputChange}
-                >
-                  {cgratesConfig.tenants.split(";").map((tenant, index) => (
-                    <option key={index} value={tenant}>
-                      {tenant}
-                    </option>
-                  ))}
-                </Form.Control>
-              </Form.Group>
+          <Row>
+            {/* Left side - all single-height fields */}
+            <Col md={9}>
+              <Row className="gy-2">
+                <Col md={4}>
+                  <Form.Group controlId="formSetupTimeStart">
+                    <Form.Label>Setup Time Start</Form.Label>
+                    <Datetime
+                      value={searchParams.setupTimeStart}
+                      onChange={(m) => handleDateChange("setupTimeStart", m)}
+                      dateFormat="YYYY-MM-DD"
+                      timeFormat="HH:mm:ss"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group controlId="formSetupTimeEnd">
+                    <Form.Label>Setup Time End</Form.Label>
+                    <Datetime
+                      value={searchParams.setupTimeEnd}
+                      onChange={(m) => handleDateChange("setupTimeEnd", m)}
+                      dateFormat="YYYY-MM-DD"
+                      timeFormat="HH:mm:ss"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group controlId="formPast">
+                    <Form.Label>Past</Form.Label>
+                    <Form.Control
+                      as="select"
+                      name="past"
+                      value={searchParams.past}
+                      onChange={handlePastChange}
+                    >
+                      <option value="">Select Interval</option>
+                      {pastOptions.map((option, index) => (
+                        <option key={index} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </Form.Control>
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group controlId="formTenant">
+                    <Form.Label>Tenant</Form.Label>
+                    <Form.Control
+                      as="select"
+                      name="tenant"
+                      value={searchParams.tenant}
+                      onChange={handleInputChange}
+                    >
+                      {cgratesConfig.tenants.split(";").map((tenant, index) => (
+                        <option key={index} value={tenant}>
+                          {tenant}
+                        </option>
+                      ))}
+                    </Form.Control>
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group controlId="formAccount">
+                    <Form.Label>Account</Form.Label>
+                    <Form.Control
+                      type="text"
+                      name="account"
+                      value={searchParams.account}
+                      onChange={handleInputChange}
+                      placeholder="Comma-separated"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group controlId="formSubject">
+                    <Form.Label>Subject</Form.Label>
+                    <Form.Control
+                      type="text"
+                      name="subject"
+                      value={searchParams.subject}
+                      onChange={handleInputChange}
+                      placeholder="Comma-separated"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group controlId="formDestination">
+                    <Form.Label>Destination</Form.Label>
+                    <Form.Control
+                      type="text"
+                      name="destination"
+                      value={searchParams.destination}
+                      onChange={handleInputChange}
+                      placeholder="Comma-separated"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group controlId="formLimit">
+                    <Form.Label>Limit</Form.Label>
+                    <Form.Control
+                      type="number"
+                      name="limit"
+                      min={1}
+                      step={1}
+                      value={searchParams.limit}
+                      onChange={handleLimitChange}
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
             </Col>
 
+            {/* Right side - Category full height */}
             <Col md={3}>
-              <Form.Group controlId="formAccount">
-                <Form.Label>Account</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="account"
-                  value={searchParams.account}
-                  onChange={handleInputChange}
-                />
-                <Form.Text muted>
-                  Separate multiple accounts with commas.
-                </Form.Text>
-              </Form.Group>
-            </Col>
-
-            <Col md={3}>
-              <Form.Group controlId="formSubject">
-                <Form.Label>Subject</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="subject"
-                  value={searchParams.subject}
-                  onChange={handleInputChange}
-                />
-                <Form.Text muted>
-                  Separate multiple subjects with commas.
-                </Form.Text>
-              </Form.Group>
-            </Col>
-
-            <Col md={3}>
-              <Form.Group controlId="formDestination">
-                <Form.Label>Destination</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="destination"
-                  value={searchParams.destination}
-                  onChange={handleInputChange}
-                />
-                <Form.Text muted>
-                  Separate multiple destinations with commas.
-                </Form.Text>
-              </Form.Group>
-            </Col>
-
-            <Col md={3}>
-              <Form.Group controlId="formCategory">
+              <Form.Group controlId="formCategory" className="h-100 d-flex flex-column">
                 <Form.Label>Category</Form.Label>
                 <Form.Control
                   as="select"
@@ -659,6 +697,7 @@ const CDRs = ({ cgratesConfig }) => {
                   value={searchParams.category}
                   onChange={handleCategoryChange}
                   multiple
+                  style={{ flex: 1, minHeight: "120px" }}
                 >
                   {categoryOptions.map((option, index) => (
                     <option key={index} value={option.value}>
@@ -666,31 +705,34 @@ const CDRs = ({ cgratesConfig }) => {
                     </option>
                   ))}
                 </Form.Control>
+                <div className="d-flex mt-1">
+                  <Form.Control
+                    type="text"
+                    placeholder="Add category..."
+                    value={newCategoryInput}
+                    onChange={(e) => setNewCategoryInput(e.target.value)}
+                    onKeyDown={handleNewCategoryKeyDown}
+                    size="sm"
+                    style={{ flex: 1 }}
+                  />
+                  <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    onClick={handleAddCategory}
+                    style={{ marginLeft: "0.5rem" }}
+                  >
+                    +
+                  </Button>
+                </div>
                 <Form.Text muted>
-                  Hold Ctrl (Cmd on Mac) to select multiple categories.
+                  Ctrl/Cmd+click to multi-select
                 </Form.Text>
               </Form.Group>
             </Col>
+          </Row>
 
-            {/* NEW: Limit control */}
-            <Col md={3}>
-              <Form.Group controlId="formLimit">
-                <Form.Label>Limit</Form.Label>
-                <Form.Control
-                  type="number"
-                  name="limit"
-                  min={1}
-                  step={1}
-                  value={searchParams.limit}
-                  onChange={handleLimitChange}
-                />
-                <Form.Text muted>
-                  Number of CDRs per page (default 50).
-                </Form.Text>
-              </Form.Group>
-            </Col>
-
-            <Col md={12} className="d-flex align-items-end">
+          <Row className="mt-3">
+            <Col md={12}>
               <Button type="submit" className="w-100">
                 Search
               </Button>
