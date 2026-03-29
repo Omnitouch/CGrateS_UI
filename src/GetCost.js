@@ -45,7 +45,7 @@ const GetCostView = ({ cgratesConfig }) => {
             }
         }
     
-        setFormData({ ...formData, [name]: formattedValue });
+        setFormData(prev => ({ ...prev, [name]: formattedValue }));
     };    
 
     const fetchCost = async () => {
