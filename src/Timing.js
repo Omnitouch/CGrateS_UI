@@ -71,7 +71,7 @@ const Timings = ({ cgratesConfig }) => {
 
   // Handle change in TPID dropdown
   const handleTPIDChange = (event) => {
-    setSearchParams({ ...searchParams, tpid: event.target.value });
+    setSearchParams(prev => ({ ...prev, tpid: event.target.value }));
   };
 
   // Fetch Timings for the selected tpid

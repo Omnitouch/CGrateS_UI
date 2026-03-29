@@ -71,7 +71,7 @@ const UpcomingActionPlans = ({ cgratesConfig }) => {
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
-    setSearchParams({ ...searchParams, [name]: value });
+    setSearchParams(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = (event) => {

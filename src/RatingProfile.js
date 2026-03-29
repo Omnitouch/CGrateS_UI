@@ -65,14 +65,14 @@ const RatingProfiles = ({ cgratesConfig }) => {
 
     const handleFormChange = (event) => {
         const { name, value } = event.target;
-        setFormData({ ...formData, [name]: value });
+        setFormData(prev => ({ ...prev, [name]: value }));
     };
 
     const handleActivationChange = (index, event) => {
         const { name, value } = event.target;
         const updatedActivations = [...formData.RatingPlanActivations];
         updatedActivations[index] = { ...updatedActivations[index], [name]: value };
-        setFormData({ ...formData, RatingPlanActivations: updatedActivations });
+        setFormData(prev => ({ ...prev, RatingPlanActivations: updatedActivations }));
     };
 
     const addActivation = () => {
@@ -87,7 +87,7 @@ const RatingProfiles = ({ cgratesConfig }) => {
 
     const removeActivation = (index) => {
         const updatedActivations = formData.RatingPlanActivations.filter((_, i) => i !== index);
-        setFormData({ ...formData, RatingPlanActivations: updatedActivations });
+        setFormData(prev => ({ ...prev, RatingPlanActivations: updatedActivations }));
     };
 
     const fetchRatingProfiles = async () => {

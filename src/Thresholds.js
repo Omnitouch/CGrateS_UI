@@ -23,7 +23,7 @@ const Thresholds = ({ cgratesConfig }) => {
   // Handle input change for tenant selection
   const handleInputChange = (event) => {
     const { name, value } = event.target;
-    setSearchParams({ ...searchParams, [name]: value });
+    setSearchParams(prev => ({ ...prev, [name]: value }));
   };
 
   // Fetch all threshold profile IDs based on the selected tenant
