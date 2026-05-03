@@ -10,6 +10,7 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
+import type { ResourceProfile, ResourceUsage } from '../types';
 
 export function Component() {
   const baseUrl = useOcsBaseUrl();
@@ -19,7 +20,8 @@ export function Component() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<unknown>(null);
+  const [detail, setDetail] = useState<ResourceProfile | null>(null);
+  const [usage, setUsage] = useState<ResourceUsage | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editJson, setEditJson] = useState('');
@@ -42,9 +44,13 @@ export function Component() {
   const fetchDetail = useCallback(async (id: string) => {
     if (!baseUrl) return;
     try {
-      const result = await api.getResourceProfile(baseUrl, tenant, id);
-      setDetail(result);
-      setEditJson(JSON.stringify(result, null, 2));
+      const [profileResult, usageResult] = await Promise.all([
+        api.getResourceProfile(baseUrl, tenant, id),
+        api.getResource(baseUrl, tenant, id).catch(() => null),
+      ]);
+      setDetail(profileResult as ResourceProfile);
+      setUsage(usageResult as ResourceUsage | null);
+      setEditJson(JSON.stringify(profileResult, null, 2));
       setSelectedId(id);
       setEditing(false);
       setDetailOpen(true);
@@ -78,8 +84,12 @@ export function Component() {
 
   const handleCreate = useCallback(() => {
     setDetail(null);
+    setUsage(null);
     setSelectedId(null);
-    setEditJson(JSON.stringify({ Tenant: tenant, ID: '' }, null, 2));
+    setEditJson(JSON.stringify({
+      Tenant: tenant, ID: '', FilterIDs: [], UsageTTL: -1,
+      Limit: 5, Blocker: false, Stored: true, Weight: 10, ThresholdIDs: ['*none'],
+    }, null, 2));
     setEditing(true);
     setDetailOpen(true);
   }, [tenant]);
@@ -138,10 +148,59 @@ export function Component() {
           {editing ? (
             <TextField multiline fullWidth minRows={15} value={editJson} onChange={e => setEditJson(e.target.value)}
               sx={{ fontFamily: 'monospace', mt: 1 }} />
-          ) : (
-            <Paper sx={{ p: 1, maxHeight: 500, overflow: 'auto', bgcolor: 'grey.50', mt: 1 }}>
-              <pre style={{ fontSize: 12, margin: 0 }}>{JSON.stringify(detail, null, 2)}</pre>
-            </Paper>
+          ) : detail && (
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="subtitle1">Profile</Typography>
+              <Table size="small">
+                <TableBody>
+                  <TableRow><TableCell><strong>Tenant</strong></TableCell><TableCell>{detail.Tenant}</TableCell></TableRow>
+                  <TableRow><TableCell><strong>ID</strong></TableCell><TableCell>{detail.ID}</TableCell></TableRow>
+                  <TableRow><TableCell><strong>Usage TTL</strong></TableCell><TableCell>{detail.UsageTTL}</TableCell></TableRow>
+                  <TableRow><TableCell><strong>Limit</strong></TableCell><TableCell>{detail.Limit}</TableCell></TableRow>
+                  <TableRow><TableCell><strong>Blocker</strong></TableCell><TableCell>{detail.Blocker ? 'Yes' : 'No'}</TableCell></TableRow>
+                  <TableRow><TableCell><strong>Stored</strong></TableCell><TableCell>{detail.Stored ? 'Yes' : 'No'}</TableCell></TableRow>
+                  <TableRow><TableCell><strong>Weight</strong></TableCell><TableCell>{detail.Weight}</TableCell></TableRow>
+                  <TableRow><TableCell><strong>Filter IDs</strong></TableCell><TableCell>{detail.FilterIDs?.join(', ') || 'None'}</TableCell></TableRow>
+                  <TableRow><TableCell><strong>Threshold IDs</strong></TableCell><TableCell>{detail.ThresholdIDs?.join(', ') || 'None'}</TableCell></TableRow>
+                </TableBody>
+              </Table>
+
+              {usage && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle1">Usage Information</Typography>
+                  {usage.Usages && Object.keys(usage.Usages).length > 0 ? (
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Usage ID</TableCell>
+                          <TableCell>Tenant</TableCell>
+                          <TableCell>Expiry Time</TableCell>
+                          <TableCell>Units</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {Object.entries(usage.Usages).map(([uid, u]) => (
+                          <TableRow key={uid}>
+                            <TableCell>{uid}</TableCell>
+                            <TableCell>{u.Tenant}</TableCell>
+                            <TableCell>{u.ExpiryTime}</TableCell>
+                            <TableCell>{u.Units}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <Typography color="text.secondary">No usages</Typography>
+                  )}
+                  <Typography variant="body2" sx={{ mt: 1 }}><strong>TTL Index:</strong> {usage.TTLIdx || 'N/A'}</Typography>
+                </Box>
+              )}
+
+              <Typography variant="subtitle2" sx={{ mt: 2 }}>Raw JSON</Typography>
+              <Paper sx={{ p: 1, maxHeight: 300, overflow: 'auto', bgcolor: 'grey.50' }}>
+                <pre style={{ fontSize: 12, margin: 0 }}>{JSON.stringify(detail, null, 2)}</pre>
+              </Paper>
+            </Box>
           )}
         </DialogContent>
         <DialogActions>

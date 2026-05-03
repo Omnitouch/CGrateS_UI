@@ -18,6 +18,7 @@ export function Component() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<unknown>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editJson, setEditJson] = useState('');
@@ -47,6 +48,7 @@ export function Component() {
       const result = await api.getActions(baseUrl, tenant);
       const details = result?.[actionId];
       setDetail(details);
+      setDetailId(actionId);
       setEditJson(JSON.stringify(details, null, 2));
       setEditing(false);
       setDetailOpen(true);
@@ -55,15 +57,78 @@ export function Component() {
     }
   }, [baseUrl, tenant]);
 
+  const handleSave = useCallback(async () => {
+    if (!baseUrl) return;
+    try {
+      const parsed = JSON.parse(editJson);
+      const parts = Array.isArray(parsed) ? parsed : [parsed];
+      const actionsId = detailId || parts[0]?.Id || '';
+
+      const updatedActions = parts.map((part: Record<string, unknown>) => {
+        const balance = part.Balance as Record<string, unknown> | null;
+        const action: Record<string, unknown> = {
+          Identifier: (part.Identifier || part.ActionType) as string,
+          ExtraParameters: (part.ExtraParameters || '') as string,
+          ExpiryTime: (part.ExpirationString || '') as string,
+          Weight: (part.Weight || 0) as number,
+        };
+        if (balance) {
+          if (balance.ID) action.BalanceId = balance.ID;
+          if (balance.Uuid) action.BalanceUuid = balance.Uuid;
+          if (balance.Type) action.BalanceType = balance.Type;
+          if (typeof balance.Disabled === 'boolean') action.BalanceDisabled = balance.Disabled ? 'true' : 'false';
+          const balValue = balance.Value as Record<string, unknown> | null;
+          action.Units = balValue?.Static || 0;
+          action.DestinationIds = typeof balance.DestinationIDs === 'object' && balance.DestinationIDs
+            ? Object.keys(balance.DestinationIDs as Record<string, boolean>).join(';')
+            : (balance.DestinationIDs || '');
+          action.RatingSubject = balance.RatingSubject || '';
+          action.BalanceWeight = balance.Weight || 0;
+          if (typeof (part as Record<string, unknown>).BalanceBlocker === 'boolean') {
+            action.BalanceBlocker = (part as Record<string, unknown>).BalanceBlocker ? 'true' : 'false';
+          }
+        }
+        if (part.Filters) {
+          action.Filters = Array.isArray(part.Filters) ? (part.Filters as string[]).join(';') : part.Filters || '';
+        }
+        return action;
+      });
+
+      await api.setActions(baseUrl, {
+        ActionsId: actionsId,
+        Tenant: tenant,
+        Overwrite: true,
+        Actions: updatedActions,
+      });
+      setDetailOpen(false);
+      fetchActions();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to save');
+    }
+  }, [baseUrl, editJson, detailId, tenant, fetchActions]);
+
   const handleDelete = useCallback(async (actionId: string) => {
     if (!baseUrl || !window.confirm(`Delete action ${actionId}?`)) return;
     try {
       await api.removeActions(baseUrl, [actionId], tenant);
       fetchActions();
+      setDetailOpen(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to delete');
     }
   }, [baseUrl, tenant, fetchActions]);
+
+  const handleCreate = useCallback(() => {
+    setDetail(null);
+    setDetailId(null);
+    setEditJson(JSON.stringify([{
+      Id: '', ActionType: '', ExtraParameters: '', Filters: '',
+      ExpirationString: '', Weight: 0,
+      Balance: { ID: '', Type: '', Value: { Static: 0 }, DestinationIDs: {}, RatingSubject: '', Weight: 0 },
+    }], null, 2));
+    setEditing(true);
+    setDetailOpen(true);
+  }, []);
 
   return (
     <Box>
@@ -77,9 +142,10 @@ export function Component() {
             </Select>
           </FormControl>
           <Button variant="contained" onClick={fetchActions}>Fetch Actions</Button>
+          <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>
         </Box>
       </Paper>
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
       {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box> : (
         <TableContainer component={Paper}>
           <Table size="small">
@@ -96,7 +162,7 @@ export function Component() {
         </TableContainer>
       )}
       <Dialog open={detailOpen} onClose={() => setDetailOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Action Details</DialogTitle>
+        <DialogTitle>{detailId ? `Action: ${detailId}` : 'Create New Action'}</DialogTitle>
         <DialogContent>
           {editing ? (
             <TextField multiline fullWidth minRows={15} value={editJson} onChange={e => setEditJson(e.target.value)} sx={{ fontFamily: 'monospace', mt: 1 }} />
@@ -107,7 +173,12 @@ export function Component() {
           )}
         </DialogContent>
         <DialogActions>
-          {!editing && <Button onClick={() => setEditing(true)}>Edit</Button>}
+          {editing ? (
+            <Button variant="contained" onClick={handleSave}>Save</Button>
+          ) : (
+            <Button onClick={() => setEditing(true)}>Edit</Button>
+          )}
+          {detailId && <Button color="error" onClick={() => handleDelete(detailId)}>Delete</Button>}
           <Button onClick={() => setDetailOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>

@@ -3,11 +3,12 @@ import {
   Box, Typography, Paper, Button, Select, MenuItem, FormControl,
   InputLabel, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, IconButton,
-  TextField,
+  TextField, Chip,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
+import BarChartIcon from '@mui/icons-material/BarChart';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 
@@ -23,6 +24,12 @@ export function Component() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editJson, setEditJson] = useState('');
+
+  // Metrics
+  const [metricsOpen, setMetricsOpen] = useState(false);
+  const [metricsId, setMetricsId] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<Record<string, string> | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
 
   const fetchIds = useCallback(async () => {
     if (!baseUrl || !tenant) return;
@@ -84,6 +91,33 @@ export function Component() {
     setDetailOpen(true);
   }, [tenant]);
 
+  const fetchMetrics = useCallback(async (id: string) => {
+    if (!baseUrl) return;
+    setMetricsLoading(true);
+    setMetrics(null);
+    setMetricsId(id);
+    setMetricsOpen(true);
+    try {
+      const result = await api.getQueueStringMetrics(baseUrl, tenant, id);
+      setMetrics(result);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to fetch metrics');
+    } finally {
+      setMetricsLoading(false);
+    }
+  }, [baseUrl, tenant]);
+
+  const handleResetQueue = useCallback(async (id: string) => {
+    if (!baseUrl || !window.confirm(`Reset stat queue ${id}?`)) return;
+    try {
+      await api.resetStatQueue(baseUrl, tenant, id);
+      // Refresh metrics if viewing
+      if (metricsOpen && metricsId === id) fetchMetrics(id);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to reset');
+    }
+  }, [baseUrl, tenant, metricsOpen, metricsId, fetchMetrics]);
+
   return (
     <Box>
       <Typography variant="h5" gutterBottom>Stat Queue Profiles</Typography>
@@ -120,6 +154,7 @@ export function Component() {
                   <TableCell>{idx + 1}</TableCell>
                   <TableCell>{id}</TableCell>
                   <TableCell align="right">
+                    <IconButton size="small" title="View Metrics" onClick={e => { e.stopPropagation(); fetchMetrics(id); }}><BarChartIcon fontSize="small" /></IconButton>
                     <IconButton size="small" onClick={e => { e.stopPropagation(); fetchDetail(id); }}><EditIcon fontSize="small" /></IconButton>
                     <IconButton size="small" color="error" onClick={e => { e.stopPropagation(); handleDelete(id); }}><DeleteIcon fontSize="small" /></IconButton>
                   </TableCell>
@@ -132,6 +167,7 @@ export function Component() {
         </TableContainer>
       )}
 
+      {/* Profile Detail Dialog */}
       <Dialog open={detailOpen} onClose={() => setDetailOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>{selectedId ? `${selectedId}` : 'Create New'}</DialogTitle>
         <DialogContent>
@@ -151,7 +187,43 @@ export function Component() {
             <Button onClick={() => setEditing(true)}>Edit</Button>
           )}
           {selectedId && <Button color="error" onClick={() => handleDelete(selectedId)}>Delete</Button>}
+          {selectedId && <Button onClick={() => fetchMetrics(selectedId)}>View Metrics</Button>}
           <Button onClick={() => setDetailOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Metrics Dialog */}
+      <Dialog open={metricsOpen} onClose={() => setMetricsOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Metrics: {metricsId}</DialogTitle>
+        <DialogContent>
+          {metricsLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+          ) : metrics ? (
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Metric</TableCell>
+                    <TableCell>Value</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {Object.entries(metrics).map(([k, v]) => (
+                    <TableRow key={k}>
+                      <TableCell><Chip label={k} size="small" /></TableCell>
+                      <TableCell>{v}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Typography color="text.secondary">No metrics available</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          {metricsId && <Button color="warning" onClick={() => handleResetQueue(metricsId)}>Reset Queue</Button>}
+          <Button onClick={() => setMetricsOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>
