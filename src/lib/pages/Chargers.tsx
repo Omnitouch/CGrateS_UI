@@ -1,15 +1,27 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Box, Typography, Paper, Button, Select, MenuItem, FormControl,
   InputLabel, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, IconButton,
-  TextField,
+  TextField, List, ListItem, ListItemText, Divider, Chip,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
+import type { ChargerProfile } from '../types';
+
+function emptyCharger(tenant: string): ChargerProfile {
+  return {
+    Tenant: tenant,
+    ID: '',
+    FilterIDs: [],
+    AttributeIDs: [],
+    RunID: '*default',
+    Weight: 0,
+  };
+}
 
 export function Component() {
   const baseUrl = useOcsBaseUrl();
@@ -19,10 +31,10 @@ export function Component() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<unknown>(null);
+  const [detail, setDetail] = useState<ChargerProfile | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [editJson, setEditJson] = useState('');
+  const [editData, setEditData] = useState<ChargerProfile>(emptyCharger(defaultTenant));
 
   const fetchIds = useCallback(async () => {
     if (!baseUrl || !tenant) return;
@@ -39,12 +51,19 @@ export function Component() {
     }
   }, [baseUrl, tenant]);
 
+  // Auto-fetch on tenant change
+  useEffect(() => {
+    if (baseUrl && tenant) {
+      fetchIds();
+    }
+  }, [tenant, baseUrl, fetchIds]);
+
   const fetchDetail = useCallback(async (id: string) => {
     if (!baseUrl) return;
     try {
-      const result = await api.getChargerProfile(baseUrl, tenant, id);
+      const result = await api.getChargerProfile(baseUrl, tenant, id) as ChargerProfile;
       setDetail(result);
-      setEditJson(JSON.stringify(result, null, 2));
+      setEditData(JSON.parse(JSON.stringify(result)));
       setSelectedId(id);
       setEditing(false);
       setDetailOpen(true);
@@ -56,14 +75,13 @@ export function Component() {
   const handleSave = useCallback(async () => {
     if (!baseUrl) return;
     try {
-      const parsed = JSON.parse(editJson);
-      await api.setChargerProfile(baseUrl, parsed);
+      await api.setChargerProfile(baseUrl, editData as unknown as Record<string, unknown>);
       setDetailOpen(false);
       fetchIds();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to save');
     }
-  }, [baseUrl, editJson, fetchIds]);
+  }, [baseUrl, editData, fetchIds]);
 
   const handleDelete = useCallback(async (id: string) => {
     if (!baseUrl || !window.confirm(`Delete ${id}?`)) return;
@@ -79,10 +97,49 @@ export function Component() {
   const handleCreate = useCallback(() => {
     setDetail(null);
     setSelectedId(null);
-    setEditJson(JSON.stringify({ Tenant: tenant, ID: '' }, null, 2));
+    setEditData(emptyCharger(tenant));
     setEditing(true);
     setDetailOpen(true);
   }, [tenant]);
+
+  // --- Edit helpers ---
+  const addFilterId = () => {
+    setEditData(prev => ({ ...prev, FilterIDs: [...(prev.FilterIDs || []), ''] }));
+  };
+
+  const removeFilterId = (idx: number) => {
+    setEditData(prev => ({
+      ...prev,
+      FilterIDs: (prev.FilterIDs || []).filter((_, i) => i !== idx),
+    }));
+  };
+
+  const updateFilterId = (idx: number, value: string) => {
+    setEditData(prev => {
+      const fids = [...(prev.FilterIDs || [])];
+      fids[idx] = value;
+      return { ...prev, FilterIDs: fids };
+    });
+  };
+
+  const addAttributeId = () => {
+    setEditData(prev => ({ ...prev, AttributeIDs: [...(prev.AttributeIDs || []), ''] }));
+  };
+
+  const removeAttributeId = (idx: number) => {
+    setEditData(prev => ({
+      ...prev,
+      AttributeIDs: (prev.AttributeIDs || []).filter((_, i) => i !== idx),
+    }));
+  };
+
+  const updateAttributeId = (idx: number, value: string) => {
+    setEditData(prev => {
+      const aids = [...(prev.AttributeIDs || [])];
+      aids[idx] = value;
+      return { ...prev, AttributeIDs: aids };
+    });
+  };
 
   return (
     <Box>
@@ -133,15 +190,108 @@ export function Component() {
       )}
 
       <Dialog open={detailOpen} onClose={() => setDetailOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{selectedId ? `${selectedId}` : 'Create New'}</DialogTitle>
-        <DialogContent>
+        <DialogTitle>{selectedId ? `${selectedId}` : 'Create New Charger'}</DialogTitle>
+        <DialogContent dividers>
           {editing ? (
-            <TextField multiline fullWidth minRows={15} value={editJson} onChange={e => setEditJson(e.target.value)}
-              sx={{ fontFamily: 'monospace', mt: 1 }} />
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+              <TextField
+                label="Tenant" size="small" fullWidth
+                value={editData.Tenant}
+                onChange={e => setEditData(prev => ({ ...prev, Tenant: e.target.value }))}
+              />
+              <TextField
+                label="ID" size="small" fullWidth
+                value={editData.ID}
+                onChange={e => setEditData(prev => ({ ...prev, ID: e.target.value }))}
+              />
+              <TextField
+                label="RunID" size="small" fullWidth
+                value={editData.RunID}
+                onChange={e => setEditData(prev => ({ ...prev, RunID: e.target.value }))}
+              />
+              <TextField
+                label="Weight" size="small" fullWidth type="number"
+                value={editData.Weight}
+                onChange={e => setEditData(prev => ({ ...prev, Weight: Number(e.target.value) }))}
+              />
+
+              {/* FilterIDs */}
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>FilterIDs</Typography>
+              {(editData.FilterIDs || []).map((fid, idx) => (
+                <Box key={idx} sx={{ display: 'flex', gap: 1 }}>
+                  <TextField
+                    size="small" fullWidth value={fid}
+                    onChange={e => updateFilterId(idx, e.target.value)}
+                    placeholder="Filter ID"
+                  />
+                  <IconButton size="small" color="error" onClick={() => removeFilterId(idx)}>
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              ))}
+              <Button size="small" startIcon={<AddIcon />} onClick={addFilterId}>Add FilterID</Button>
+
+              <Divider />
+
+              {/* AttributeIDs */}
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>AttributeIDs</Typography>
+              {(editData.AttributeIDs || []).map((aid, idx) => (
+                <Box key={idx} sx={{ display: 'flex', gap: 1 }}>
+                  <TextField
+                    size="small" fullWidth value={aid}
+                    onChange={e => updateAttributeId(idx, e.target.value)}
+                    placeholder="Attribute ID (or *none)"
+                  />
+                  <IconButton size="small" color="error" onClick={() => removeAttributeId(idx)}>
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              ))}
+              <Button size="small" startIcon={<AddIcon />} onClick={addAttributeId}>Add AttributeID</Button>
+            </Box>
           ) : (
-            <Paper sx={{ p: 1, maxHeight: 500, overflow: 'auto', bgcolor: 'grey.50', mt: 1 }}>
-              <pre style={{ fontSize: 12, margin: 0 }}>{JSON.stringify(detail, null, 2)}</pre>
-            </Paper>
+            /* --- View mode --- */
+            detail && (
+              <List dense>
+                <ListItem>
+                  <ListItemText primary="Tenant" secondary={detail.Tenant} />
+                </ListItem>
+                <Divider />
+                <ListItem>
+                  <ListItemText primary="ID" secondary={detail.ID} />
+                </ListItem>
+                <Divider />
+                <ListItem>
+                  <ListItemText primary="RunID" secondary={detail.RunID} />
+                </ListItem>
+                <Divider />
+                <ListItem>
+                  <ListItemText primary="Weight" secondary={detail.Weight} />
+                </ListItem>
+                <Divider />
+                <ListItem sx={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <Typography variant="body2" fontWeight={600}>FilterIDs</Typography>
+                  {detail.FilterIDs && detail.FilterIDs.length > 0 ? (
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                      {detail.FilterIDs.map((fid, i) => <Chip key={i} label={fid} size="small" variant="outlined" />)}
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">None</Typography>
+                  )}
+                </ListItem>
+                <Divider />
+                <ListItem sx={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <Typography variant="body2" fontWeight={600}>AttributeIDs</Typography>
+                  {detail.AttributeIDs && detail.AttributeIDs.length > 0 ? (
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                      {detail.AttributeIDs.map((aid, i) => <Chip key={i} label={aid} size="small" color="primary" variant="outlined" />)}
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">None</Typography>
+                  )}
+                </ListItem>
+              </List>
+            )
           )}
         </DialogContent>
         <DialogActions>
