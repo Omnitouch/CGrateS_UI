@@ -389,6 +389,13 @@ export function runReader(baseUrl: string, readerId: string) {
   return jsonRpc(baseUrl, 'ErSv1.RunReader', [{ ID: readerId, ReaderID: readerId }]);
 }
 
+// --- Event Exporter ---
+
+/** Re-post failed export requests found on disk. Empty SourcePath defaults to the EEs FailedPosts.Dir. */
+export function replayFailedPosts(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc(baseUrl, 'APIerSv1.ReplayFailedPosts', [params]);
+}
+
 // --- Tariff Plans ---
 
 export function removeTP(baseUrl: string, tpid: string) {

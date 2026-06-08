@@ -431,3 +431,12 @@ export interface EventReaderConfig {
   config?: unknown;
   [key: string]: unknown;
 }
+
+/** Event exporter (from config) */
+export interface EventExporterConfig {
+  id: string;
+  type?: string;
+  export_path?: string;
+  synchronous?: boolean;
+  [key: string]: unknown;
+}

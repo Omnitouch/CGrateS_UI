@@ -64,6 +64,7 @@ const NAV_ITEMS = [
   { label: 'Charge Tester', path: 'charge-tester' },
   { label: 'Analyzer', path: 'analyzer' },
   { label: 'Event Reader', path: 'event-reader' },
+  { label: 'Event Exporter', path: 'event-exporter' },
   { label: 'Execute JSON', path: 'execute-json' },
   { label: 'Config', path: 'config' },
 ] as const;

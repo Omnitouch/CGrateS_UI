@@ -110,6 +110,10 @@ const routes: RouteObject[] = [
     lazy: () => import('./pages/EventReader'),
   },
   {
+    path: 'event-exporter',
+    lazy: () => import('./pages/EventExporterService'),
+  },
+  {
     path: 'execute-json',
     lazy: () => import('./pages/ExecuteJSON'),
   },
