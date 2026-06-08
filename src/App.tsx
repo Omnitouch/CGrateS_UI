@@ -8,7 +8,7 @@ import {
 import MenuIcon from '@mui/icons-material/Menu';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createBrowserRouter, RouterProvider, useNavigate, useLocation, Outlet } from 'react-router-dom';
+import { createHashRouter, RouterProvider, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { OcsProvider } from './lib/OcsContext';
 import ocsRouteDefs from './lib/routes';
 
@@ -133,7 +133,7 @@ function Layout() {
 }
 
 function createRouter() {
-  return createBrowserRouter([
+  return createHashRouter([
     {
       element: <Layout />,
       children: ocsRouteDefs,
