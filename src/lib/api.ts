@@ -112,20 +112,20 @@ export function getTPRatingPlan(baseUrl: string, tpid: string, id: string) {
 
 // --- Rating Profiles ---
 
-export function getRatingProfileIDs(baseUrl: string) {
-  return jsonRpc<string[]>(baseUrl, 'ApierV1.GetRatingProfileIDs', []);
+export function getRatingProfileIDs(baseUrl: string, tenant: string) {
+  return jsonRpc<string[]>(baseUrl, 'ApierV1.GetRatingProfileIDs', [{ Tenant: tenant }]);
 }
 
-export function getRatingProfile(baseUrl: string, category: string, subject: string) {
-  return jsonRpc(baseUrl, 'ApierV1.GetRatingProfile', [{ Category: category, Subject: subject }]);
+export function getRatingProfile(baseUrl: string, tenant: string, category: string, subject: string) {
+  return jsonRpc(baseUrl, 'ApierV1.GetRatingProfile', [{ Tenant: tenant, Category: category, Subject: subject }]);
 }
 
 export function setRatingProfile(baseUrl: string, params: Record<string, unknown>) {
   return jsonRpc(baseUrl, 'APIerSv1.SetRatingProfile', [params]);
 }
 
-export function removeRatingProfile(baseUrl: string, category: string, subject: string) {
-  return jsonRpc(baseUrl, 'APIerSv1.RemoveRatingProfile', [{ Category: category, Subject: subject }]);
+export function removeRatingProfile(baseUrl: string, tenant: string, category: string, subject: string) {
+  return jsonRpc(baseUrl, 'APIerSv1.RemoveRatingProfile', [{ Tenant: tenant, Category: category, Subject: subject }]);
 }
 
 // --- Timings (TP) ---

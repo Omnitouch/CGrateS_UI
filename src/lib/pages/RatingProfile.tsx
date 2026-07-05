@@ -49,6 +49,8 @@ const toForm = (data: Record<string, unknown>): RatingProfileForm => ({
 
 export function Component() {
   const baseUrl = useOcsBaseUrl();
+  const { tenants, defaultTenant } = useOcsTenants();
+  const [tenant, setTenant] = useState(defaultTenant);
   const [profiles, setProfiles] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,17 +87,17 @@ export function Component() {
   }, [selectedTpid, fetchRatingPlanIds]);
 
   const fetchProfiles = useCallback(async () => {
-    if (!baseUrl) return;
+    if (!baseUrl || !tenant) return;
     setLoading(true);
     try {
-      const result = await api.getRatingProfileIDs(baseUrl);
+      const result = await api.getRatingProfileIDs(baseUrl, tenant);
       setProfiles(result || []);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to fetch');
     } finally {
       setLoading(false);
     }
-  }, [baseUrl]);
+  }, [baseUrl, tenant]);
 
   useEffect(() => { fetchProfiles(); }, [fetchProfiles]);
 
@@ -103,7 +105,7 @@ export function Component() {
     if (!baseUrl) return;
     const [category, subject] = profileStr.split(':');
     try {
-      const result = await api.getRatingProfile(baseUrl, category, subject);
+      const result = await api.getRatingProfile(baseUrl, tenant, category, subject);
       setDetail(result);
       setForm(toForm(result as Record<string, unknown>));
       setEditing(false);
@@ -112,29 +114,29 @@ export function Component() {
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to fetch detail');
     }
-  }, [baseUrl]);
+  }, [baseUrl, tenant]);
 
   const handleSave = useCallback(async () => {
     if (!baseUrl) return;
     try {
-      await api.setRatingProfile(baseUrl, { Overwrite: true, ...form } as unknown as Record<string, unknown>);
+      await api.setRatingProfile(baseUrl, { Tenant: tenant, Overwrite: true, ...form } as unknown as Record<string, unknown>);
       setDetailOpen(false);
       fetchProfiles();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to save');
     }
-  }, [baseUrl, form, fetchProfiles]);
+  }, [baseUrl, tenant, form, fetchProfiles]);
 
   const handleDelete = useCallback(async (profileStr: string) => {
     if (!baseUrl || !window.confirm(`Delete ${profileStr}?`)) return;
     const [category, subject] = profileStr.split(':');
     try {
-      await api.removeRatingProfile(baseUrl, category, subject);
+      await api.removeRatingProfile(baseUrl, tenant, category, subject);
       fetchProfiles();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to delete');
     }
-  }, [baseUrl, fetchProfiles]);
+  }, [baseUrl, tenant, fetchProfiles]);
 
   const handleCreate = useCallback(() => {
     setDetail(null);
@@ -265,7 +267,13 @@ export function Component() {
     <Box>
       <Typography variant="h5" gutterBottom>Rating Profiles</Typography>
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel>Tenant</InputLabel>
+            <Select value={tenant} label="Tenant" onChange={e => setTenant(e.target.value)}>
+              {tenants.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
+            </Select>
+          </FormControl>
           <Button variant="contained" onClick={fetchProfiles}>Fetch Profiles</Button>
           <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>
         </Box>

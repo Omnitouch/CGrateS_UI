@@ -92,12 +92,12 @@ export function useTPRatingPlanIds(tpid: string) {
 
 // --- Rating Profiles ---
 
-export function useRatingProfileIDs() {
+export function useRatingProfileIDs(tenant: string) {
   const baseUrl = useBaseUrl();
   return useQuery({
-    queryKey: ['ocs', 'rating-profile-ids', baseUrl],
-    queryFn: () => api.getRatingProfileIDs(baseUrl!),
-    enabled: !!baseUrl,
+    queryKey: ['ocs', 'rating-profile-ids', baseUrl, tenant],
+    queryFn: () => api.getRatingProfileIDs(baseUrl!, tenant),
+    enabled: !!baseUrl && !!tenant,
   });
 }
 

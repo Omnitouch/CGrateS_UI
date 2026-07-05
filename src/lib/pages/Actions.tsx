@@ -189,7 +189,13 @@ export function Component() {
     try {
       const result = await api.getAccounts(baseUrl, tenant, 0, 500);
       if (result && Array.isArray(result)) {
-        setAccounts(result.map((acc: { ID?: string }) => acc.ID || '').filter(Boolean));
+        // Account ID format is "tenant:account"; strip the tenant prefix so the
+        // bare account is sent to ExecuteAction (not "tenant:account" as the Account).
+        setAccounts(result.map((acc: { ID?: string }) => {
+          const id = acc.ID || '';
+          const parts = id.split(':');
+          return parts.length > 1 ? parts[1] : id;
+        }).filter(Boolean));
       } else {
         setAccounts([]);
       }
