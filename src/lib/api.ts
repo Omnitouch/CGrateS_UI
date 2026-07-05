@@ -412,6 +412,10 @@ export function exportTPToFolder(baseUrl: string, tpid: string, folderPath = '/t
 
 // --- TP Rates ---
 
+export function getTPRateIds(baseUrl: string, tpid: string) {
+  return jsonRpc<string[]>(baseUrl, 'ApierV1.GetTPRateIds', [{ TPid: tpid }]);
+}
+
 export function getTPRate(baseUrl: string, tpid: string, id: string) {
   return jsonRpc(baseUrl, 'ApierV1.GetTPRate', [{ TPid: tpid, ID: id }]);
 }

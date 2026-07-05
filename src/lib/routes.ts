@@ -121,6 +121,10 @@ const routes: RouteObject[] = [
     path: 'tariff-plans',
     lazy: () => import('./pages/TariffPlans'),
   },
+  {
+    path: 'tp-explorer',
+    lazy: () => import('./pages/TariffPlanExplorer'),
+  },
 ];
 
 export default routes;
