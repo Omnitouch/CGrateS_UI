@@ -6,6 +6,7 @@ import {
   TableHead, TableRow, Stack, Tooltip, Select, MenuItem, FormControl, InputLabel,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
+import CategoryIcon from '@mui/icons-material/Category';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import CallSplitIcon from '@mui/icons-material/CallSplit';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
@@ -18,11 +19,12 @@ import * as api from '../api';
 
 // ---- Entity model ---------------------------------------------------------
 
-type EntityType = 'ratingplan' | 'destinationrate' | 'rate' | 'destination' | 'timing';
+type EntityType = 'ratingprofile' | 'ratingplan' | 'destinationrate' | 'rate' | 'destination' | 'timing';
 
 interface ExNode { type: EntityType; id: string; }
 
 const TYPE_META: Record<EntityType, { label: string; plural: string; color: string; Icon: typeof AccountTreeIcon }> = {
+  ratingprofile: { label: 'Rating Profile', plural: 'Rating Profiles', color: '#ec407a', Icon: CategoryIcon },
   ratingplan: { label: 'Rating Plan', plural: 'Rating Plans', color: '#42a5f5', Icon: AccountTreeIcon },
   destinationrate: { label: 'Destination Rate', plural: 'Destination Rates', color: '#ab47bc', Icon: CallSplitIcon },
   rate: { label: 'Rate', plural: 'Rates', color: '#ffa726', Icon: MonetizationOnIcon },
@@ -30,12 +32,20 @@ const TYPE_META: Record<EntityType, { label: string; plural: string; color: stri
   timing: { label: 'Timing', plural: 'Timings', color: '#26c6da', Icon: ScheduleIcon },
 };
 
-const ENTRY_ORDER: EntityType[] = ['ratingplan', 'destinationrate', 'rate', 'destination', 'timing'];
+const ENTRY_ORDER: EntityType[] = ['ratingprofile', 'ratingplan', 'destinationrate', 'rate', 'destination', 'timing'];
+
+// Rating-profile IDs come back as "category:subject" (the *out:tenant: prefix is
+// stripped by the backend). Tenant is supplied separately — it is part of the key.
+function splitProfileId(id: string): { category: string; subject: string } {
+  const i = id.indexOf(':');
+  return i < 0 ? { category: id, subject: '' } : { category: id.slice(0, i), subject: id.slice(i + 1) };
+}
 
 // ---- Data hooks -----------------------------------------------------------
 
-function idsQueryFn(baseUrl: string, tpid: string, type: EntityType): Promise<string[] | null> {
+function idsQueryFn(baseUrl: string, tpid: string, tenant: string, type: EntityType): Promise<string[] | null> {
   switch (type) {
+    case 'ratingprofile': return api.getRatingProfileIDs(baseUrl, tenant);
     case 'ratingplan': return api.getTPRatingPlanIds(baseUrl, tpid);
     case 'destinationrate': return api.getTPDestinationRateIds(baseUrl, tpid);
     case 'rate': return api.getTPRateIds(baseUrl, tpid);
@@ -44,8 +54,9 @@ function idsQueryFn(baseUrl: string, tpid: string, type: EntityType): Promise<st
   }
 }
 
-function detailQueryFn(baseUrl: string, tpid: string, node: ExNode): Promise<unknown> {
+function detailQueryFn(baseUrl: string, tpid: string, tenant: string, node: ExNode): Promise<unknown> {
   switch (node.type) {
+    case 'ratingprofile': { const { category, subject } = splitProfileId(node.id); return api.getRatingProfile(baseUrl, tenant, category, subject); }
     case 'ratingplan': return api.getTPRatingPlan(baseUrl, tpid, node.id);
     case 'destinationrate': return api.getTPDestinationRate(baseUrl, tpid, node.id);
     case 'rate': return api.getTPRate(baseUrl, tpid, node.id);
@@ -54,20 +65,29 @@ function detailQueryFn(baseUrl: string, tpid: string, node: ExNode): Promise<unk
   }
 }
 
-function useEntityIds(baseUrl: string | null, tpid: string, type: EntityType, enabled: boolean) {
+// cgrates returns NOT_FOUND (an error) rather than an empty list when a category
+// has no entries — treat that as "empty" so the column shows nothing, not an error.
+async function safeIds(fn: () => Promise<string[] | null>): Promise<string[]> {
+  try { return (await fn()) || []; }
+  catch (e) { if (String((e as Error)?.message || e).includes('NOT_FOUND')) return []; throw e; }
+}
+
+function useEntityIds(baseUrl: string | null, tpid: string, tenant: string, type: EntityType, enabled: boolean) {
+  // Rating profiles are tenant-scoped and independent of the TP; everything else is TP-scoped.
+  const tpScoped = type !== 'ratingprofile';
   return useQuery({
-    queryKey: ['tpx-ids', baseUrl, tpid, type],
-    queryFn: async () => (await idsQueryFn(baseUrl!, tpid, type)) || [],
-    enabled: !!baseUrl && !!tpid && enabled,
+    queryKey: ['tpx-ids', baseUrl, tpScoped ? tpid : `tenant:${tenant}`, type],
+    queryFn: () => safeIds(() => idsQueryFn(baseUrl!, tpid, tenant, type)),
+    enabled: !!baseUrl && enabled && (tpScoped ? !!tpid : true),
     staleTime: 60_000,
   });
 }
 
-function useEntityDetail(baseUrl: string | null, tpid: string, node: ExNode | null) {
+function useEntityDetail(baseUrl: string | null, tpid: string, tenant: string, node: ExNode | null) {
   return useQuery({
-    queryKey: ['tpx-detail', baseUrl, tpid, node?.type, node?.id],
-    queryFn: () => detailQueryFn(baseUrl!, tpid, node!),
-    enabled: !!baseUrl && !!tpid && !!node,
+    queryKey: ['tpx-detail', baseUrl, tpid, tenant, node?.type, node?.id],
+    queryFn: () => detailQueryFn(baseUrl!, tpid, tenant, node!),
+    enabled: !!baseUrl && !!node && (node!.type === 'ratingprofile' || !!tpid),
     staleTime: 60_000,
   });
 }
@@ -123,10 +143,45 @@ function ColumnShell({ node, children }: { node: ExNode; children: React.ReactNo
 interface RatingPlanBinding { DestinationRatesId: string; TimingId: string; Weight: number; }
 interface DestRateRow { DestinationId: string; RateId: string; RoundingMethod: string; RoundingDecimals: number; MaxCost: number; MaxCostStrategy: string; }
 interface RateSlot { ConnectFee: number; Rate: number; RateUnit: string; RateIncrement: string; GroupIntervalStart: string; }
+interface RatingPlanActivation { ActivationTime: string; RatingPlanId: string; FallbackKeys?: string[] | null; }
 
 function DetailBody({ node, detail, onOpen }: { node: ExNode; detail: unknown; onOpen: (child: ExNode) => void }) {
   const d = detail as Record<string, unknown> | null;
   if (!d) return <Typography variant="body2" color="text.secondary">No data</Typography>;
+
+  if (node.type === 'ratingprofile') {
+    const acts = (d.RatingPlanActivations as RatingPlanActivation[]) || [];
+    // The engine can store repeated identical activations; collapse them for display.
+    const seen = new Set<string>();
+    const uniq = acts.filter(a => { const k = `${a.ActivationTime}|${a.RatingPlanId}`; if (seen.has(k)) return false; seen.add(k); return true; });
+    // Full id is "*out:tenant:category:subject"; fall back to the node id for category/subject.
+    const idParts = String(d.Id || '').split(':');
+    const tenant = idParts.length >= 4 ? idParts[1] : '';
+    const { category, subject } = splitProfileId(node.id);
+    return (
+      <Box>
+        <Stack direction="row" spacing={1} sx={{ mb: 1.5, flexWrap: 'wrap' }} useFlexGap>
+          <Chip size="small" icon={<CategoryIcon sx={{ fontSize: 16, color: `${TYPE_META.ratingprofile.color} !important` }} />}
+            label={`Category: ${category}`} sx={{ bgcolor: TYPE_META.ratingprofile.color, color: '#000', fontWeight: 600 }} />
+          <Chip size="small" variant="outlined" label={`Subject: ${subject || '*any'}`} />
+        </Stack>
+        {tenant && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>Tenant: <b>{tenant}</b></Typography>}
+        <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Rating Plan Activations</Typography>
+        <Table size="small">
+          <TableHead><TableRow><TableCell>Active from</TableCell><TableCell>Rating Plan</TableCell></TableRow></TableHead>
+          <TableBody>
+            {uniq.map((a, i) => (
+              <TableRow key={i}>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{(a.ActivationTime || '').replace('T', ' ').replace('Z', '')}</TableCell>
+                <TableCell><RefChip type="ratingplan" id={a.RatingPlanId} onClick={() => onOpen({ type: 'ratingplan', id: a.RatingPlanId })} /></TableCell>
+              </TableRow>
+            ))}
+            {uniq.length === 0 && <TableRow><TableCell colSpan={2}><Typography variant="body2" color="text.secondary">No activations</Typography></TableCell></TableRow>}
+          </TableBody>
+        </Table>
+      </Box>
+    );
+  }
 
   if (node.type === 'ratingplan') {
     const bindings = (d.RatingPlanBindings as RatingPlanBinding[]) || [];
@@ -240,12 +295,12 @@ function DestRateTable({ rows, onOpen }: { rows: DestRateRow[]; onOpen: (child: 
 
 // ---- Columns --------------------------------------------------------------
 
-function EntryColumn({ baseUrl, tpid, active, entryType, setEntryType, onOpen }: {
-  baseUrl: string | null; tpid: string; active: ExNode | null;
+function EntryColumn({ baseUrl, tpid, tenant, active, entryType, setEntryType, onOpen }: {
+  baseUrl: string | null; tpid: string; tenant: string; active: ExNode | null;
   entryType: EntityType; setEntryType: (t: EntityType) => void; onOpen: (n: ExNode) => void;
 }) {
   const [filter, setFilter] = useState('');
-  const { data: ids, isLoading, error } = useEntityIds(baseUrl, tpid, entryType, true);
+  const { data: ids, isLoading, error } = useEntityIds(baseUrl, tpid, tenant, entryType, true);
   const shown = useMemo(() => {
     const list = ids || [];
     const q = filter.trim().toLowerCase();
@@ -260,6 +315,11 @@ function EntryColumn({ baseUrl, tpid, active, entryType, setEntryType, onOpen }:
       </Tabs>
       <Box sx={{ p: 1.5, pb: 1 }}>
         <Typography variant="caption" sx={{ color: TYPE_META[entryType].color, fontWeight: 600 }}>{TYPE_META[entryType].plural}</Typography>
+        {entryType === 'ratingprofile' && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            tenant-scoped ({tenant || 'default'}) · <code>category:subject</code>
+          </Typography>
+        )}
         <TextField size="small" fullWidth placeholder="Filter…" value={filter} onChange={e => setFilter(e.target.value)}
           sx={{ mt: 0.5 }} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }} />
       </Box>
@@ -282,10 +342,10 @@ function EntryColumn({ baseUrl, tpid, active, entryType, setEntryType, onOpen }:
   );
 }
 
-function DetailColumn({ baseUrl, tpid, node, selectedChild, onOpen }: {
-  baseUrl: string | null; tpid: string; node: ExNode; selectedChild: ExNode | null; onOpen: (child: ExNode) => void;
+function DetailColumn({ baseUrl, tpid, tenant, node, selectedChild, onOpen }: {
+  baseUrl: string | null; tpid: string; tenant: string; node: ExNode; selectedChild: ExNode | null; onOpen: (child: ExNode) => void;
 }) {
-  const { data, isLoading, error } = useEntityDetail(baseUrl, tpid, node);
+  const { data, isLoading, error } = useEntityDetail(baseUrl, tpid, tenant, node);
   return (
     <ColumnShell node={node}>
       {isLoading ? <Box sx={{ textAlign: 'center', py: 3 }}><CircularProgress size={22} /></Box>
@@ -305,7 +365,8 @@ function DetailColumn({ baseUrl, tpid, node, selectedChild, onOpen }: {
 export function Component() {
   const baseUrl = useOcsBaseUrl();
   const [tpid, setTpid] = useState('');
-  const [entryType, setEntryType] = useState<EntityType>('ratingplan');
+  const [tenant, setTenant] = useState('');
+  const [entryType, setEntryType] = useState<EntityType>('ratingprofile');
   const [path, setPath] = useState<ExNode[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -338,20 +399,23 @@ export function Component() {
               {(tpids || []).map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
             </Select>
           </FormControl>
+          <TextField size="small" label="Tenant (rating profiles)" placeholder="engine default" value={tenant}
+            onChange={e => setTenant(e.target.value)} sx={{ minWidth: 240 }}
+            helperText="Rating profiles are keyed by tenant:category:subject" />
           {tpidsLoading && <CircularProgress size={20} />}
           {tpidsError && <Alert severity="error">{(tpidsError as Error).message}</Alert>}
           {!tpidsLoading && !tpidsError && <Typography variant="body2" color="text.secondary">{(tpids || []).length} tariff plan(s) loaded</Typography>}
         </Stack>
       </Paper>
 
-      {!tpid ? (
-        <Alert severity="info">Select a loaded tariff plan to start exploring its rating plans, destination rates, rates, destinations and timings.</Alert>
+      {!tpid && entryType !== 'ratingprofile' ? (
+        <Alert severity="info">Select a loaded tariff plan to explore its rating plans, destination rates, rates, destinations and timings — or start from a <b>Rating Profile</b> (category) to trace a call from tenant → category → rating plan → rate.</Alert>
       ) : (
         <>
-          {tpid && <SummaryCards baseUrl={baseUrl} tpid={tpid} entryType={entryType} onPick={t => { setEntryType(t); }} />}
+          <SummaryCards baseUrl={baseUrl} tpid={tpid} tenant={tenant} entryType={entryType} onPick={t => { setEntryType(t); }} />
 
           <Breadcrumbs sx={{ mb: 1 }}>
-            <Link component="button" underline="hover" color="inherit" onClick={() => setPath([])}>{tpid}</Link>
+            <Link component="button" underline="hover" color="inherit" onClick={() => setPath([])}>{tpid || 'tenant'}</Link>
             {path.map((n, i) => (
               <Link key={i} component="button" underline="hover" onClick={() => setPath(path.slice(0, i + 1))}
                 sx={{ color: TYPE_META[n.type].color }}>{n.id}</Link>
@@ -359,9 +423,9 @@ export function Component() {
           </Breadcrumbs>
 
           <Box ref={scrollRef} sx={{ display: 'flex', gap: 1.5, flex: 1, overflowX: 'auto', overflowY: 'hidden', pb: 1 }}>
-            <EntryColumn baseUrl={baseUrl} tpid={tpid} active={path[0] || null} entryType={entryType} setEntryType={setEntryType} onOpen={openFromEntry} />
+            <EntryColumn baseUrl={baseUrl} tpid={tpid} tenant={tenant} active={path[0] || null} entryType={entryType} setEntryType={setEntryType} onOpen={openFromEntry} />
             {path.map((node, depth) => (
-              <DetailColumn key={`${depth}-${node.type}-${node.id}`} baseUrl={baseUrl} tpid={tpid} node={node}
+              <DetailColumn key={`${depth}-${node.type}-${node.id}`} baseUrl={baseUrl} tpid={tpid} tenant={tenant} node={node}
                 selectedChild={path[depth + 1] || null} onOpen={child => openFromDepth(depth, child)} />
             ))}
           </Box>
@@ -371,21 +435,21 @@ export function Component() {
   );
 }
 
-function SummaryCards({ baseUrl, tpid, entryType, onPick }: {
-  baseUrl: string | null; tpid: string; entryType: EntityType; onPick: (t: EntityType) => void;
+function SummaryCards({ baseUrl, tpid, tenant, entryType, onPick }: {
+  baseUrl: string | null; tpid: string; tenant: string; entryType: EntityType; onPick: (t: EntityType) => void;
 }) {
   return (
     <Box sx={{ display: 'flex', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
-      {ENTRY_ORDER.map(t => <SummaryCard key={t} baseUrl={baseUrl} tpid={tpid} type={t} active={entryType === t} onPick={() => onPick(t)} />)}
+      {ENTRY_ORDER.map(t => <SummaryCard key={t} baseUrl={baseUrl} tpid={tpid} tenant={tenant} type={t} active={entryType === t} onPick={() => onPick(t)} />)}
     </Box>
   );
 }
 
-function SummaryCard({ baseUrl, tpid, type, active, onPick }: {
-  baseUrl: string | null; tpid: string; type: EntityType; active: boolean; onPick: () => void;
+function SummaryCard({ baseUrl, tpid, tenant, type, active, onPick }: {
+  baseUrl: string | null; tpid: string; tenant: string; type: EntityType; active: boolean; onPick: () => void;
 }) {
   const meta = TYPE_META[type];
-  const { data, isLoading } = useEntityIds(baseUrl, tpid, type, true);
+  const { data, isLoading } = useEntityIds(baseUrl, tpid, tenant, type, true);
   return (
     <Card variant="outlined" sx={{ minWidth: 150, flex: '1 1 0', borderBottom: `3px solid ${meta.color}`, bgcolor: active ? 'action.selected' : undefined }}>
       <CardActionArea onClick={onPick} sx={{ p: 1.5 }}>
