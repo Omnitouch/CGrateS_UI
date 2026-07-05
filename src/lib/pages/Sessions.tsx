@@ -65,8 +65,24 @@ export function Component() {
   }, [detailOpen, detail, baseUrl]);
 
   const handleTerminate = useCallback(async () => {
-    if (!baseUrl || !detail || !window.confirm('Terminate this session?')) return;
+    if (!baseUrl || !detail || !window.confirm('Terminate this session and generate a CDR?')) return;
     setTerminateLoading(true);
+    // Event shared by TerminateSession and ProcessCDR so the CDR correlates to the session.
+    const event = {
+      Account: detail.Account,
+      Category: detail.Category,
+      Destination: detail.Destination,
+      OriginHost: detail.OriginHost,
+      OriginID: detail.OriginID,
+      RequestType: detail.RequestType,
+      SetupTime: detail.SetupTime,
+      AnswerTime: detail.AnswerTime,
+      Source: detail.Source,
+      Subject: detail.Subject,
+      Tenant: detail.Tenant,
+      ToR: detail.ToR,
+      Usage: detail.Usage,
+    };
     try {
       await api.terminateSession(baseUrl, {
         TerminateSession: true,
@@ -77,19 +93,13 @@ export function Component() {
         Tenant: detail.Tenant,
         ID: detail.CGRID,
         Time: detail.SetupTime,
-        Event: {
-          Account: detail.Account,
-          Category: detail.Category,
-          Destination: detail.Destination,
-          OriginHost: detail.OriginHost,
-          OriginID: detail.OriginID,
-          RequestType: detail.RequestType,
-          SetupTime: detail.SetupTime,
-          Source: detail.Source,
-          Subject: detail.Subject,
-          Tenant: detail.Tenant,
-          ToR: detail.ToR,
-        },
+        Event: event,
+        Opts: {},
+      });
+      // TerminateSession only finalizes charging; a CDR must be generated separately.
+      await api.processCDR(baseUrl, {
+        Tenant: detail.Tenant,
+        Event: event,
         Opts: {},
       });
       setDetailOpen(false);
