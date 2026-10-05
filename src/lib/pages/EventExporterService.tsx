@@ -9,6 +9,7 @@ import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import { useConfig } from '../hooks';
 import * as api from '../api';
 import type { EventExporterConfig } from '../types';
+import SearchableSelect from '../components/SearchableSelect';
 
 const pastOptions = [
   { label: 'Past 15 minutes', value: 15 },
@@ -155,12 +156,7 @@ export function Component() {
 
           <Typography variant="subtitle1" sx={{ mt: 2 }}>Export CDRs</Typography>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-end', mt: 1 }}>
-            <FormControl size="small" sx={{ minWidth: 160 }}>
-              <InputLabel>Tenant</InputLabel>
-              <Select value={tenant} label="Tenant" onChange={e => setTenant(e.target.value)}>
-                {tenants.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-              </Select>
-            </FormControl>
+            <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 160 }} />
             <FormControl size="small" sx={{ minWidth: 160 }}>
               <InputLabel>Time Range</InputLabel>
               <Select value={past} label="Time Range" onChange={e => handlePastChange(e.target.value)}>

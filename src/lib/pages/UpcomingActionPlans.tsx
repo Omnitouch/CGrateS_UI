@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react';
-import { Box, Typography, Paper, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, Chip, Select, MenuItem, FormControl, InputLabel } from '@mui/material';
+import { Box, Typography, Paper, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, Chip, InputLabel } from '@mui/material';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import type { ScheduledAction } from '../types';
+import SearchableSelect from '../components/SearchableSelect';
 
 function getRelativeTime(dateTimeStr: string): string {
   if (!dateTimeStr) return '';
@@ -68,12 +69,7 @@ export function Component() {
       <Typography variant="h5" gutterBottom>Upcoming Action Plans</Typography>
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
-          <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel>Tenant</InputLabel>
-            <Select value={tenant} label="Tenant" onChange={e => setTenant(e.target.value)}>
-              {tenants.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-            </Select>
-          </FormControl>
+          <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
           <Button variant="contained" onClick={() => fetchResults(0)}>Fetch Scheduled Actions</Button>
         </Box>
       </Paper>

@@ -7,6 +7,7 @@ import {
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import type { Account } from '../types';
+import SearchableSelect from '../components/SearchableSelect';
 
 interface CategoryOption {
   label: string;
@@ -186,12 +187,7 @@ export function Component() {
       <Paper sx={{ p: 2, mb: 2 }}>
         {/* Row 1: Tenant + Account */}
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-end', mb: 2 }}>
-          <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>Tenant</InputLabel>
-            <Select value={tenant} label="Tenant" onChange={e => setTenant(e.target.value)}>
-              {tenants.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-            </Select>
-          </FormControl>
+          <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 150 }} />
           <Autocomplete
             size="small"
             sx={{ minWidth: 250 }}

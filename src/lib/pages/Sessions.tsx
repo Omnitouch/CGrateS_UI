@@ -1,8 +1,9 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { Box, Typography, Paper, Button, Select, MenuItem, FormControl, InputLabel, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, TableSortLabel } from '@mui/material';
+import { Box, Typography, Paper, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, TableSortLabel } from '@mui/material';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import type { Session } from '../types';
+import SearchableSelect from '../components/SearchableSelect';
 
 function formatUsage(usage: number, tor: string): string {
   if (tor === '*data') {
@@ -147,7 +148,7 @@ export function Component() {
     <Box>
       <Typography variant="h5" gutterBottom>Active Sessions</Typography>
       <Paper sx={{ p: 2, mb: 2 }}><Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
-        <FormControl size="small" sx={{ minWidth: 200 }}><InputLabel>Tenant</InputLabel><Select value={tenant} label="Tenant" onChange={e => setTenant(e.target.value)}>{tenants.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl>
+        <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
         <Button variant="contained" onClick={fetchSessions}>Search Active Sessions</Button>
       </Box></Paper>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}

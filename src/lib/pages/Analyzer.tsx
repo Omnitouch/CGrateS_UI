@@ -13,6 +13,7 @@ import AddIcon from '@mui/icons-material/Add';
 import { useOcsBaseUrl } from '../OcsContext';
 import * as api from '../api';
 import type { AnalyzerResult } from '../types';
+import SearchableSelect from '../components/SearchableSelect';
 
 // --- Constants ---
 
@@ -559,28 +560,15 @@ export function Component() {
         <Typography variant="subtitle2" sx={{ mb: 1 }}>Request Filters</Typography>
         <Grid container spacing={2}>
           <Grid item xs={12} md={4}>
-            <FormControl size="small" fullWidth>
-              <InputLabel>Method</InputLabel>
-              <Select
-                label="Method"
-                value={searchParams.method}
-                onChange={e => handleParamChange('method', e.target.value)}
-              >
-                <MenuItem value="">Any Method</MenuItem>
-                {customMethods.length > 0 && (
-                  [
-                    <MenuItem key="__custom_header" disabled sx={{ fontWeight: 'bold', fontSize: '0.8rem', opacity: 1 }}>
-                      -- Custom Methods --
-                    </MenuItem>,
-                    ...customMethods.map(m => <MenuItem key={`c-${m}`} value={m}>{m}</MenuItem>),
-                  ]
-                )}
-                <MenuItem disabled sx={{ fontWeight: 'bold', fontSize: '0.8rem', opacity: 1 }}>
-                  -- Common Methods --
-                </MenuItem>
-                {commonMethods.map(m => <MenuItem key={m} value={m}>{m}</MenuItem>)}
-              </Select>
-            </FormControl>
+            <SearchableSelect
+              label="Method"
+              placeholder="Any Method"
+              value={searchParams.method}
+              options={[...customMethods, ...commonMethods.filter(m => !customMethods.includes(m))]}
+              groupBy={m => (customMethods.includes(m) ? 'Custom Methods' : 'Common Methods')}
+              onChange={v => handleParamChange('method', v)}
+              fullWidth
+            />
             <Box sx={{ display: 'flex', gap: 0.5, mt: 1 }}>
               <TextField
                 size="small" fullWidth placeholder="Add custom method..."

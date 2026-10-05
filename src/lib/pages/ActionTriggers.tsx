@@ -3,6 +3,7 @@ import { Box, Typography, Paper, Button, Select, MenuItem, FormControl, InputLab
 import AddIcon from '@mui/icons-material/Add';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
+import SearchableSelect from '../components/SearchableSelect';
 
 const THRESHOLD_TYPES = [
   '*min_counter', '*max_counter', '*min_balance', '*max_balance',
@@ -182,7 +183,7 @@ export function Component() {
     <Box>
       <Typography variant="h5" gutterBottom>Action Triggers</Typography>
       <Paper sx={{ p: 2, mb: 2 }}><Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
-        <FormControl size="small" sx={{ minWidth: 200 }}><InputLabel>Tenant</InputLabel><Select value={tenant} label="Tenant" onChange={e => setTenant(e.target.value)}>{tenants.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl>
+        <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
         <Button variant="contained" onClick={fetchTriggers}>Fetch</Button>
         <Button variant="outlined" startIcon={<AddIcon />} onClick={() => { setDetail(null); setForm(emptyTrigger()); setEditing(true); setDetailOpen(true); fetchActionIds(); }}>Add Trigger</Button>
       </Box></Paper>
