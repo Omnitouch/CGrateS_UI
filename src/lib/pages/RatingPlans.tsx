@@ -1,11 +1,11 @@
 import { useState, useCallback } from 'react';
 import {
-  Box, Typography, Paper, Button, Select, MenuItem, FormControl,
-  InputLabel, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
+  Box, Typography, Paper, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert,
 } from '@mui/material';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
+import SearchableSelect from '../components/SearchableSelect';
 
 export function Component() {
   const baseUrl = useOcsBaseUrl();
@@ -58,12 +58,7 @@ export function Component() {
       <Typography variant="h5" gutterBottom>Rating Plans</Typography>
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
-          <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel>TPID</InputLabel>
-            <Select value={selectedTpid} label="TPID" onChange={e => setSelectedTpid(e.target.value)}>
-              {tpids.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-            </Select>
-          </FormControl>
+          <SearchableSelect label="TPID" value={selectedTpid} options={tpids} onChange={setSelectedTpid} disableClearable sx={{ minWidth: 200 }} />
           <Button variant="contained" onClick={fetchIds} disabled={!selectedTpid}>Search</Button>
         </Box>
       </Paper>

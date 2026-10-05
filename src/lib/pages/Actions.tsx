@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
-  Box, Typography, Paper, Button, Select, MenuItem, FormControl,
-  InputLabel, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
+  Box, Typography, Paper, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert,
   TextField, IconButton, Checkbox, FormControlLabel, Autocomplete, Divider,
 } from '@mui/material';
@@ -10,6 +9,7 @@ import AddIcon from '@mui/icons-material/Add';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
+import SearchableSelect from '../components/SearchableSelect';
 
 const ACTION_TYPES = [
   '*log',
@@ -397,12 +397,7 @@ export function Component() {
       <Typography variant="h5" gutterBottom>Actions</Typography>
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
-          <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel>Tenant</InputLabel>
-            <Select value={tenant} label="Tenant" onChange={e => setTenant(e.target.value)}>
-              {tenants.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-            </Select>
-          </FormControl>
+          <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
           <Button variant="contained" onClick={fetchActions}>Fetch Actions</Button>
           <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>
         </Box>
@@ -457,18 +452,15 @@ export function Component() {
               <Box sx={{ mb: 1.5 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>ActionType</Typography>
                 {editing ? (
-                  <FormControl fullWidth size="small" sx={{ mt: 0.5 }}>
-                    <Select
-                      value={part.ActionType || ''}
-                      onChange={e => handleEditChange(index, 'ActionType', e.target.value)}
-                      displayEmpty
-                    >
-                      <MenuItem value="" disabled><em>Select action type</em></MenuItem>
-                      {ACTION_TYPES.map(type => (
-                        <MenuItem key={type} value={type}>{type}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <SearchableSelect
+                    label="ActionType"
+                    placeholder="Select action type"
+                    value={part.ActionType || ''}
+                    options={ACTION_TYPES}
+                    onChange={v => handleEditChange(index, 'ActionType', v)}
+                    fullWidth
+                    sx={{ mt: 0.5 }}
+                  />
                 ) : (
                   <Typography variant="body1">{part.ActionType || 'N/A'}</Typography>
                 )}

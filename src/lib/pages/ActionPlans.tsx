@@ -1,10 +1,11 @@
 import { useState, useCallback } from 'react';
-import { Box, Typography, Paper, Button, Select, MenuItem, FormControl, InputLabel, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, TextField, IconButton, Divider, Autocomplete } from '@mui/material';
+import { Box, Typography, Paper, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, TextField, IconButton, Divider, Autocomplete } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import type { ActionTiming } from '../types';
+import SearchableSelect from '../components/SearchableSelect';
 
 interface ActionTimingForm {
   ActionsID: string;
@@ -170,7 +171,7 @@ export function Component() {
     <Box>
       <Typography variant="h5" gutterBottom>Action Plans</Typography>
       <Paper sx={{ p: 2, mb: 2 }}><Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
-        <FormControl size="small" sx={{ minWidth: 200 }}><InputLabel>Tenant</InputLabel><Select value={tenant} label="Tenant" onChange={e => setTenant(e.target.value)}>{tenants.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}</Select></FormControl>
+        <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
         <Button variant="contained" onClick={() => { fetchIds(); fetchAccounts(); }}>Fetch</Button>
         <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>
       </Box></Paper>
@@ -180,12 +181,7 @@ export function Component() {
         <Paper sx={{ p: 2, mb: 2 }}>
           <Typography variant="subtitle2" gutterBottom>Assign Action Plan to Account</Typography>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
-            <FormControl size="small" sx={{ minWidth: 200 }}>
-              <InputLabel>Action Plan</InputLabel>
-              <Select value={assignPlanId} label="Action Plan" onChange={e => setAssignPlanId(e.target.value)}>
-                {ids.map(id => <MenuItem key={id} value={id}>{id}</MenuItem>)}
-              </Select>
-            </FormControl>
+            <SearchableSelect label="Action Plan" value={assignPlanId} options={ids} onChange={setAssignPlanId} sx={{ minWidth: 200 }} />
             <Autocomplete
               size="small"
               sx={{ minWidth: 200 }}

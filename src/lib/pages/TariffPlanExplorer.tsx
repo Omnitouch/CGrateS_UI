@@ -3,8 +3,7 @@ import {
   Box, Typography, Paper, Chip, TextField, InputAdornment, Tabs, Tab,
   List, ListItemButton, ListItemText, CircularProgress, Alert, Breadcrumbs,
   Link, Card, CardActionArea, CardContent, Table, TableBody, TableCell,
-  TableHead, TableRow, Stack, Tooltip, Select, MenuItem, FormControl, InputLabel,
-} from '@mui/material';
+  TableHead, TableRow, Stack, Tooltip, } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CategoryIcon from '@mui/icons-material/Category';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
@@ -16,6 +15,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useQuery } from '@tanstack/react-query';
 import { useOcsBaseUrl } from '../OcsContext';
 import * as api from '../api';
+import SearchableSelect from '../components/SearchableSelect';
 
 // ---- Entity model ---------------------------------------------------------
 
@@ -393,12 +393,7 @@ export function Component() {
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
-          <FormControl size="small" sx={{ minWidth: 260 }}>
-            <InputLabel>Loaded Tariff Plan</InputLabel>
-            <Select value={tpid} label="Loaded Tariff Plan" onChange={e => setTpid(e.target.value)}>
-              {(tpids || []).map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-            </Select>
-          </FormControl>
+          <SearchableSelect label="Loaded Tariff Plan" value={tpid} options={tpids || []} onChange={setTpid} disableClearable sx={{ minWidth: 260 }} />
           <TextField size="small" label="Tenant (rating profiles)" placeholder="engine default" value={tenant}
             onChange={e => setTenant(e.target.value)} sx={{ minWidth: 240 }}
             helperText="Rating profiles are keyed by tenant:category:subject" />

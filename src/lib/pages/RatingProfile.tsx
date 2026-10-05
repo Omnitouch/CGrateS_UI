@@ -3,13 +3,14 @@ import {
   Box, Typography, Paper, Button, CircularProgress, Alert,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton,
-  Select, MenuItem, FormControl, InputLabel, Tabs, Tab,
+  Tabs, Tab,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
+import SearchableSelect from '../components/SearchableSelect';
 
 interface RatingPlanActivation {
   ActivationTime: string;
@@ -219,12 +220,7 @@ export function Component() {
           <TextField label="Subject" size="small" fullWidth value={form.Subject} onChange={e => updateForm('Subject', e.target.value)} />
 
           {tpids.length > 0 && (
-            <FormControl size="small" fullWidth>
-              <InputLabel>Tariff Plan (for Rating Plan lookup)</InputLabel>
-              <Select value={selectedTpid} label="Tariff Plan (for Rating Plan lookup)" onChange={e => setSelectedTpid(e.target.value)}>
-                {tpids.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-              </Select>
-            </FormControl>
+            <SearchableSelect label="Tariff Plan (for Rating Plan lookup)" value={selectedTpid} options={tpids} onChange={setSelectedTpid} disableClearable fullWidth />
           )}
 
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -240,13 +236,7 @@ export function Component() {
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                 <TextField label="ActivationTime" size="small" fullWidth value={act.ActivationTime} onChange={e => updateActivation(idx, 'ActivationTime', e.target.value)} helperText="e.g. 2024-01-01T00:00:00Z" />
                 {ratingPlanIds.length > 0 ? (
-                  <FormControl size="small" fullWidth>
-                    <InputLabel>RatingPlanId</InputLabel>
-                    <Select value={act.RatingPlanId} label="RatingPlanId" onChange={e => updateActivation(idx, 'RatingPlanId', e.target.value as string)}>
-                      <MenuItem value="">-- Select --</MenuItem>
-                      {ratingPlanIds.map(rp => <MenuItem key={rp} value={rp}>{rp}</MenuItem>)}
-                    </Select>
-                  </FormControl>
+                  <SearchableSelect label="RatingPlanId" value={act.RatingPlanId} options={ratingPlanIds} onChange={v => updateActivation(idx, 'RatingPlanId', v)} fullWidth />
                 ) : (
                   <TextField label="RatingPlanId" size="small" fullWidth value={act.RatingPlanId} onChange={e => updateActivation(idx, 'RatingPlanId', e.target.value)} />
                 )}
@@ -268,12 +258,7 @@ export function Component() {
       <Typography variant="h5" gutterBottom>Rating Profiles</Typography>
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel>Tenant</InputLabel>
-            <Select value={tenant} label="Tenant" onChange={e => setTenant(e.target.value)}>
-              {tenants.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-            </Select>
-          </FormControl>
+          <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
           <Button variant="contained" onClick={fetchProfiles}>Fetch Profiles</Button>
           <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>
         </Box>

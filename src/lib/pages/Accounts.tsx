@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import {
-  Box, Typography, Paper, Button, TextField, Select, MenuItem, FormControl,
-  InputLabel, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
+  Box, Typography, Paper, Button, TextField, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Alert,
   IconButton, Card, CardContent,
 } from '@mui/material';
@@ -13,6 +12,7 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import type { Account, Balance, ActionTriggerEntry, AccountActionPlan } from '../types';
+import SearchableSelect from '../components/SearchableSelect';
 
 // --- Utility functions ---
 
@@ -468,12 +468,7 @@ export function Component() {
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel>Tenant</InputLabel>
-            <Select value={tenant} label="Tenant" onChange={e => setTenant(e.target.value)}>
-              {tenants.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-            </Select>
-          </FormControl>
+          <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
           <TextField
             size="small" label="Account" value={accountFilter}
             onChange={e => setAccountFilter(e.target.value)}
@@ -675,12 +670,7 @@ export function Component() {
               <Box sx={{ mt: 3 }}>
                 <Typography variant="h6">Execute Action</Typography>
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end', mt: 1 }}>
-                  <FormControl size="small" sx={{ minWidth: 250 }}>
-                    <InputLabel>Action</InputLabel>
-                    <Select value={executeActionId} label="Action" onChange={e => setExecuteActionId(e.target.value)}>
-                      {actionsList.map(a => <MenuItem key={a} value={a}>{a}</MenuItem>)}
-                    </Select>
-                  </FormControl>
+                  <SearchableSelect label="Action" value={executeActionId} options={actionsList} onChange={setExecuteActionId} sx={{ minWidth: 250 }} />
                   <Button variant="contained" onClick={handleExecuteActionClick} disabled={!executeActionId}>
                     Execute
                   </Button>

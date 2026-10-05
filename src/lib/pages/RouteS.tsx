@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react';
-import { Box, Typography, Paper, Button, TextField, Select, MenuItem, FormControl, InputLabel, CircularProgress, Alert, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Box, Typography, Paper, Button, TextField, CircularProgress, Alert, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import type { RouteResult } from '../types';
+import SearchableSelect from '../components/SearchableSelect';
 
 export function Component() {
   const baseUrl = useOcsBaseUrl();
@@ -77,12 +78,7 @@ export function Component() {
       <Typography variant="h5" gutterBottom>Route Lookup</Typography>
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel>Tenant</InputLabel>
-            <Select value={tenant} label="Tenant" onChange={e => setTenant(e.target.value)}>
-              {tenants.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-            </Select>
-          </FormControl>
+          <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
           <TextField size="small" label="Account" value={account} onChange={e => setAccount(e.target.value)} />
           <TextField size="small" label="Destination" value={destination} onChange={e => setDestination(e.target.value)} />
           <Button variant="contained" onClick={fetchRoutes}>Search</Button>
