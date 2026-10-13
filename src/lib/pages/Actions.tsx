@@ -10,6 +10,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import SearchableSelect from '../components/SearchableSelect';
+import { BalanceName, BalanceBucket, CompositeId } from '../components/ParsedId';
 import { BALANCE_TYPES, BalanceValueDisplay, BalanceValueInput } from '../components/BalanceValue';
 
 const ACTION_TYPES = [
@@ -419,7 +420,7 @@ export function Component() {
               {actions.length > 0 ? actions.map((a, i) => (
                 <TableRow key={a.id} hover sx={{ cursor: 'pointer' }} onClick={() => handleRowClick(a.id)}>
                   <TableCell>{i + 1}</TableCell>
-                  <TableCell>{a.id}</TableCell>
+                  <TableCell><CompositeId id={a.id} compact /></TableCell>
                   <TableCell>{a.count}</TableCell>
                   <TableCell align="right">
                     <IconButton size="small" color="error" onClick={e => { e.stopPropagation(); handleDelete(a.id); }}>
@@ -535,7 +536,12 @@ export function Component() {
                     onChange={e => handleEditChange(index, 'Balance.ID', e.target.value)}
                   />
                 ) : (
-                  <Typography variant="body1">{part.Balance?.ID || 'N/A'}</Typography>
+                  part.Balance?.ID ? (
+                    <>
+                      <BalanceName id={part.Balance.ID} />
+                      <BalanceBucket id={part.Balance.ID} balanceType={part.Balance.Type} />
+                    </>
+                  ) : <Typography variant="body1">N/A</Typography>
                 )}
               </Box>
 

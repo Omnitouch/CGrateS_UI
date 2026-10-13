@@ -11,6 +11,7 @@ import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
+import { BalanceName, BalanceBucket, CompositeId } from '../components/ParsedId';
 import type { Account, Balance, ActionTriggerEntry, AccountActionPlan } from '../types';
 import SearchableSelect from '../components/SearchableSelect';
 
@@ -428,8 +429,11 @@ export function Component() {
               const { prettyDate, timeUntil } = formatExpiration(balance.ExpirationDate);
               return (
                 <TableRow key={i}>
-                  <TableCell>{balance.ID}</TableCell>
-                  <TableCell>{formatUsage(balance.Value, category)}</TableCell>
+                  <TableCell><BalanceName id={balance.ID} /></TableCell>
+                  <TableCell>
+                    {formatUsage(balance.Value, category)}
+                    <BalanceBucket id={balance.ID} balanceType={category} value={balance.Value} />
+                  </TableCell>
                   <TableCell>
                     {prettyDate}
                     <br />
@@ -579,7 +583,7 @@ export function Component() {
                                 <br />
                                 <Typography variant="caption" color="text.secondary">{trigger.UniqueID}</Typography>
                               </TableCell>
-                              <TableCell>{trigger.ActionsID}</TableCell>
+                              <TableCell><CompositeId id={trigger.ActionsID} compact /></TableCell>
                               <TableCell>
                                 {timeUntil}
                                 <br />
@@ -630,13 +634,13 @@ export function Component() {
                         <Card key={index} variant="outlined" sx={{ bgcolor: 'grey.50' }}>
                           <CardContent>
                             <Typography variant="subtitle2" color="text.secondary">Action Plan ID</Typography>
-                            <Typography variant="body1" fontWeight="bold">{plan.ActionPlanId}</Typography>
+                            <CompositeId id={plan.ActionPlanId} />
                             <Box sx={{ display: 'flex', gap: 4, mt: 2 }}>
                               <Box sx={{ flex: 1 }}>
                                 <Typography variant="subtitle2" color="text.secondary">UUID</Typography>
                                 <Typography variant="body2">{plan.Uuid}</Typography>
                                 <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>Actions ID</Typography>
-                                <Typography variant="body2">{plan.ActionsId}</Typography>
+                                <CompositeId id={plan.ActionsId} compact />
                               </Box>
                               <Box sx={{ flex: 1 }}>
                                 <Typography variant="subtitle2" color="text.secondary">Next Execution Time</Typography>
@@ -738,6 +742,10 @@ export function Component() {
         <DialogContent>
           {selectedBalance ? (
             <TableContainer>
+              <Box sx={{ mb: 2 }}>
+                <BalanceName id={selectedBalance.ID} />
+                <BalanceBucket id={selectedBalance.ID} balanceType={selectedBalance.Type} value={selectedBalance.Value} />
+              </Box>
               <Table size="small">
                 <TableHead>
                   <TableRow>
