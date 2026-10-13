@@ -4,6 +4,7 @@ import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import type { ScheduledAction } from '../types';
 import SearchableSelect from '../components/SearchableSelect';
+import { CompositeId } from '../components/ParsedId';
 
 function getRelativeTime(dateTimeStr: string): string {
   if (!dateTimeStr) return '';
@@ -92,8 +93,8 @@ export function Component() {
                 return (
                   <TableRow key={i} hover sx={{ cursor: 'pointer' }} onClick={() => { setDetail(item); setDetailOpen(true); }}>
                     <TableCell>{page * pageSize + i + 1}</TableCell>
-                    <TableCell sx={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.ActionPlanID}>{item.ActionPlanID}</TableCell>
-                    <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.ActionsID}>{item.ActionsID}</TableCell>
+                    <TableCell sx={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} ><CompositeId id={item.ActionPlanID} compact /></TableCell>
+                    <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} ><CompositeId id={item.ActionsID} compact /></TableCell>
                     <TableCell>
                       {new Date(item.NextRunTime).toLocaleString()}
                       {relative && <Typography variant="caption" color="text.secondary" display="block">({relative})</Typography>}
@@ -116,8 +117,8 @@ export function Component() {
         <DialogContent>
           {detail && (
             <Box sx={{ mt: 1 }}>
-              <Typography><strong>Action Plan ID:</strong> {detail.ActionPlanID}</Typography>
-              <Typography><strong>Actions ID:</strong> {detail.ActionsID}</Typography>
+              <Typography component="div" sx={{ mb: 1 }}><strong>Action Plan ID:</strong> <CompositeId id={detail.ActionPlanID} /></Typography>
+              <Typography component="div" sx={{ mb: 1 }}><strong>Actions ID:</strong> <CompositeId id={detail.ActionsID} /></Typography>
               <Typography><strong>Action Timing UUID:</strong> {detail.ActionTimingUUID}</Typography>
               <Typography>
                 <strong>Next Run Time:</strong> {new Date(detail.NextRunTime).toLocaleString()}

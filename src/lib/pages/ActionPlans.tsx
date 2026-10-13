@@ -6,6 +6,7 @@ import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import type { ActionTiming } from '../types';
 import SearchableSelect from '../components/SearchableSelect';
+import { CompositeId } from '../components/ParsedId';
 
 interface ActionTimingForm {
   ActionsID: string;
@@ -199,7 +200,7 @@ export function Component() {
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
       {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box> : (
         <TableContainer component={Paper}><Table size="small"><TableHead><TableRow><TableCell>#</TableCell><TableCell>Action Plan ID</TableCell><TableCell align="right">Actions</TableCell></TableRow></TableHead><TableBody>
-          {ids.length > 0 ? ids.map((id, i) => (<TableRow key={id} hover sx={{ cursor: 'pointer' }} onClick={() => fetchDetail(id)}><TableCell>{i+1}</TableCell><TableCell>{id}</TableCell><TableCell align="right"><IconButton size="small" color="error" onClick={e => { e.stopPropagation(); handleDelete(id); }}><DeleteIcon fontSize="small" /></IconButton></TableCell></TableRow>)) : <TableRow><TableCell colSpan={3} align="center">No action plans found</TableCell></TableRow>}
+          {ids.length > 0 ? ids.map((id, i) => (<TableRow key={id} hover sx={{ cursor: 'pointer' }} onClick={() => fetchDetail(id)}><TableCell>{i+1}</TableCell><TableCell><CompositeId id={id} compact /></TableCell><TableCell align="right"><IconButton size="small" color="error" onClick={e => { e.stopPropagation(); handleDelete(id); }}><DeleteIcon fontSize="small" /></IconButton></TableCell></TableRow>)) : <TableRow><TableCell colSpan={3} align="center">No action plans found</TableCell></TableRow>}
         </TableBody></Table></TableContainer>
       )}
 

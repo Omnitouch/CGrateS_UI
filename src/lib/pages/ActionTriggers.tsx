@@ -4,6 +4,7 @@ import AddIcon from '@mui/icons-material/Add';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import SearchableSelect from '../components/SearchableSelect';
+import { CompositeId } from '../components/ParsedId';
 
 const THRESHOLD_TYPES = [
   '*min_counter', '*max_counter', '*min_balance', '*max_balance',
@@ -206,7 +207,7 @@ export function Component() {
                 <TableCell>{String(t.ThresholdType || '')}</TableCell>
                 <TableCell>{String(t.ThresholdValue ?? '')}</TableCell>
                 <TableCell>{String(bal.Type || t.BalanceType || '')}</TableCell>
-                <TableCell>{String(t.ActionsID || '')}</TableCell>
+                <TableCell><CompositeId id={String(t.ActionsID || '')} compact /></TableCell>
               </TableRow>
             );
           }) : <TableRow><TableCell colSpan={6} align="center">No triggers found</TableCell></TableRow>}
