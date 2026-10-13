@@ -10,6 +10,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import SearchableSelect from '../components/SearchableSelect';
+import { BALANCE_TYPES, BalanceValueDisplay, BalanceValueInput } from '../components/BalanceValue';
 
 const ACTION_TYPES = [
   '*log',
@@ -542,10 +543,13 @@ export function Component() {
               <Box sx={{ mb: 1.5 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>Balance Type</Typography>
                 {editing ? (
-                  <TextField
-                    fullWidth size="small" sx={{ mt: 0.5 }}
+                  <SearchableSelect
+                    label="Balance Type"
                     value={part.Balance?.Type || ''}
-                    onChange={e => handleEditChange(index, 'Balance.Type', e.target.value)}
+                    options={BALANCE_TYPES}
+                    onChange={v => handleEditChange(index, 'Balance.Type', v)}
+                    fullWidth
+                    sx={{ mt: 0.5 }}
                   />
                 ) : (
                   <Typography variant="body1">{part.Balance?.Type || 'N/A'}</Typography>
@@ -556,13 +560,15 @@ export function Component() {
               <Box sx={{ mb: 1.5 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>Balance Value</Typography>
                 {editing ? (
-                  <TextField
-                    fullWidth size="small" type="text" sx={{ mt: 0.5 }}
-                    value={part.Balance?.Value?.Static?.toString() || '0'}
-                    onChange={e => handleEditChange(index, 'Balance.Value.Static', e.target.value)}
+                  <BalanceValueInput
+                    key={part.Balance?.Type || ''}
+                    value={part.Balance?.Value?.Static ?? 0}
+                    balanceType={part.Balance?.Type}
+                    onChange={raw => handleEditChange(index, 'Balance.Value.Static', String(raw))}
+                    sx={{ mt: 0.5 }}
                   />
                 ) : (
-                  <Typography variant="body1">{part.Balance?.Value?.Static ?? 0}</Typography>
+                  <BalanceValueDisplay value={part.Balance?.Value?.Static ?? 0} balanceType={part.Balance?.Type} />
                 )}
               </Box>
 
