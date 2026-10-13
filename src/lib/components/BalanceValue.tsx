@@ -117,3 +117,11 @@ export function BalanceValueInput({ value, balanceType, onChange, sx }: BalanceV
     </Box>
   );
 }
+
+export function formatDuration(ns: number): string {
+  return formatBalanceValue(ns, '*voice');
+}
+
+export function DurationInput(props: Omit<BalanceValueInputProps, 'balanceType'>) {
+  return <BalanceValueInput {...props} balanceType="*voice" />;
+}

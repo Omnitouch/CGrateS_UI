@@ -1,9 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Box, Typography, Paper, Button, Select, MenuItem, FormControl,
   InputLabel, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, IconButton,
-  TextField, Chip, List, ListItem, ListItemText, Divider,
+  TextField, Chip, List, ListItem, ListItemText, Divider, Checkbox, FormControlLabel,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -15,11 +15,17 @@ import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import SearchableSelect from '../components/SearchableSelect';
+import { DurationInput, formatDuration } from '../components/BalanceValue';
 
 interface MetricEntry {
   MetricID: string;
   FilterIDs: string[];
   genericValue?: string;
+}
+
+interface ActivationInterval {
+  ActivationTime: string;
+  ExpiryTime: string;
 }
 
 interface EditProfileData {
@@ -30,7 +36,41 @@ interface EditProfileData {
   MinItems: number;
   FilterIDs: string[];
   Metrics: MetricEntry[];
+  Stored: boolean;
+  Blocker: boolean;
+  Weight: number;
+  ThresholdIDs: string[];
+  ActivationInterval: ActivationInterval | null;
   [key: string]: unknown;
+}
+
+const emptyProfile = (tenant: string): EditProfileData => ({
+  Tenant: tenant, ID: '', QueueLength: 0, TTL: -1, MinItems: 0, FilterIDs: [], Metrics: [],
+  Stored: false, Blocker: false, Weight: 0, ThresholdIDs: [], ActivationInterval: null,
+});
+
+const ZERO_TIME = '0001-01-01T00:00:00Z';
+
+function isZeroTime(t: string | undefined): boolean {
+  return !t || t.startsWith('0001-01-01');
+}
+
+function toLocalInput(t: string | undefined): string {
+  if (isZeroTime(t)) return '';
+  const d = new Date(t!);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+function fromLocalInput(v: string): string {
+  return v ? new Date(v).toISOString() : ZERO_TIME;
+}
+
+function formatTime(t: string | undefined): string {
+  return isZeroTime(t) ? 'Not set' : new Date(t!).toLocaleString();
+}
+
+function formatTTL(ttl: number): string {
+  return ttl > 0 ? `${formatDuration(ttl)} (${ttl} ns)` : `No expiry (${ttl})`;
 }
 
 const metricsOptions = [
@@ -44,7 +84,20 @@ const metricsOptions = [
   { value: '*sum', label: 'Generic sum' },
   { value: '*average', label: 'Generic average' },
   { value: '*distinct', label: 'Generic distinct' },
+  { value: '*highest', label: 'Generic highest' },
+  { value: '*lowest', label: 'Generic lowest' },
+  { value: '*repsc', label: 'Successful requests count' },
+  { value: '*repfc', label: 'Failed requests count' },
 ];
+
+const metricParams: Record<string, { label: string; placeholder: string }> = {
+  '*sum': { label: 'Input Value', placeholder: 'Enter value (e.g., ~*req.Cost)' },
+  '*average': { label: 'Input Value', placeholder: 'Enter value (e.g., ~*req.Cost)' },
+  '*distinct': { label: 'Input Value', placeholder: 'Enter value (e.g., ~*req.Destination)' },
+  '*highest': { label: 'Input Value', placeholder: 'Enter value (e.g., ~*req.Cost)' },
+  '*lowest': { label: 'Input Value', placeholder: 'Enter value (e.g., ~*req.Cost)' },
+  '*repfc': { label: 'Error Type (optional)', placeholder: 'e.g. ERR_TERMINATE; empty counts all failures' },
+};
 
 function getMetricLabel(metricID: string): string {
   const [metricType] = metricID.split('#');
@@ -53,7 +106,7 @@ function getMetricLabel(metricID: string): string {
 }
 
 function isGenericMetric(metricID: string): boolean {
-  return metricID.startsWith('*sum') || metricID.startsWith('*average') || metricID.startsWith('*distinct');
+  return metricID.split('#')[0] in metricParams;
 }
 
 export function Component() {
@@ -68,10 +121,17 @@ export function Component() {
   const [editing, setEditing] = useState(false);
 
   // Structured edit form state
-  const [editProfile, setEditProfile] = useState<EditProfileData>({
-    Tenant: '', ID: '', QueueLength: 0, TTL: -1, MinItems: 0, FilterIDs: [], Metrics: [],
-  });
+  const [editProfile, setEditProfile] = useState<EditProfileData>(emptyProfile(''));
   const [genericMetricInput, setGenericMetricInput] = useState<Record<number, string>>({});
+  const [thresholdIds, setThresholdIds] = useState<string[]>([]);
+  const [newThresholdId, setNewThresholdId] = useState('');
+
+  useEffect(() => {
+    if (!detailOpen || !editing || !baseUrl || !tenant) return;
+    api.getThresholdProfileIDs(baseUrl, tenant)
+      .then(r => setThresholdIds(((r as string[]) || []).sort((a, b) => a.localeCompare(b))))
+      .catch(() => setThresholdIds([]));
+  }, [detailOpen, editing, baseUrl, tenant]);
 
   // Metrics
   const [metricsOpen, setMetricsOpen] = useState(false);
@@ -114,9 +174,11 @@ export function Component() {
       });
 
       const profile: EditProfileData = {
+        ...emptyProfile(tenant),
         ...(result as unknown as EditProfileData),
         Metrics: parsedMetrics,
         FilterIDs: (result.FilterIDs as string[]) || [],
+        ThresholdIDs: (result.ThresholdIDs as string[]) || [],
       };
       setEditProfile(profile);
 
@@ -178,15 +240,7 @@ export function Component() {
 
   const handleCreate = useCallback(() => {
     setSelectedProfile(null);
-    setEditProfile({
-      Tenant: tenant,
-      ID: '',
-      QueueLength: 0,
-      TTL: -1,
-      MinItems: 0,
-      FilterIDs: [],
-      Metrics: [],
-    });
+    setEditProfile(emptyProfile(tenant));
     setGenericMetricInput({});
     setEditing(true);
     setDetailOpen(true);
@@ -249,8 +303,23 @@ export function Component() {
   }, [baseUrl, tenant, metricsOpen, metricsId, fetchMetrics]);
 
   // Edit form handlers
-  const handleEditChange = (name: string, value: string | number) => {
+  const handleEditChange = (name: string, value: unknown) => {
     setEditProfile(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleActivationChange = (field: keyof ActivationInterval, value: string) => {
+    setEditProfile(prev => {
+      const ai = { ActivationTime: ZERO_TIME, ExpiryTime: ZERO_TIME, ...prev.ActivationInterval, [field]: fromLocalInput(value) };
+      return { ...prev, ActivationInterval: isZeroTime(ai.ActivationTime) && isZeroTime(ai.ExpiryTime) ? null : ai };
+    });
+  };
+
+  const addThresholdId = () => {
+    const id = newThresholdId.trim();
+    if (id && !editProfile.ThresholdIDs.includes(id)) {
+      handleEditChange('ThresholdIDs', [...editProfile.ThresholdIDs, id]);
+    }
+    setNewThresholdId('');
   };
 
   const handleFilterChange = (index: number, value: string) => {
@@ -422,17 +491,91 @@ export function Component() {
               />
 
               {/* TTL */}
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>TTL (0 or -1 = items never expire)</Typography>
+                <DurationInput
+                  value={editProfile.TTL}
+                  onChange={raw => handleEditChange('TTL', raw < 0 ? -1 : raw)}
+                />
+              </Box>
+
               <TextField
-                label="TTL"
+                label="Min Items"
                 type="number"
-                value={editProfile.TTL}
-                onChange={e => {
-                  const val = parseInt(e.target.value, 10);
-                  handleEditChange('TTL', isNaN(val) ? -1 : val);
-                }}
+                value={editProfile.MinItems}
+                onChange={e => handleEditChange('MinItems', parseInt(e.target.value, 10) || 0)}
+                helperText="Metrics report N/A until the queue holds this many items"
                 fullWidth
                 size="small"
               />
+
+              <TextField
+                label="Weight"
+                type="number"
+                value={editProfile.Weight}
+                onChange={e => handleEditChange('Weight', parseFloat(e.target.value) || 0)}
+                fullWidth
+                size="small"
+              />
+
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <FormControlLabel
+                  control={<Checkbox checked={!!editProfile.Stored} onChange={e => handleEditChange('Stored', e.target.checked)} />}
+                  label="Stored"
+                />
+                <FormControlLabel
+                  control={<Checkbox checked={!!editProfile.Blocker} onChange={e => handleEditChange('Blocker', e.target.checked)} />}
+                  label="Blocker"
+                />
+              </Box>
+
+              {/* Activation Interval */}
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <TextField
+                  label="Activation Time"
+                  type="datetime-local"
+                  value={toLocalInput(editProfile.ActivationInterval?.ActivationTime)}
+                  onChange={e => handleActivationChange('ActivationTime', e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  fullWidth
+                  size="small"
+                />
+                <TextField
+                  label="Expiry Time"
+                  type="datetime-local"
+                  value={toLocalInput(editProfile.ActivationInterval?.ExpiryTime)}
+                  onChange={e => handleActivationChange('ExpiryTime', e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  fullWidth
+                  size="small"
+                />
+              </Box>
+
+              {/* Threshold IDs */}
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>Threshold IDs</Typography>
+                <Box sx={{ mb: 1 }}>
+                  {editProfile.ThresholdIDs.map(t => (
+                    <Chip
+                      key={t}
+                      label={t}
+                      size="small"
+                      onDelete={() => handleEditChange('ThresholdIDs', editProfile.ThresholdIDs.filter(x => x !== t))}
+                      sx={{ mr: 0.5, mb: 0.5 }}
+                    />
+                  ))}
+                </Box>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                  <SearchableSelect
+                    label="Threshold"
+                    value={newThresholdId}
+                    options={['*none', ...thresholdIds].filter(t => !editProfile.ThresholdIDs.includes(t))}
+                    onChange={setNewThresholdId}
+                    fullWidth
+                  />
+                  <Button size="small" startIcon={<AddIcon />} onClick={addThresholdId} disabled={!newThresholdId}>Add</Button>
+                </Box>
+              </Box>
 
               {/* Filters */}
               <Box>
@@ -482,12 +625,12 @@ export function Component() {
                     {/* Generic metric input value */}
                     {isGenericMetric(metric.MetricID) && (
                       <TextField
-                        label="Input Value"
+                        label={metricParams[metric.MetricID].label}
                         value={genericMetricInput[index] || ''}
                         onChange={e => handleGenericInputChange(index, e.target.value)}
                         fullWidth
                         size="small"
-                        placeholder="Enter value (e.g., ~*req.Cost)"
+                        placeholder={metricParams[metric.MetricID].placeholder}
                         sx={{ mb: 1 }}
                       />
                     )}
@@ -528,7 +671,39 @@ export function Component() {
                 </ListItem>
                 <Divider />
                 <ListItem>
-                  <ListItemText primary="TTL" secondary={String(selectedProfile.TTL)} />
+                  <ListItemText primary="TTL" secondary={formatTTL(Number(selectedProfile.TTL))} />
+                </ListItem>
+                <Divider />
+                <ListItem>
+                  <ListItemText primary="Min Items" secondary={String(selectedProfile.MinItems ?? 0)} />
+                </ListItem>
+                <Divider />
+                <ListItem>
+                  <ListItemText primary="Weight" secondary={String(selectedProfile.Weight ?? 0)} />
+                </ListItem>
+                <Divider />
+                <ListItem>
+                  <ListItemText primary="Stored" secondary={selectedProfile.Stored ? 'Yes' : 'No'} />
+                </ListItem>
+                <Divider />
+                <ListItem>
+                  <ListItemText primary="Blocker" secondary={selectedProfile.Blocker ? 'Yes' : 'No'} />
+                </ListItem>
+                <Divider />
+                <ListItem>
+                  <ListItemText
+                    primary="Activation Interval"
+                    secondary={selectedProfile.ActivationInterval
+                      ? `${formatTime((selectedProfile.ActivationInterval as ActivationInterval).ActivationTime)} → ${formatTime((selectedProfile.ActivationInterval as ActivationInterval).ExpiryTime)}`
+                      : 'Always active'}
+                  />
+                </ListItem>
+                <Divider />
+                <ListItem sx={{ display: 'block' }}>
+                  <ListItemText primary="Threshold IDs" />
+                  {((selectedProfile.ThresholdIDs as string[]) || []).length > 0
+                    ? (selectedProfile.ThresholdIDs as string[]).map(t => <Chip key={t} label={t} size="small" sx={{ mr: 0.5, mb: 0.5 }} />)
+                    : <Typography variant="body2" color="text.secondary">None</Typography>}
                 </ListItem>
                 <Divider />
                 <ListItem>
