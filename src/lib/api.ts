@@ -28,7 +28,8 @@ export async function jsonRpc<T = unknown>(
   const data: JsonRpcResponse<T> = await res.json();
 
   if (data.error) {
-    throw new Error(data.error.message || 'JSON-RPC error');
+    // CGrateS sends the error as a plain string (e.g. "NOT_FOUND").
+    throw new Error(typeof data.error === 'string' ? data.error : data.error.message);
   }
 
   return data.result as T;

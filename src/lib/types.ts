@@ -4,7 +4,7 @@
 export interface JsonRpcResponse<T = unknown> {
   id: number;
   result: T | null;
-  error: JsonRpcError | null;
+  error: JsonRpcError | string | null;
 }
 
 export interface JsonRpcError {
