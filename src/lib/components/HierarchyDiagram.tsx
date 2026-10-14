@@ -5,7 +5,7 @@ import type { HNode } from './HierarchyTree';
 const NODE_H = 58;
 const GAP_Y = 8;
 const PAD = 8;
-const MIN_W = 110;
+const MIN_W = 100;
 const MAX_W = 220;
 
 interface Placed { node: HNode; depth: number; y: number; }

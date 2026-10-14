@@ -53,19 +53,40 @@ function focusTree(path: HNode[], childrenOf: (n: HNode) => HNode[] | undefined)
   return parent ? { ...parent, children: [sel] } : sel;
 }
 
+const MATCH_BUDGET = 150;
+
+/** While searching: every match and the path to it, capped so the diagram stays light. */
+function matchTree(root: HNode, childrenOf: (n: HNode) => HNode[] | undefined, match: Set<string>): HNode {
+  let budget = MATCH_BUDGET;
+  const visit = (n: HNode): HNode => {
+    const kids = (childrenOf(n) ?? []).filter(k => match.has(k.id));
+    const take = kids.slice(0, Math.max(budget, 0));
+    budget -= take.length;
+    const shown = take.map(visit);
+    if (kids.length > take.length) {
+      shown.push({ id: `${n.id}/__more`, label: 'More', value: `+${kids.length - take.length} more`, subtext: 'Narrow the search to see them', color: '#757575' });
+    }
+    return { ...n, children: shown.length ? shown : undefined };
+  };
+  return visit(root);
+}
+
 /** Every loaded node that matches, plus the ancestors that lead to it. */
 function filterTree(root: HNode, childrenOf: (n: HNode) => HNode[] | undefined, isMatch: (n: HNode) => boolean) {
   const match = new Set<string>();
   const forceOpen = new Set<string>();
+  let matches = 0;
   const visit = (n: HNode): boolean => {
     let below = false;
     for (const c of childrenOf(n) ?? []) if (visit(c)) below = true;
     if (below) forceOpen.add(n.id);
-    if (below || isMatch(n)) { match.add(n.id); return true; }
+    const self = isMatch(n);
+    if (self) matches++;
+    if (below || self) { match.add(n.id); return true; }
     return false;
   };
   visit(root);
-  return { match, forceOpen };
+  return { match, forceOpen, matches };
 }
 
 /** The longest prefix wins in CGrateS, so name the destination in this hierarchy that the number would rate against. */
@@ -157,6 +178,18 @@ export default function HierarchyView({ root, numberLookup }: HierarchyViewProps
     setLoaded(s => { const { [n.id]: _gone, ...rest } = s; return rest; });
   }, []);
 
+  // Searching loads whatever hasn't been opened yet, so matches aren't limited to expanded branches.
+  const pendingLoads = Object.values(loaded).filter(l => l === 'loading').length;
+  useEffect(() => {
+    if (!deferred) return;
+    const walk = (n: HNode) => {
+      const kids = childrenOf(n);
+      if (kids) kids.forEach(walk);
+      else if (n.loadChildren) expand(n);
+    };
+    walk(root);
+  }, [deferred, loaded, root, childrenOf, expand]);
+
   const tree: LazyTree = useMemo(() => ({
     match: filtered?.match ?? null,
     forceOpen: filtered?.forceOpen ?? null,
@@ -185,25 +218,26 @@ export default function HierarchyView({ root, numberLookup }: HierarchyViewProps
     if (toDetails) setTab(1);
   };
 
-  const diagramRoot = useMemo(() => focusTree(path, tree.childrenOf), [path, tree]);
+  const diagramRoot = useMemo(() => (filtered ? matchTree(rootNode, tree.childrenOf, filtered.match) : focusTree(path, tree.childrenOf)), [filtered, rootNode, path, tree]);
 
   return (
     <LazyTreeContext.Provider value={tree}>
+      <Paper variant="outlined" sx={{ p: 1.5, mb: 2, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+        <TextField
+          size="small" value={query} onChange={e => setQuery(e.target.value)} sx={{ flex: '1 1 320px', maxWidth: 520 }}
+          placeholder={numberLookup ? 'Search destinations, rates, plans… or type a number to find its rate' : 'Search destinations, rates, plans…'}
+          slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
+        />
+        {filtered && (
+          <Typography variant="body2" color="text.secondary">
+            {filtered.match.size ? `${filtered.matches} match${filtered.matches === 1 ? '' : 'es'}` : 'No matches'}
+            {pendingLoads > 0 && ` · loading ${pendingLoads} more…`}
+            {numberLookup && isNumber(deferred) && (numberHits?.q === deferred ? ` · ${numberMatchText(numberHits.ids, filtered.match, rootNode, tree.childrenOf)}` : ' · looking up number…')}
+          </Typography>
+        )}
+      </Paper>
       <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: { xs: 'wrap', md: 'nowrap' } }}>
         <Paper variant="outlined" sx={{ width: { xs: '100%', md: 320 }, minWidth: { md: 320 }, maxHeight: '75vh', overflow: 'auto', flexShrink: 0 }}>
-          <Box sx={{ p: 1, position: 'sticky', top: 0, zIndex: 2, bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
-            <TextField
-              size="small" fullWidth value={query} onChange={e => setQuery(e.target.value)}
-              placeholder={numberLookup ? 'Filter, or type a number to find its rate' : 'Filter loaded items'}
-              slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
-            />
-            {filtered && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                {filtered.match.size ? `${filtered.match.size} shown` : 'No matches'} among loaded items
-                {numberLookup && isNumber(deferred) && (numberHits?.q === deferred ? ` · ${numberMatchText(numberHits.ids, filtered.match, rootNode, tree.childrenOf)}` : ' · looking up number…')}
-              </Typography>
-            )}
-          </Box>
           <HierarchyTree nodes={filtered && !filtered.match.has(rootNode.id) ? [] : [rootNode]} selectedId={selectedId} onSelect={n => pick(n, tab === 1)} />
         </Paper>
         <Paper variant="outlined" sx={{ flex: 1, minWidth: 0 }}>
@@ -214,18 +248,20 @@ export default function HierarchyView({ root, numberLookup }: HierarchyViewProps
           <Box sx={{ p: 2 }}>
             {tab === 0 && (
               <>
-                <Breadcrumbs maxItems={6} sx={{ mb: 1.5, fontSize: '0.8rem' }}>
+                {!filtered && <Breadcrumbs maxItems={6} sx={{ mb: 1.5, fontSize: '0.8rem' }}>
                   {path.map((n, i) => (i === path.length - 1
                     ? <Typography key={n.id} sx={{ fontSize: '0.8rem', color: n.color, fontWeight: 600 }}>{n.value}</Typography>
                     : <Link key={n.id} component="button" underline="hover" color="inherit" sx={{ fontSize: '0.8rem' }} onClick={() => pick(n, false)}>{n.value}</Link>))}
-                </Breadcrumbs>
-                <HierarchyDiagram root={diagramRoot} selectedId={selectedId} onSelect={id => {
+                </Breadcrumbs>}
+                {filtered && filtered.match.size === 0
+                  ? <Typography color="text.secondary">Nothing matches “{query.trim()}”.</Typography>
+                  : <HierarchyDiagram root={diagramRoot} selectedId={selectedId} onSelect={id => {
                   const n = findPath(diagramRoot, id, x => x.children)?.pop();
                   if (n) pick(n, id === selectedId);
-                }} />
+                }} />}
               </>
             )}
-            {tab === 1 && <NodeDetails node={selected} kids={tree.childrenOf(selected)} loading={tree.loading(selected.id)} onSelect={n => pick(n, true)} onEdit={() => setEditing(true)} />}
+            {tab === 1 && <NodeDetails node={selected} kids={tree.childrenOf(selected)?.filter(k => !filtered || filtered.match.has(k.id))} loading={tree.loading(selected.id)} onSelect={n => pick(n, true)} onEdit={() => setEditing(true)} />}
           </Box>
         </Paper>
       </Box>
