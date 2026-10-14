@@ -48,13 +48,15 @@ const ACTION_TYPES = [
   '*cdr_account',
 ];
 
+const BALANCE_WEIGHT_OPTIONS = ['*time_desc', '*time_asc'];
+
 interface ActionBalance {
   Uuid?: string;
   ID?: string;
   Type?: string;
   Value?: { Static: number };
   ExpirationDate?: string;
-  Weight?: number;
+  Weight?: number | string;
   DestinationIDs?: string | Record<string, boolean>;
   RatingSubject?: string;
   Categories?: Record<string, unknown>;
@@ -133,7 +135,7 @@ function makeEmptyPart(): ActionPart {
       Type: '',
       Value: { Static: 0 },
       ExpirationDate: '',
-      Weight: 0,
+      Weight: '',
       DestinationIDs: '',
       RatingSubject: '',
       Categories: {},
@@ -157,6 +159,8 @@ export function Component() {
   const [selectedAction, setSelectedAction] = useState<ActionPart[] | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [isNew, setIsNew] = useState(false);
+  const [newActionId, setNewActionId] = useState('');
 
   // Execute action state
   const [accounts, setAccounts] = useState<string[]>([]);
@@ -253,6 +257,7 @@ export function Component() {
         setSelectedAction(null);
       }
       setEditing(false);
+      setIsNew(false);
       setSelectedAccount(null);
       setDetailOpen(true);
     } catch (e: unknown) {
@@ -308,7 +313,11 @@ export function Component() {
     setLoading(true);
     setError(null);
     try {
-      const actionsId = selectedAction[0]?.Id || '';
+      const actionsId = isNew ? newActionId.trim() : selectedAction[0]?.Id || '';
+      if (!actionsId) {
+        setError('Action ID is required.');
+        return;
+      }
 
       const updatedActions = selectedAction.map((part) => {
         const action: Record<string, unknown> = {
@@ -329,7 +338,7 @@ export function Component() {
             action.BalanceDisabled = part.Balance.Disabled ? 'true' : 'false';
           }
           action.Directions = '*out';
-          action.Units = part.Balance.Value?.Static || 0;
+          action.Units = String(part.Balance.Value?.Static || 0);
           action.DestinationIds =
             typeof part.Balance.DestinationIDs === 'object' && part.Balance.DestinationIDs
               ? Object.keys(part.Balance.DestinationIDs as Record<string, boolean>).join(';')
@@ -339,7 +348,8 @@ export function Component() {
           action.SharedGroups = '';
           action.TimingTags = '';
           action.TimingIDs = '';
-          action.BalanceWeight = part.Balance.Weight || 0;
+          const balanceWeight = String(part.Balance.Weight ?? '').trim();
+          if (balanceWeight) action.BalanceWeight = balanceWeight;
         }
 
         if (part.Filters) {
@@ -354,7 +364,7 @@ export function Component() {
       await api.setActions(baseUrl, {
         ActionsId: actionsId,
         Tenant: tenant,
-        Overwrite: true,
+        Overwrite: !isNew,
         Actions: updatedActions,
       });
       setDetailOpen(false);
@@ -364,7 +374,7 @@ export function Component() {
     } finally {
       setLoading(false);
     }
-  }, [baseUrl, selectedAction, tenant, fetchActions]);
+  }, [baseUrl, selectedAction, tenant, fetchActions, isNew, newActionId]);
 
   const handleDelete = useCallback(async (actionId: string) => {
     if (!baseUrl || !window.confirm(`Delete action ${actionId}?`)) return;
@@ -380,6 +390,8 @@ export function Component() {
   const handleCreate = useCallback(() => {
     setSelectedAction([makeEmptyPart()]);
     setEditing(true);
+    setIsNew(true);
+    setNewActionId('');
     setSelectedAccount(null);
     setDetailOpen(true);
   }, []);
@@ -466,6 +478,13 @@ export function Component() {
           {actionId ? ` for ${actionId}` : ''}
         </DialogTitle>
         <DialogContent>
+          {isNew && (
+            <TextField
+              label="Action ID" required fullWidth size="small" sx={{ mt: 1, mb: 2 }}
+              value={newActionId}
+              onChange={e => setNewActionId(e.target.value)}
+            />
+          )}
           {selectedAction && selectedAction.map((part, index) => (
             <Paper key={index} variant="outlined" sx={{ p: 2, mb: 2, mt: index === 0 ? 1 : 0 }}>
               <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
@@ -599,6 +618,22 @@ export function Component() {
                   />
                 ) : (
                   <BalanceValueDisplay value={part.Balance?.Value?.Static ?? 0} balanceType={part.Balance?.Type} />
+                )}
+              </Box>
+
+              {/* Balance Weight */}
+              <Box sx={{ mb: 1.5 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>Balance Weight</Typography>
+                {editing ? (
+                  <Autocomplete<string, false, false, true>
+                    freeSolo fullWidth size="small" sx={{ mt: 0.5 }}
+                    options={BALANCE_WEIGHT_OPTIONS}
+                    value={String(part.Balance?.Weight ?? '')}
+                    onInputChange={(_e, v) => handleEditChange(index, 'Balance.Weight', v)}
+                    renderInput={params => <TextField {...params} placeholder="Number, or *time_desc / *time_asc to order by when the action is set" />}
+                  />
+                ) : (
+                  <Typography variant="body1">{part.Balance?.Weight ?? 'N/A'}</Typography>
                 )}
               </Box>
 
