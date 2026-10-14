@@ -47,6 +47,16 @@ const ACTION_TYPES = [
   '*cdr_account',
 ];
 
+const EXPIRATION_OPTIONS = [
+  '*unlimited',
+  '*daily',
+  '*monthly',
+  '*monthly_estimated',
+  '*month_end',
+  '*yearly',
+  '+720h',
+];
+
 interface ActionBalance {
   Uuid?: string;
   ID?: string;
@@ -162,6 +172,8 @@ export function Component() {
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [accountsLoading, setAccountsLoading] = useState(false);
 
+  const [destinationIds, setDestinationIds] = useState<string[]>([]);
+
   const fetchActions = useCallback(async () => {
     if (!baseUrl || !tenant) return;
     setLoading(true);
@@ -208,12 +220,31 @@ export function Component() {
     }
   }, [baseUrl, tenant]);
 
+  // DataDB has no destination listing API, so offer the IDs defined across all tariff plans.
+  const fetchDestinationIds = useCallback(async () => {
+    if (!baseUrl) return;
+    try {
+      const tpids = await api.getTPIds(baseUrl) || [];
+      const lists = await Promise.all(tpids.map(tpid =>
+        api.getTPDestinationIDs(baseUrl, tpid).catch(() => [] as string[])));
+      setDestinationIds([...new Set(lists.flatMap(l => l || []))].sort());
+    } catch {
+      setDestinationIds([]);
+    }
+  }, [baseUrl]);
+
   // Fetch accounts when modal opens
   useEffect(() => {
     if (detailOpen) {
       fetchAccounts();
     }
   }, [detailOpen, fetchAccounts]);
+
+  useEffect(() => {
+    if (detailOpen && editing) {
+      fetchDestinationIds();
+    }
+  }, [detailOpen, editing, fetchDestinationIds]);
 
   // Clear selected account when tenant changes
   useEffect(() => {
@@ -472,10 +503,12 @@ export function Component() {
               <Box sx={{ mb: 1.5 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>DestinationIDs</Typography>
                 {editing ? (
-                  <TextField
-                    fullWidth size="small" sx={{ mt: 0.5 }}
-                    value={part.Balance?.DestinationIDs || ''}
-                    onChange={e => handleEditChange(index, 'Balance.DestinationIDs', e.target.value)}
+                  <Autocomplete<string, true, false, true>
+                    multiple freeSolo fullWidth size="small" sx={{ mt: 0.5 }}
+                    options={['*any', ...destinationIds]}
+                    value={((part.Balance?.DestinationIDs as string) || '').split(';').filter(Boolean)}
+                    onChange={(_e, v) => handleEditChange(index, 'Balance.DestinationIDs', v.map(d => d.trim()).filter(Boolean).join(';'))}
+                    renderInput={params => <TextField {...params} placeholder="Select or type, prefix ! to exclude" />}
                   />
                 ) : (
                   <Typography variant="body1">{(part.Balance?.DestinationIDs as string) || 'N/A'}</Typography>
@@ -502,10 +535,12 @@ export function Component() {
               <Box sx={{ mb: 1.5 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>Expiration</Typography>
                 {editing ? (
-                  <TextField
-                    fullWidth size="small" sx={{ mt: 0.5 }}
+                  <Autocomplete<string, false, false, true>
+                    freeSolo fullWidth size="small" sx={{ mt: 0.5 }}
+                    options={EXPIRATION_OPTIONS}
                     value={part.ExpirationString || ''}
-                    onChange={e => handleEditChange(index, 'ExpirationString', e.target.value)}
+                    onInputChange={(_e, v) => handleEditChange(index, 'ExpirationString', v)}
+                    renderInput={params => <TextField {...params} placeholder="*monthly, *month_end+24h or 2026-12-31T00:00:00Z" />}
                   />
                 ) : (
                   <Typography variant="body1">{part.ExpirationString || 'N/A'}</Typography>
