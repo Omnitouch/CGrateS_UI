@@ -44,3 +44,10 @@ export function splitIds(s: string | undefined | null): string[] {
 export function joinIds(ids: string[]): string {
   return ids.join(';');
 }
+
+/** CGrateS StringMap ({ID: true, excluded: false}) as IDs, excluded ones prefixed with "!". */
+export function stringMapToIds(m: Record<string, boolean> | string | null | undefined): string[] {
+  if (!m) return [];
+  if (typeof m === 'string') return splitIds(m);
+  return Object.entries(m).map(([k, v]) => (v ? k : `!${k}`));
+}

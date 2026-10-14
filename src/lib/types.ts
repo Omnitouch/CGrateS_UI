@@ -4,7 +4,8 @@
 export interface JsonRpcResponse<T = unknown> {
   id: number;
   result: T | null;
-  error: JsonRpcError | null;
+  /** CGrateS sends a plain string; other servers may send an object. */
+  error: JsonRpcError | string | null;
 }
 
 export interface JsonRpcError {
@@ -107,18 +108,25 @@ export interface TriggerBalance {
 /** Action plan (APIerSv1.GetActionPlan) */
 export interface ActionPlan {
   Id: string;
-  AccountIDs: Record<string, boolean>;
-  ActionTimings: ActionTiming[];
+  AccountIDs: Record<string, boolean> | null;
+  ActionTimings: ActionTiming[] | null;
 }
 
 export interface ActionTiming {
+  Uuid: string;
   ActionsID: string;
-  Years: string;
-  Months: string;
-  MonthDays: string;
-  WeekDays: string;
-  Time: string;
-  Weight: string | number;
+  Weight: number;
+  Timing: { Timing: RITiming | null } | null;
+}
+
+export interface RITiming {
+  ID: string;
+  Years: number[] | null;
+  Months: number[] | null;
+  MonthDays: number[] | null;
+  WeekDays: number[] | null;
+  StartTime: string;
+  EndTime: string;
 }
 
 /** Scheduled action (ApierV1.GetScheduledActions) */

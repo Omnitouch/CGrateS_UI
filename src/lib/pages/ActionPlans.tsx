@@ -1,26 +1,19 @@
 import { useState, useCallback } from 'react';
-import { Box, Typography, Paper, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, TextField, IconButton, Divider, Autocomplete } from '@mui/material';
+import {
+  Box, Typography, Paper, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Table, TableBody,
+  TableCell, TableContainer, TableHead, TableRow, Alert, TextField, IconButton, Divider, Autocomplete, Chip,
+} from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
-import type { ActionTiming } from '../types';
+import type { ActionPlan } from '../types';
 import SearchableSelect from '../components/SearchableSelect';
 import { CompositeId } from '../components/ParsedId';
-
-interface ActionTimingForm {
-  ActionsID: string;
-  Years: string;
-  Months: string;
-  MonthDays: string;
-  WeekDays: string;
-  Time: string;
-  Weight: string;
-}
-
-const emptyTiming = (): ActionTimingForm => ({
-  ActionsID: '', Years: '*any', Months: '*any', MonthDays: '*any', WeekDays: '*any', Time: '*asap', Weight: '0',
-});
+import { ACTION_PLAN_TIME_KEYWORDS } from '../cgrConsts';
+import {
+  type TimingForm, emptyTiming, timingToForm, timingErrors, formToAttr, timeIgnoresDates, describeTiming,
+} from '../actionPlanTiming';
 
 export function Component() {
   const baseUrl = useOcsBaseUrl();
@@ -29,108 +22,105 @@ export function Component() {
   const [ids, setIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [detail, setDetail] = useState<unknown>(null);
+  const [detail, setDetail] = useState<ActionPlan | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // Structured edit form state
   const [editId, setEditId] = useState('');
-  const [editTimings, setEditTimings] = useState<ActionTimingForm[]>([emptyTiming()]);
+  const [editTimings, setEditTimings] = useState<TimingForm[]>([emptyTiming()]);
 
-  // Assign to account state
   const [accountIds, setAccountIds] = useState<string[]>([]);
   const [assignAccount, setAssignAccount] = useState('');
   const [assignPlanId, setAssignPlanId] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
 
-  // Available actions for dropdown
   const [actionIds, setActionIds] = useState<string[]>([]);
 
   const fetchIds = useCallback(async () => {
-    if (!baseUrl || !tenant) return;
+    if (!baseUrl) return;
     setLoading(true); setError(null);
-    try { const r = await api.getActionPlanIDs(baseUrl, tenant); setIds((r || []) as string[]); }
-    catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed'); setIds([]); }
+    try { setIds(((await api.getActionPlanIDs(baseUrl, tenant)) || []).sort()); }
+    catch (e: unknown) {
+      if (!api.isNotFound(e)) setError(e instanceof Error ? e.message : 'Failed');
+      setIds([]);
+    }
     finally { setLoading(false); }
   }, [baseUrl, tenant]);
 
   const fetchAccounts = useCallback(async () => {
     if (!baseUrl || !tenant) return;
     try {
-      const r = await api.getAccounts(baseUrl, tenant) as { ID: string }[] | null;
-      if (r) {
-        setAccountIds(r.map(a => {
-          // Account ID format is "tenant:account", extract account part
-          const parts = a.ID.split(':');
-          return parts.length > 1 ? parts[1] : a.ID;
-        }));
-      }
-    } catch { /* ignore */ }
+      const r = await api.getAccounts(baseUrl, tenant, 0, 0) as { ID: string }[] | null;
+      setAccountIds((r || []).map(a => a.ID.slice(a.ID.indexOf(':') + 1)).sort());
+    } catch { setAccountIds([]); }
   }, [baseUrl, tenant]);
 
   const fetchActionIds = useCallback(async () => {
-    if (!baseUrl || !tenant) return;
-    try {
-      const r = await api.getActions(baseUrl, tenant) as Record<string, unknown> | null;
-      if (r) setActionIds(Object.keys(r));
-    } catch { /* ignore */ }
+    if (!baseUrl) return;
+    try { setActionIds(Object.keys(await api.getActions(baseUrl, tenant) || {}).sort()); }
+    catch { setActionIds([]); }
   }, [baseUrl, tenant]);
+
+  const loadPlan = useCallback(async (id: string) => {
+    const r = await api.getActionPlan(baseUrl!, id);
+    return (Array.isArray(r) ? r[0] : r) as ActionPlan;
+  }, [baseUrl]);
 
   const fetchDetail = useCallback(async (id: string) => {
     if (!baseUrl) return;
     try {
-      const r = await api.getActionPlan(baseUrl, tenant, id);
-      setDetail(r);
-      // Populate structured form from response
-      const plans = Array.isArray(r) ? r : [r];
-      const plan = plans[0] as Record<string, unknown> | undefined;
-      if (plan) {
-        setEditId(String(plan.Id || ''));
-        const timings = (plan.ActionTimings || []) as ActionTiming[];
-        setEditTimings(timings.length > 0
-          ? timings.map(t => ({
-              ActionsID: String(t.ActionsID || ''),
-              Years: String(t.Years || '*any'),
-              Months: String(t.Months || '*any'),
-              MonthDays: String(t.MonthDays || '*any'),
-              WeekDays: String(t.WeekDays || '*any'),
-              Time: String(t.Time || '*asap'),
-              Weight: String(t.Weight ?? '0'),
-            }))
-          : [emptyTiming()]
-        );
-      }
+      const plan = await loadPlan(id);
+      setDetail(plan);
+      setEditId(plan.Id);
+      const timings = plan.ActionTimings || [];
+      setEditTimings(timings.length ? timings.map(timingToForm) : [emptyTiming()]);
       setEditing(false);
       setDetailOpen(true);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed'); }
-  }, [baseUrl, tenant]);
+  }, [baseUrl, loadPlan]);
 
+  const errors = editTimings.flatMap((t, i) => timingErrors(t).map(e => `Timing #${i + 1}: ${e}`));
+  const planAccounts = Object.keys(detail?.AccountIDs || {});
+
+  // SetActionPlan with Overwrite drops every account from the plan. SetActionPlanAccounts puts them back on the
+  // plan without SetAccount's *asap task queueing; it does drop the account->plan index, hence the recompute.
   const handleSave = useCallback(async () => {
-    if (!baseUrl) return;
+    if (!baseUrl || errors.length || !editId.trim()) return;
+    setSaving(true); setError(null);
     try {
-      await api.setActionPlan(baseUrl, {
-        Id: editId,
-        Tenant: tenant,
-        Overwrite: true,
-        ReloadScheduler: true,
-        ActionPlan: editTimings.map(t => ({
-          ActionsId: t.ActionsID,
-          Years: t.Years || '*any',
-          Months: t.Months || '*any',
-          MonthDays: t.MonthDays || '*any',
-          WeekDays: t.WeekDays || '*any',
-          Time: t.Time || '*asap',
-          Weight: t.Weight || '0',
-        })),
-      });
+      const ActionPlan = editTimings.map(formToAttr);
+      if (detail) {
+        const accounts = Object.keys((await loadPlan(detail.Id)).AccountIDs || {});
+        if (accounts.length) {
+          await api.setActionPlanAccounts(baseUrl, { Id: detail.Id, ActionPlan, AccountIDs: accounts, Overwrite: true, ReloadScheduler: true });
+          await api.computeAccountActionPlans(baseUrl, tenant);
+        } else {
+          await api.setActionPlan(baseUrl, { Id: detail.Id, ActionPlan, Overwrite: true, ReloadScheduler: true });
+        }
+      } else {
+        await api.setActionPlan(baseUrl, { Id: editId.trim(), ActionPlan, Overwrite: false, ReloadScheduler: true });
+      }
       setDetailOpen(false); fetchIds();
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed'); }
-  }, [baseUrl, editId, editTimings, tenant, fetchIds]);
+    finally { setSaving(false); }
+  }, [baseUrl, editId, editTimings, errors.length, detail, tenant, loadPlan, fetchIds]);
 
   const handleDelete = useCallback(async (id: string) => {
-    if (!baseUrl || !window.confirm(`Delete ${id}?`)) return;
+    if (!baseUrl || !window.confirm(`Delete action plan ${id}? It is removed from every account on it.`)) return;
     try { await api.removeActionPlan(baseUrl, id, tenant); fetchIds(); setDetailOpen(false); }
     catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed'); }
   }, [baseUrl, tenant, fetchIds]);
+
+  const handleRemoveAccount = useCallback(async (accId: string) => {
+    if (!baseUrl || !detail) return;
+    const i = accId.indexOf(':');
+    if (!window.confirm(`Remove account ${accId} from ${detail.Id}?`)) return;
+    try {
+      await api.removeAccountFromActionPlan(baseUrl, accId.slice(0, i), accId.slice(i + 1), detail.Id);
+      setDetail(await loadPlan(detail.Id));
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed'); }
+  }, [baseUrl, detail, loadPlan]);
 
   const handleCreate = useCallback(() => {
     setDetail(null);
@@ -138,11 +128,6 @@ export function Component() {
     setEditTimings([emptyTiming()]);
     setEditing(true);
     setDetailOpen(true);
-    fetchActionIds();
-  }, [fetchActionIds]);
-
-  const handleEdit = useCallback(() => {
-    setEditing(true);
     fetchActionIds();
   }, [fetchActionIds]);
 
@@ -155,12 +140,13 @@ export function Component() {
         ActionPlanIDs: [assignPlanId],
         ReloadScheduler: true,
       });
+      setNotice(`${assignPlanId} attached to ${assignAccount}.`);
       setAssignAccount('');
       setError(null);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to assign'); }
   }, [baseUrl, tenant, assignAccount, assignPlanId]);
 
-  const updateTiming = (index: number, field: keyof ActionTimingForm, value: string) => {
+  const updateTiming = (index: number, field: keyof TimingForm, value: string) => {
     setEditTimings(prev => prev.map((t, i) => i === index ? { ...t, [field]: value } : t));
   };
 
@@ -171,84 +157,128 @@ export function Component() {
   return (
     <Box>
       <Typography variant="h5" gutterBottom>Action Plans</Typography>
-      <Paper sx={{ p: 2, mb: 2 }}><Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+      <Paper sx={{ p: 2, mb: 2 }}><Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
         <Button variant="contained" onClick={() => { fetchIds(); fetchAccounts(); }}>Fetch</Button>
         <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>
       </Box></Paper>
 
-      {/* Assign Action Plan to Account */}
       {ids.length > 0 && (
         <Paper sx={{ p: 2, mb: 2 }}>
           <Typography variant="subtitle2" gutterBottom>Assign Action Plan to Account</Typography>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <SearchableSelect label="Action Plan" value={assignPlanId} options={ids} onChange={setAssignPlanId} sx={{ minWidth: 200 }} />
-            <Autocomplete
-              size="small"
-              sx={{ minWidth: 200 }}
-              freeSolo
-              options={accountIds}
-              value={assignAccount}
-              onInputChange={(_, v) => setAssignAccount(v)}
-              renderInput={(params) => <TextField {...params} label="Account" />}
-            />
+            <SearchableSelect label="Account" value={assignAccount} options={accountIds} onChange={setAssignAccount} sx={{ minWidth: 200 }} />
             <Button variant="contained" color="secondary" onClick={handleAssign} disabled={!assignAccount || !assignPlanId}>Assign</Button>
           </Box>
+          <Typography variant="caption" color="text.secondary">
+            The plan's *asap timings run for the account straight away; the rest run on schedule.
+          </Typography>
         </Paper>
       )}
 
+      {notice && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setNotice(null)}>{notice}</Alert>}
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
       {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box> : (
         <TableContainer component={Paper}><Table size="small"><TableHead><TableRow><TableCell>#</TableCell><TableCell>Action Plan ID</TableCell><TableCell align="right">Actions</TableCell></TableRow></TableHead><TableBody>
-          {ids.length > 0 ? ids.map((id, i) => (<TableRow key={id} hover sx={{ cursor: 'pointer' }} onClick={() => fetchDetail(id)}><TableCell>{i+1}</TableCell><TableCell><CompositeId id={id} compact /></TableCell><TableCell align="right"><IconButton size="small" color="error" onClick={e => { e.stopPropagation(); handleDelete(id); }}><DeleteIcon fontSize="small" /></IconButton></TableCell></TableRow>)) : <TableRow><TableCell colSpan={3} align="center">No action plans found</TableCell></TableRow>}
+          {ids.length > 0 ? ids.map((id, i) => (<TableRow key={id} hover sx={{ cursor: 'pointer' }} onClick={() => fetchDetail(id)}><TableCell>{i + 1}</TableCell><TableCell><CompositeId id={id} compact /></TableCell><TableCell align="right"><IconButton size="small" color="error" onClick={e => { e.stopPropagation(); handleDelete(id); }}><DeleteIcon fontSize="small" /></IconButton></TableCell></TableRow>)) : <TableRow><TableCell colSpan={3} align="center">No action plans found</TableCell></TableRow>}
         </TableBody></Table></TableContainer>
       )}
 
       <Dialog open={detailOpen} onClose={() => setDetailOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{editing ? (detail ? 'Edit Action Plan' : 'Create Action Plan') : 'Action Plan'}</DialogTitle>
+        <DialogTitle>{editing ? (detail ? `Edit Action Plan ${detail.Id}` : 'Create Action Plan') : `Action Plan ${detail?.Id ?? ''}`}</DialogTitle>
         <DialogContent>
           {editing ? (
             <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
               <TextField label="Action Plan ID" size="small" fullWidth value={editId} onChange={e => setEditId(e.target.value)} disabled={!!detail} />
+              {detail && planAccounts.length > 0 && (
+                <Alert severity="info">
+                  {planAccounts.length} account{planAccounts.length === 1 ? '' : 's'} on this plan stay attached when you save.
+                  Their *asap timings are not run again, and an *asap timing added here won't run for them.
+                </Alert>
+              )}
               <Divider />
               <Typography variant="subtitle2">Action Timings</Typography>
-              {editTimings.map((timing, idx) => (
-                <Paper key={idx} variant="outlined" sx={{ p: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                    <Typography variant="body2" fontWeight="bold">Timing #{idx + 1}</Typography>
-                    {editTimings.length > 1 && (
-                      <IconButton size="small" color="error" onClick={() => removeTiming(idx)}><DeleteIcon fontSize="small" /></IconButton>
-                    )}
-                  </Box>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-                    <Autocomplete
-                      size="small"
-                      freeSolo
-                      options={actionIds}
-                      value={timing.ActionsID}
-                      onInputChange={(_, v) => updateTiming(idx, 'ActionsID', v)}
-                      renderInput={(params) => <TextField {...params} label="ActionsID" required />}
-                      sx={{ gridColumn: '1 / -1' }}
-                    />
-                    <TextField label="Years" size="small" value={timing.Years} onChange={e => updateTiming(idx, 'Years', e.target.value)} helperText="*any, 2024, etc." />
-                    <TextField label="Months" size="small" value={timing.Months} onChange={e => updateTiming(idx, 'Months', e.target.value)} helperText="*any, 1-12, etc." />
-                    <TextField label="MonthDays" size="small" value={timing.MonthDays} onChange={e => updateTiming(idx, 'MonthDays', e.target.value)} helperText="*any, 1-31, etc." />
-                    <TextField label="WeekDays" size="small" value={timing.WeekDays} onChange={e => updateTiming(idx, 'WeekDays', e.target.value)} helperText="*any, 1-7, etc." />
-                    <TextField label="Time" size="small" value={timing.Time} onChange={e => updateTiming(idx, 'Time', e.target.value)} helperText="*asap, 00:00:00, etc." />
-                    <TextField label="Weight" size="small" type="number" value={timing.Weight} onChange={e => updateTiming(idx, 'Weight', e.target.value)} />
-                  </Box>
-                </Paper>
-              ))}
+              {editTimings.map((timing, idx) => {
+                const datesIgnored = timeIgnoresDates(timing.Time);
+                const errs = timingErrors(timing);
+                const fieldErr = (label: string) => errs.find(e => e.startsWith(`${label}:`));
+                return (
+                  <Paper key={idx} variant="outlined" sx={{ p: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                      <Typography variant="body2" fontWeight="bold">Timing #{idx + 1}</Typography>
+                      {editTimings.length > 1 && (
+                        <IconButton size="small" color="error" onClick={() => removeTiming(idx)}><DeleteIcon fontSize="small" /></IconButton>
+                      )}
+                    </Box>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+                      <SearchableSelect label="ActionsID" value={timing.ActionsID} options={actionIds}
+                        onChange={v => updateTiming(idx, 'ActionsID', v)} sx={{ gridColumn: '1 / -1' }} />
+                      <Autocomplete<string, false, false, true>
+                        freeSolo size="small" options={[...ACTION_PLAN_TIME_KEYWORDS, '00:00:00']}
+                        value={timing.Time}
+                        onInputChange={(_e, v) => updateTiming(idx, 'Time', v)}
+                        renderInput={params => (
+                          <TextField {...params} label="Time" error={!!fieldErr('Time')}
+                            helperText={fieldErr('Time') ?? 'hh:mm:ss, *asap, +1h (once, after), *recurring+1h, or a keyword'} />
+                        )}
+                      />
+                      <TextField label="Weight" size="small" type="number" value={timing.Weight}
+                        onChange={e => updateTiming(idx, 'Weight', e.target.value)} error={!!fieldErr('Weight')} helperText={fieldErr('Weight')} />
+                      {(['Years', 'Months', 'MonthDays', 'WeekDays'] as const).map(f => (
+                        <TextField key={f} label={f} size="small" value={timing[f]} disabled={datesIgnored}
+                          onChange={e => updateTiming(idx, f, e.target.value)}
+                          error={!datesIgnored && !!fieldErr(f)}
+                          helperText={datesIgnored ? `Ignored with ${timing.Time.trim()}` : fieldErr(f) ?? {
+                            Years: '*any or e.g. 2027;2028', Months: '*any or 1-12, ;-separated',
+                            MonthDays: '*any or 1-31, ;-separated', WeekDays: '*any or 0-7 (0 and 7 are Sunday)',
+                          }[f]} />
+                      ))}
+                    </Box>
+                  </Paper>
+                );
+              })}
               <Button variant="outlined" size="small" startIcon={<AddIcon />} onClick={() => setEditTimings(prev => [...prev, emptyTiming()])}>Add Timing</Button>
             </Box>
-          ) : (
-            <Paper sx={{ p: 1, maxHeight: 500, overflow: 'auto', bgcolor: 'grey.50', mt: 1 }}>
-              <pre style={{ fontSize: 12, margin: 0 }}>{JSON.stringify(detail, null, 2)}</pre>
-            </Paper>
+          ) : detail && (
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="subtitle2">Timings</Typography>
+              <Table size="small" sx={{ mb: 2 }}>
+                <TableHead><TableRow><TableCell>Actions</TableCell><TableCell>Schedule</TableCell><TableCell>Weight</TableCell></TableRow></TableHead>
+                <TableBody>
+                  {(detail.ActionTimings || []).map(at => {
+                    const f = timingToForm(at);
+                    return (
+                      <TableRow key={at.Uuid}>
+                        <TableCell><CompositeId id={at.ActionsID} compact /></TableCell>
+                        <TableCell>{describeTiming(f)}</TableCell>
+                        <TableCell>{at.Weight}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              <Typography variant="subtitle2">Accounts ({planAccounts.length})</Typography>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1, mb: 2 }}>
+                {planAccounts.length ? planAccounts.map(a => (
+                  <Chip key={a} size="small" label={a} onDelete={() => handleRemoveAccount(a)} />
+                )) : <Typography variant="body2" color="text.secondary">None</Typography>}
+              </Box>
+              <Typography variant="subtitle2">Raw JSON</Typography>
+              <Paper sx={{ p: 1, maxHeight: 300, overflow: 'auto', bgcolor: 'action.hover' }}>
+                <pre style={{ fontSize: 12, margin: 0 }}>{JSON.stringify(detail, null, 2)}</pre>
+              </Paper>
+            </Box>
           )}
         </DialogContent>
         <DialogActions>
-          {editing ? <Button variant="contained" onClick={handleSave} disabled={!editId}>Save</Button> : <Button onClick={handleEdit}>Edit</Button>}
+          {editing && errors.length > 0 && (
+            <Typography variant="caption" color="error" sx={{ mr: 'auto', pl: 2 }}>{errors[0]}</Typography>
+          )}
+          {editing
+            ? <Button variant="contained" onClick={handleSave} disabled={saving || !editId.trim() || errors.length > 0}>Save</Button>
+            : <Button onClick={() => { setEditing(true); fetchActionIds(); }}>Edit</Button>}
+          {detail && !editing && <Button color="error" onClick={() => handleDelete(detail.Id)}>Delete</Button>}
           <Button onClick={() => setDetailOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
