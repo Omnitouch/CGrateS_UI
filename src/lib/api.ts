@@ -369,10 +369,172 @@ export function sessionCall(baseUrl: string, method: string, params: Record<stri
   return jsonRpc(baseUrl, `SessionSv1.${method}`, [params]);
 }
 
+export function getPassiveSessions(baseUrl: string, tenant: string, filters: string[] = [], limit: number | null = null) {
+  return jsonRpc(baseUrl, 'SessionSv1.GetPassiveSessions', [sessionFilter(tenant, filters, limit)]);
+}
+
+export function getActiveSessionsCount(baseUrl: string, tenant: string, filters: string[] = []) {
+  return jsonRpc<number>(baseUrl, 'SessionSv1.GetActiveSessionsCount', [sessionFilter(tenant, filters, null)]);
+}
+
+export function getPassiveSessionsCount(baseUrl: string, tenant: string, filters: string[] = []) {
+  return jsonRpc<number>(baseUrl, 'SessionSv1.GetPassiveSessionsCount', [sessionFilter(tenant, filters, null)]);
+}
+
+export function forceDisconnect(baseUrl: string, tenant: string, filters: string[]) {
+  return jsonRpc<string>(baseUrl, 'SessionSv1.ForceDisconnect', [{ ...sessionFilter(tenant, filters, null), Event: {} }]);
+}
+
+/** Empty ids means every passive (activate) or active (deactivate) session. */
+export function activateSessions(baseUrl: string, tenant: string, ids: string[]) {
+  return jsonRpc<string>(baseUrl, 'SessionSv1.ActivateSessions', [{ IDs: ids, Tenant: tenant, APIOpts: {} }]);
+}
+
+export function deactivateSessions(baseUrl: string, tenant: string, ids: string[]) {
+  return jsonRpc<string>(baseUrl, 'SessionSv1.DeactivateSessions', [{ IDs: ids, Tenant: tenant, APIOpts: {} }]);
+}
+
+export function syncSessions(baseUrl: string, tenant: string) {
+  return jsonRpc<string>(baseUrl, 'SessionSv1.SyncSessions', [{ Tenant: tenant, APIOpts: {} }]);
+}
+
+/** Replies with the number of sessions stored. */
+export function backupActiveSessions(baseUrl: string) {
+  return jsonRpc<number>(baseUrl, 'SessionSv1.BackupActiveSessions', ['']);
+}
+
+export function disconnectPeer(baseUrl: string, params: { OriginHost: string; OriginRealm: string; RemoteAddr: string; DisconnectCause: number }) {
+  return jsonRpc<string>(baseUrl, 'SessionSv1.DisconnectPeer', [params]);
+}
+
+export function stirAuthenticate(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc<string>(baseUrl, 'SessionSv1.STIRAuthenticate', [params]);
+}
+
+export function stirIdentity(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc<string>(baseUrl, 'SessionSv1.STIRIdentity', [params]);
+}
+
 // --- Config ---
 
 export function getConfigAsJSON(baseUrl: string) {
   return jsonRpc<string>(baseUrl, 'ConfigSv1.GetConfigAsJSON', [{}]);
+}
+
+/** Section "*all" (or empty) returns every section. */
+export function getConfig(baseUrl: string, tenant: string, section: string) {
+  return jsonRpc<Record<string, unknown>>(baseUrl, 'ConfigSv1.GetConfig', [{ Tenant: tenant, Section: section, APIOpts: {} }]);
+}
+
+export function setConfig(baseUrl: string, tenant: string, config: Record<string, unknown>, dryRun: boolean) {
+  return jsonRpc<string>(baseUrl, 'ConfigSv1.SetConfig', [{ Tenant: tenant, Config: config, DryRun: dryRun, APIOpts: {} }]);
+}
+
+export function setConfigFromJSON(baseUrl: string, tenant: string, config: string, dryRun: boolean) {
+  return jsonRpc<string>(baseUrl, 'ConfigSv1.SetConfigFromJSON', [{ Tenant: tenant, Config: config, DryRun: dryRun, APIOpts: {} }]);
+}
+
+/** Re-reads the config from Path on the server; empty Section reloads every section. */
+export function reloadConfig(baseUrl: string, tenant: string, path: string, section: string, dryRun: boolean) {
+  return jsonRpc<string>(baseUrl, 'ConfigSv1.ReloadConfig', [{ Tenant: tenant, Path: path, Section: section, DryRun: dryRun, APIOpts: {} }]);
+}
+
+// --- Cache ---
+
+export interface CacheStats {
+  Items: number;
+  Groups: number;
+}
+
+/** Empty cacheIds means every partition. */
+export function getCacheStats(baseUrl: string, tenant: string, cacheIds: string[] = []) {
+  return jsonRpc<Record<string, CacheStats>>(baseUrl, 'CacheSv1.GetCacheStats', [{ Tenant: tenant, CacheIDs: cacheIds, APIOpts: {} }]);
+}
+
+export function precacheStatus(baseUrl: string, tenant: string, cacheIds: string[] = []) {
+  return jsonRpc<Record<string, string>>(baseUrl, 'CacheSv1.PrecacheStatus', [{ Tenant: tenant, CacheIDs: cacheIds, APIOpts: {} }]);
+}
+
+export function getCacheItemIDs(baseUrl: string, tenant: string, cacheId: string, prefix: string) {
+  return jsonRpc<string[]>(baseUrl, 'CacheSv1.GetItemIDs', [{ Tenant: tenant, CacheID: cacheId, ItemIDPrefix: prefix, APIOpts: {} }]);
+}
+
+function cacheItemArgs(tenant: string, cacheId: string, itemId: string) {
+  return { Tenant: tenant, CacheID: cacheId, ItemID: itemId, APIOpts: {} };
+}
+
+export function hasCacheItem(baseUrl: string, tenant: string, cacheId: string, itemId: string) {
+  return jsonRpc<boolean>(baseUrl, 'CacheSv1.HasItem', [cacheItemArgs(tenant, cacheId, itemId)]);
+}
+
+export function getCacheItem(baseUrl: string, tenant: string, cacheId: string, itemId: string) {
+  return jsonRpc(baseUrl, 'CacheSv1.GetItem', [cacheItemArgs(tenant, cacheId, itemId)]);
+}
+
+export function getCacheItemExpiryTime(baseUrl: string, tenant: string, cacheId: string, itemId: string) {
+  return jsonRpc<string>(baseUrl, 'CacheSv1.GetItemExpiryTime', [cacheItemArgs(tenant, cacheId, itemId)]);
+}
+
+/** args are utils.AttrReloadCacheWithAPIOpts ID lists, e.g. { AttributeProfileIDs: ['cgrates.org:ATTR_1'] }. */
+export function removeCacheItems(baseUrl: string, tenant: string, args: Record<string, string[]>) {
+  return jsonRpc<string>(baseUrl, 'CacheSv1.RemoveItems', [{ Tenant: tenant, APIOpts: {}, ...args }]);
+}
+
+export function reloadCache(baseUrl: string, tenant: string, args: Record<string, string[]>) {
+  return jsonRpc<string>(baseUrl, 'CacheSv1.ReloadCache', [{ Tenant: tenant, APIOpts: {}, ...args }]);
+}
+
+export function loadCache(baseUrl: string, tenant: string, args: Record<string, string[]>) {
+  return jsonRpc<string>(baseUrl, 'CacheSv1.LoadCache', [{ Tenant: tenant, APIOpts: {}, ...args }]);
+}
+
+/** Empty cacheIds clears every partition. */
+export function clearCache(baseUrl: string, tenant: string, cacheIds: string[]) {
+  return jsonRpc<string>(baseUrl, 'CacheSv1.Clear', [{ Tenant: tenant, CacheIDs: cacheIds, APIOpts: {} }]);
+}
+
+// --- Core ---
+
+export function coreStatus(baseUrl: string, tenant: string, debug: boolean, timezone: string) {
+  return jsonRpc<Record<string, unknown>>(baseUrl, 'CoreSv1.Status', [{ Tenant: tenant, Debug: debug, Timezone: timezone, APIOpts: {} }]);
+}
+
+/** Durations are nanoseconds (Go time.Duration). */
+export function coreSleep(baseUrl: string, tenant: string, durationNs: number) {
+  return jsonRpc<string>(baseUrl, 'CoreSv1.Sleep', [{ Tenant: tenant, Duration: durationNs, APIOpts: {} }]);
+}
+
+export function startCPUProfiling(baseUrl: string, tenant: string, dirPath: string) {
+  return jsonRpc<string>(baseUrl, 'CoreSv1.StartCPUProfiling', [{ Tenant: tenant, DirPath: dirPath, APIOpts: {} }]);
+}
+
+export function stopCPUProfiling(baseUrl: string, tenant: string) {
+  return jsonRpc<string>(baseUrl, 'CoreSv1.StopCPUProfiling', [{ Tenant: tenant, APIOpts: {} }]);
+}
+
+export function startMemoryProfiling(baseUrl: string, params: { Tenant: string; DirPath: string; Interval: number; MaxFiles: number; UseTimestamp: boolean }) {
+  return jsonRpc<string>(baseUrl, 'CoreSv1.StartMemoryProfiling', [params]);
+}
+
+export function stopMemoryProfiling(baseUrl: string, tenant: string) {
+  return jsonRpc<string>(baseUrl, 'CoreSv1.StopMemoryProfiling', [{ Tenant: tenant, APIOpts: {} }]);
+}
+
+/** ServiceManagerV1 only manages *scheduler; replies RUNNING/STOPPED or OK. */
+export function serviceManager(baseUrl: string, action: 'ServiceStatus' | 'StartService' | 'StopService', tenant: string, serviceId: string) {
+  return jsonRpc<string>(baseUrl, `ServiceManagerV1.${action}`, [{ Tenant: tenant, ServiceID: serviceId, APIOpts: {} }]);
+}
+
+/** Replies with the lock reference ID. */
+export function remoteLock(baseUrl: string, tenant: string, referenceId: string, lockIds: string[], timeoutNs: number) {
+  return jsonRpc<string>(baseUrl, 'GuardianSv1.RemoteLock', [{
+    Tenant: tenant, ReferenceID: referenceId, LockIDs: lockIds, Timeout: timeoutNs, APIOpts: {},
+  }]);
+}
+
+/** Replies with the IDs that were unlocked. */
+export function remoteUnlock(baseUrl: string, tenant: string, refId: string) {
+  return jsonRpc<string[]>(baseUrl, 'GuardianSv1.RemoteUnlock', [{ Tenant: tenant, RefID: refId, APIOpts: {} }]);
 }
 
 // --- GetCost ---
@@ -397,6 +559,17 @@ export function runReader(baseUrl: string, tenant: string, readerId: string, api
 }
 
 // --- Event Exporter ---
+
+/** EeIDs limits which exporters receive the event; empty sends it to every exporter whose filters match. */
+export function eeProcessEvent(baseUrl: string, params: { EeIDs: string[]; Tenant: string; ID: string; Event: Record<string, unknown>; APIOpts: Record<string, unknown> }) {
+  return jsonRpc(baseUrl, 'EeSv1.ProcessEvent', [params]);
+}
+
+export function resetExporterMetrics(baseUrl: string, tenant: string, exporterId: string) {
+  return jsonRpc<string>(baseUrl, 'EeSv1.ResetExporterMetrics', [{
+    Tenant: tenant, ID: crypto.randomUUID(), ExporterID: exporterId, APIOpts: {},
+  }]);
+}
 
 /** Re-post failed export requests found on disk. Empty SourcePath defaults to the EEs FailedPosts.Dir. */
 export function replayFailedPosts(baseUrl: string, params: Record<string, unknown>) {
