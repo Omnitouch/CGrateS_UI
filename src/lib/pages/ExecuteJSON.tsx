@@ -1,14 +1,17 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import {
   Box, Typography, Paper, Button, TextField, CircularProgress, Alert, Chip,
-  Select, MenuItem, FormControl, InputLabel, IconButton, Tooltip,
+  Select, MenuItem, FormControl, InputLabel, IconButton, Tooltip, List, ListItemButton, ListItemIcon, ListItemText,
 } from '@mui/material';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DownloadIcon from '@mui/icons-material/Download';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import { useOcsBaseUrl } from '../OcsContext';
-import * as api from '../api';
+import { diagnose, explainResponseError, type Problem, type ResponseHint } from '../jsonDoctor';
 
 interface HistoryEntry {
   id: number;
@@ -31,17 +34,6 @@ function saveHistory(entries: HistoryEntry[]) {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(entries.slice(0, MAX_HISTORY)));
 }
 
-function getJsonErrorPosition(jsonStr: string, errorMsg: string): { line: number; col: number } | null {
-  const posMatch = errorMsg.match(/position\s+(\d+)/i);
-  if (!posMatch) return null;
-  const pos = parseInt(posMatch[1], 10);
-  const before = jsonStr.substring(0, pos);
-  const line = (before.match(/\n/g) || []).length + 1;
-  const lastNewline = before.lastIndexOf('\n');
-  const col = pos - (lastNewline === -1 ? 0 : lastNewline);
-  return { line, col };
-}
-
 export function Component() {
   const baseUrl = useOcsBaseUrl();
   const [requestText, setRequestText] = useState('{\n  "jsonrpc": "2.0",\n  "id": 1,\n  "method": "CoreSv1.Ping",\n  "params": [{}]\n}');
@@ -53,20 +45,14 @@ export function Component() {
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
   const [selectedHistory, setSelectedHistory] = useState<number | ''>('');
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
-  const [parseError, setParseError] = useState<{ message: string; line: number; col: number } | null>(null);
+  const [responseHint, setResponseHint] = useState<ResponseHint | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const diagnosis = useMemo(() => diagnose(requestText), [requestText]);
+  const errorCount = diagnosis.problems.filter(p => p.severity === 'error').length;
+
   const handleFormat = useCallback(() => {
-    try {
-      setRequestText(JSON.stringify(JSON.parse(requestText), null, 2));
-      setError(null);
-      setParseError(null);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Invalid JSON';
-      setError(msg);
-      const pos = getJsonErrorPosition(requestText, msg);
-      setParseError(pos ? { message: msg, ...pos } : null);
-    }
+    setRequestText(JSON.stringify(JSON.parse(requestText), null, 2));
   }, [requestText]);
 
   const addToHistory = useCallback((request: string) => {
@@ -84,20 +70,15 @@ export function Component() {
     if (!baseUrl) return;
     setLoading(true);
     setError(null);
-    setParseError(null);
+    setResponseHint(null);
     setResponseText('');
     setStatusCode(null);
-    let payload: Record<string, unknown>;
-    try {
-      payload = JSON.parse(requestText);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Invalid JSON';
-      setError(msg);
-      const pos = getJsonErrorPosition(requestText, msg);
-      setParseError(pos ? { message: msg, ...pos } : null);
+    if (errorCount > 0) {
+      setError(`Fix the ${errorCount} problem${errorCount > 1 ? 's' : ''} listed under the request before sending.`);
       setLoading(false);
       return;
     }
+    const payload = JSON.parse(requestText);
     const start = Date.now();
     try {
       const res = await fetch(`${baseUrl}/jsonrpc`, {
@@ -108,6 +89,9 @@ export function Component() {
       setStatusCode(res.status);
       const data = await res.json();
       setResponseText(JSON.stringify(data, null, 2));
+      if (typeof data?.error === 'string' && data.error) {
+        setResponseHint(explainResponseError(data.error, requestText));
+      }
       setExecTime(((Date.now() - start) / 1000).toFixed(3));
       addToHistory(requestText);
     } catch (e: unknown) {
@@ -116,7 +100,7 @@ export function Component() {
     } finally {
       setLoading(false);
     }
-  }, [baseUrl, requestText, addToHistory]);
+  }, [baseUrl, requestText, addToHistory, errorCount]);
 
   const handleCursorChange = useCallback(() => {
     const el = textareaRef.current;
@@ -129,17 +113,15 @@ export function Component() {
     setCursorPos({ line, col });
   }, []);
 
-  const jumpToError = useCallback(() => {
-    if (!parseError || !textareaRef.current) return;
-    const lines = requestText.split('\n');
-    let pos = 0;
-    for (let i = 0; i < parseError.line - 1 && i < lines.length; i++) {
-      pos += lines[i].length + 1;
-    }
-    pos += parseError.col - 1;
-    textareaRef.current.focus();
-    textareaRef.current.setSelectionRange(pos, pos);
-  }, [parseError, requestText]);
+  const selectProblem = useCallback((p: Problem) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(p.offset, p.offset + p.length);
+    const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 20;
+    el.scrollTop = Math.max(0, (p.line - 3) * lineHeight);
+    handleCursorChange();
+  }, [handleCursorChange]);
 
   const handleHistorySelect = useCallback((id: number | '') => {
     setSelectedHistory(id);
@@ -180,21 +162,14 @@ export function Component() {
   return (
     <Box>
       <Typography variant="h5" gutterBottom>Execute JSON-RPC</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography component="div" variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Endpoint: {baseUrl}/jsonrpc
         {execTime && <Chip label={`${execTime}s`} size="small" sx={{ ml: 1 }} />}
         {statusCode !== null && <Chip label={`HTTP ${statusCode}`} size="small" color={statusColor} sx={{ ml: 1 }} />}
       </Typography>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => { setError(null); setParseError(null); }}>
-          {error}
-          {parseError && (
-            <Button size="small" sx={{ ml: 1 }} onClick={jumpToError}>
-              Jump to error (Line {parseError.line}, Col {parseError.col})
-            </Button>
-          )}
-        </Alert>
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>
       )}
 
       {history.length > 0 && (
@@ -243,23 +218,61 @@ export function Component() {
           fullWidth
           minRows={10}
           value={requestText}
-          onChange={e => { setRequestText(e.target.value); setParseError(null); }}
+          onChange={e => setRequestText(e.target.value)}
           onSelect={handleCursorChange}
           onKeyUp={handleCursorChange}
           onClick={handleCursorChange}
           inputRef={textareaRef}
-          sx={{ fontFamily: 'monospace', mb: 1 }}
+          sx={{ mb: 1, '& textarea': { fontFamily: 'monospace' } }}
         />
+        {diagnosis.problems.length > 0 && (
+          <Paper variant="outlined" sx={{ mb: 1 }}>
+            <List dense disablePadding>
+              {diagnosis.problems.map((p, i) => (
+                <ListItemButton key={i} onClick={() => selectProblem(p)} divider={i < diagnosis.problems.length - 1}>
+                  <ListItemIcon sx={{ minWidth: 32 }}>
+                    {p.severity === 'error'
+                      ? <ErrorOutlineIcon fontSize="small" color="error" />
+                      : <WarningAmberIcon fontSize="small" color="warning" />}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={<><Typography component="span" variant="caption" color="text.secondary" sx={{ mr: 1, fontFamily: 'monospace' }}>Ln {p.line}:{p.col}</Typography>{p.message}</>}
+                    secondary={p.hint}
+                  />
+                </ListItemButton>
+              ))}
+            </List>
+          </Paper>
+        )}
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button variant="outlined" onClick={handleFormat}>Format</Button>
+          {diagnosis.fixed && (
+            <Button variant="outlined" color="warning" startIcon={<AutoFixHighIcon />} onClick={() => setRequestText(diagnosis.fixed!)}>
+              Fix it
+            </Button>
+          )}
+          <Button variant="outlined" onClick={handleFormat} disabled={!diagnosis.valid}>Format</Button>
           <Button variant="contained" onClick={handleSend} disabled={loading}>
             {loading ? <CircularProgress size={20} /> : 'Send'}
           </Button>
         </Box>
       </Paper>
 
+      {responseHint && (
+        <Alert
+          severity="info" sx={{ mb: 2 }}
+          action={responseHint.fixed && (
+            <Button color="inherit" size="small" startIcon={<AutoFixHighIcon />}
+              onClick={() => { setRequestText(responseHint.fixed!); setResponseHint(null); }}>
+              {responseHint.fixLabel}
+            </Button>
+          )}
+        >
+          {responseHint.message}
+        </Alert>
+      )}
+
       {responseText && (
-        <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
+        <Paper variant="outlined" sx={{ p: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
             <Typography variant="subtitle2">Response</Typography>
             <Box sx={{ display: 'flex', gap: 0.5 }}>
