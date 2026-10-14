@@ -55,7 +55,8 @@ interface TpToolbarProps {
 export default function TpToolbar({ tpids, tpid, onTpid, search, onSearch, onRefresh, children }: TpToolbarProps) {
   return (
     <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-      <SearchableSelect label="TPID" value={tpid} options={tpids} onChange={onTpid} disableClearable sx={{ minWidth: 220 }} />
+      <SearchableSelect label="TPID" value={tpid} options={tpids} onChange={v => onTpid(v.trim())} disableClearable freeSolo
+        placeholder="Pick or type a new one" sx={{ minWidth: 220 }} />
       <TextField size="small" label="Search ID" value={search} onChange={e => onSearch(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') onRefresh(); }} />
       <Button variant="contained" onClick={onRefresh} disabled={!tpid}>Search</Button>
