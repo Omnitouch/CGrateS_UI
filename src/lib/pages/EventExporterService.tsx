@@ -10,6 +10,9 @@ import { useConfig } from '../hooks';
 import * as api from '../api';
 import type { EventExporterConfig } from '../types';
 import IdMultiSelect from '../components/IdMultiSelect';
+import SearchableSelect from '../components/SearchableSelect';
+import KeyValueEditor, { rowsToObject, type KeyValueRow } from '../components/KeyValueEditor';
+import { useConfirm } from '../components/ConfirmDialog';
 import { toLocalInput } from '../components/ActivationIntervalInput';
 import { TORS, REQUEST_TYPES } from '../cgrConsts';
 
@@ -44,6 +47,16 @@ const ORDER_BY = ['OrderID', 'AnswerTime', 'SetupTime', 'Usage', 'Cost'];
 
 const fromLocal = (v: string) => (v ? new Date(v).toISOString() : '');
 
+const sampleEventRows = (tenant: string): KeyValueRow[] => [
+  { key: 'Tenant', value: tenant },
+  { key: 'Account', value: '1001' },
+  { key: 'Destination', value: '1002' },
+  { key: 'ToR', value: '*voice' },
+  { key: 'OriginID', value: 'cgrui-ee-test' },
+  { key: 'Usage', value: '60000000000' },
+  { key: 'Cost', value: '0.1' },
+];
+
 export function Component() {
   const baseUrl = useOcsBaseUrl();
   const { tenants, defaultTenant } = useOcsTenants();
@@ -70,6 +83,14 @@ export function Component() {
   const [exporting, setExporting] = useState(false);
   const [exportResult, setExportResult] = useState<string | null>(null);
 
+  // EeSv1.ProcessEvent test event
+  const [testOpen, setTestOpen] = useState(false);
+  const [testTenant, setTestTenant] = useState(defaultTenant);
+  const [testEeIds, setTestEeIds] = useState<string[]>([]);
+  const [testEvent, setTestEvent] = useState<KeyValueRow[]>(() => sampleEventRows(defaultTenant));
+  const [testOpts, setTestOpts] = useState<KeyValueRow[]>([]);
+  const { ask, dialog: confirmDialog, outcomeAlert } = useConfirm();
+
   // Replay Failed Posts modal
   const [replayOpen, setReplayOpen] = useState(false);
   const [sourcePath, setSourcePath] = useState('');
@@ -90,6 +111,32 @@ export function Component() {
     setDetail(e);
     setDetailOpen(true);
   };
+
+  const sendTestEvent = () => {
+    const params = {
+      EeIDs: testEeIds, Tenant: testTenant, ID: crypto.randomUUID(),
+      Event: rowsToObject(testEvent), APIOpts: rowsToObject(testOpts),
+    };
+    ask({
+      title: 'Send test event',
+      confirmLabel: 'Send',
+      body: (
+        <Typography variant="body2" component="div">
+          EeSv1.ProcessEvent exports this event for real
+          ({testEeIds.length ? testEeIds.join(', ') : 'every exporter whose filters match'}).
+          <pre style={{ fontSize: 12 }}>{JSON.stringify(params, null, 2)}</pre>
+        </Typography>
+      ),
+      run: () => api.eeProcessEvent(baseUrl!, params),
+    });
+  };
+
+  const confirmResetMetrics = (id: string) => ask({
+    title: 'Reset exporter metrics',
+    confirmLabel: 'Reset',
+    body: <Typography variant="body2">Runs EeSv1.ResetExporterMetrics for {id}, zeroing its event counters.</Typography>,
+    run: () => api.resetExporterMetrics(baseUrl!, defaultTenant, id),
+  });
 
   const openExport = (ids: string[]) => {
     setExporterIds(ids);
@@ -148,6 +195,7 @@ export function Component() {
         </Button>
       </Box>
 
+      {outcomeAlert}
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Configured exporters from the running CGrateS config. Select an exporter to export CDRs through it via APIerSv1.ExportCDRs.
       </Typography>
@@ -186,6 +234,8 @@ export function Component() {
           </Paper>
         </DialogContent>
         <DialogActions>
+          <Button onClick={() => { setDetailOpen(false); confirmResetMetrics(detail!.id); }}>Reset metrics</Button>
+          <Button onClick={() => { setDetailOpen(false); setTestEeIds(detail ? [detail.id] : []); setTestOpen(true); }}>Send test event</Button>
           <Button variant="contained" onClick={() => { setDetailOpen(false); openExport(detail ? [detail.id] : []); }}>Export CDRs</Button>
           <Button onClick={() => setDetailOpen(false)}>Close</Button>
         </DialogActions>
@@ -261,6 +311,26 @@ export function Component() {
         </DialogActions>
       </Dialog>
 
+      {/* EeSv1.ProcessEvent */}
+      <Dialog open={testOpen} onClose={() => setTestOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Send test event</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-start', mt: 1, mb: 2 }}>
+            <SearchableSelect label="Tenant" value={testTenant} options={tenants} onChange={setTestTenant} disableClearable sx={{ minWidth: 200 }} />
+            <IdMultiSelect label="EeIDs" value={testEeIds} options={exporterIdOptions} onChange={setTestEeIds}
+              fullWidth={false} sx={{ minWidth: 300, flex: 1 }} helperText="Empty: every exporter whose filters match" />
+          </Box>
+          <KeyValueEditor label="Event" rows={testEvent} onChange={setTestEvent} />
+          <Box sx={{ mt: 2 }}>
+            <KeyValueEditor label="APIOpts" rows={testOpts} onChange={setTestOpts} keyOptions={['*eesVerbose']} />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTestOpen(false)}>Close</Button>
+          <Button variant="contained" onClick={() => { setTestOpen(false); sendTestEvent(); }}>Send…</Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Replay Failed Posts modal */}
       <Dialog open={replayOpen} onClose={() => setReplayOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Replay Failed Posts</DialogTitle>
@@ -293,6 +363,7 @@ export function Component() {
           <Button onClick={() => setReplayOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
+      {confirmDialog}
     </Box>
   );
 }
