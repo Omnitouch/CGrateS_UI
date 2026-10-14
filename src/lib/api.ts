@@ -153,7 +153,7 @@ export function getActions(baseUrl: string, tenant: string) {
 }
 
 export function setActions(baseUrl: string, params: Record<string, unknown>) {
-  return jsonRpc(baseUrl, 'ApierV1.SetActions', [params]);
+  return jsonRpc(baseUrl, 'APIerSv2.SetActions', [params]);
 }
 
 export function removeActions(baseUrl: string, actionIds: string[], tenant: string) {
