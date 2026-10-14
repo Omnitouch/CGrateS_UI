@@ -15,13 +15,19 @@ interface KeyValueEditorProps {
   keyPlaceholder?: string;
 }
 
-/** Text that parses as JSON (numbers, true/false, objects, arrays, "quoted") is sent as that value, anything else as a string. */
+const looksLikeJson = (v: string) => /^\s*[[{]/.test(v);
+
+function isBadJson(v: string) {
+  if (!looksLikeJson(v)) return false;
+  try { JSON.parse(v); return false; } catch { return true; }
+}
+
+/**
+ * Values are sent as strings (CGrateS converts "60s", "1001", "true" itself) so IDs like 1001 keep their type;
+ * JSON objects and arrays are sent parsed so list options like *attrProfileIDs work.
+ */
 export function parseKeyValueValue(v: string): unknown {
-  try {
-    return JSON.parse(v);
-  } catch {
-    return v;
-  }
+  return looksLikeJson(v) && !isBadJson(v) ? JSON.parse(v) : v;
 }
 
 export function rowsToObject(rows: KeyValueRow[]): Record<string, unknown> {
@@ -55,7 +61,8 @@ export default function KeyValueEditor({ label, rows, onChange, keyOptions, keyP
             onChange={e => set(i, 'key', e.target.value)}
             slotProps={{ htmlInput: { list: listId } }}
           />
-          <TextField size="small" placeholder="Value" value={r.value} sx={{ flex: '2 1 260px' }} onChange={e => set(i, 'value', e.target.value)} />
+          <TextField size="small" placeholder="Value" value={r.value} sx={{ flex: '2 1 260px' }} onChange={e => set(i, 'value', e.target.value)}
+            error={isBadJson(r.value)} helperText={isBadJson(r.value) ? 'Invalid JSON: will be sent as a string' : undefined} />
           <IconButton size="small" color="error" onClick={() => onChange(rows.filter((_, j) => j !== i))}>
             <DeleteIcon fontSize="small" />
           </IconButton>
@@ -63,7 +70,7 @@ export default function KeyValueEditor({ label, rows, onChange, keyOptions, keyP
       ))}
       {rows.length > 0 && (
         <Typography variant="caption" color="text.secondary">
-          Values that parse as JSON (10, true, {'{…}'}, "quoted") are sent typed; anything else is sent as a string.
+          Values are sent as strings; JSON objects and arrays ({'{…}'}, […]) are sent parsed.
         </Typography>
       )}
     </Box>
