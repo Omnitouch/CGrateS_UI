@@ -10,6 +10,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import SearchableSelect from '../components/SearchableSelect';
+import ExpiryTimeInput from '../components/ExpiryTimeInput';
 import { BalanceName, BalanceBucket, CompositeId } from '../components/ParsedId';
 import { BALANCE_TYPES, BalanceValueDisplay, BalanceValueInput } from '../components/BalanceValue';
 
@@ -45,16 +46,6 @@ const ACTION_TYPES = [
   '*remove_session_costs',
   '*remove_expired',
   '*cdr_account',
-];
-
-const EXPIRATION_OPTIONS = [
-  '*unlimited',
-  '*daily',
-  '*monthly',
-  '*monthly_estimated',
-  '*month_end',
-  '*yearly',
-  '+720h',
 ];
 
 interface ActionBalance {
@@ -535,12 +526,10 @@ export function Component() {
               <Box sx={{ mb: 1.5 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>Expiration</Typography>
                 {editing ? (
-                  <Autocomplete<string, false, false, true>
-                    freeSolo fullWidth size="small" sx={{ mt: 0.5 }}
-                    options={EXPIRATION_OPTIONS}
+                  <ExpiryTimeInput
                     value={part.ExpirationString || ''}
-                    onInputChange={(_e, v) => handleEditChange(index, 'ExpirationString', v)}
-                    renderInput={params => <TextField {...params} placeholder="*monthly, *month_end+24h or 2026-12-31T00:00:00Z" />}
+                    onChange={v => handleEditChange(index, 'ExpirationString', v)}
+                    sx={{ mt: 0.5 }}
                   />
                 ) : (
                   <Typography variant="body1">{part.ExpirationString || 'N/A'}</Typography>
