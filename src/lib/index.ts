@@ -27,7 +27,6 @@ export const ocsNavGroups: OcsNavGroup[] = [
     label: 'Core',
     items: [
       { label: 'Accounts', path: '' },
-      { label: 'Account Hierarchy', path: 'account-hierarchy' },
       { label: 'CDRs', path: 'cdrs' },
       { label: 'Exported CDRs', path: 'exported-cdrs' },
       { label: 'Sessions', path: 'sessions' },
