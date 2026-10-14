@@ -291,6 +291,10 @@ export function getActions(baseUrl: string, tenant: string) {
   return jsonRpc<Record<string, unknown[]>>(baseUrl, 'APIerSv2.GetActions', [{ Tenant: tenant }]);
 }
 
+export function getActionsByIds(baseUrl: string, ids: string[]) {
+  return jsonRpc<Record<string, unknown[]>>(baseUrl, 'APIerSv2.GetActions', [{ ActionIDs: ids }]);
+}
+
 export function setActions(baseUrl: string, params: Record<string, unknown>) {
   return jsonRpc(baseUrl, 'APIerSv2.SetActions', [params]);
 }
@@ -580,8 +584,9 @@ export function getRouteProfilesForEvent(baseUrl: string, args: CGREventArgs) {
   return jsonRpc(baseUrl, 'RouteSv1.GetRouteProfilesForEvent', [args]);
 }
 
-export function getAccountIDs(baseUrl: string, tenant: string) {
-  return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetAccountIDs', [{ Tenant: tenant }]);
+/** Search matches part of the ID on the server; limit caps the reply for tenants with many accounts. */
+export function getAccountIDs(baseUrl: string, tenant: string, search?: string, limit?: number) {
+  return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetAccountIDs', [{ Tenant: tenant, ...(search ? { Search: search } : {}), ...(limit ? { Limit: limit } : {}) }]);
 }
 
 // --- Sessions ---

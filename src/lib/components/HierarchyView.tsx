@@ -1,0 +1,256 @@
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Box, CircularProgress, InputAdornment, Paper, Tab, Table, TableBody, TableCell, TableRow, Tabs, TextField, Typography } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
+import HierarchyTree, { LazyTreeContext, type HNode, type LazyTree } from './HierarchyTree';
+import HierarchyDiagram from './HierarchyDiagram';
+
+/** Children shown under the selected node in the diagram; the rest are one "+N more" card. */
+const DIAGRAM_CHILDREN = 12;
+const DETAIL_CHIPS = 60;
+const RAW_CHARS = 20000;
+
+function rawText(raw: unknown) {
+  const s = JSON.stringify(raw, null, 2);
+  return s.length > RAW_CHARS ? `${s.slice(0, RAW_CHARS)}\n… ${s.length - RAW_CHARS} more characters` : s;
+}
+
+type Loaded = HNode[] | 'loading' | { error: string };
+
+/** Ancestors from the root down to id, searching only what has been loaded. */
+function findPath(root: HNode, id: string, childrenOf: (n: HNode) => HNode[] | undefined): HNode[] | null {
+  if (root.id === id) return [root];
+  for (const c of childrenOf(root) ?? []) {
+    const p = findPath(c, id, childrenOf);
+    if (p) return [root, ...p];
+  }
+  return null;
+}
+
+/** The path to the selected node, then a capped set of its children, so the diagram stays readable at any size. */
+function focusTree(path: HNode[], childrenOf: (n: HNode) => HNode[] | undefined): HNode {
+  const sel = path[path.length - 1];
+  const kids = childrenOf(sel) ?? [];
+  const shown: HNode[] = kids.slice(0, DIAGRAM_CHILDREN).map(k => ({ ...k, children: undefined }));
+  if (kids.length > DIAGRAM_CHILDREN) {
+    shown.push({ id: `${sel.id}/__more`, label: 'More', value: `+${kids.length - DIAGRAM_CHILDREN} more`, subtext: 'Use the tree to browse or filter', color: '#757575' });
+  }
+  let node: HNode = { ...sel, children: shown };
+  for (let i = path.length - 2; i >= 0; i--) node = { ...path[i], children: [node] };
+  return node;
+}
+
+/** Every loaded node that matches, plus the ancestors that lead to it. */
+function filterTree(root: HNode, childrenOf: (n: HNode) => HNode[] | undefined, isMatch: (n: HNode) => boolean) {
+  const match = new Set<string>();
+  const forceOpen = new Set<string>();
+  const visit = (n: HNode): boolean => {
+    let below = false;
+    for (const c of childrenOf(n) ?? []) if (visit(c)) below = true;
+    if (below) forceOpen.add(n.id);
+    if (below || isMatch(n)) { match.add(n.id); return true; }
+    return false;
+  };
+  visit(root);
+  return { match, forceOpen };
+}
+
+/** The longest prefix wins in CGrateS, so name the destination in this hierarchy that the number would rate against. */
+function numberMatchText(hits: Map<string, string>, shown: Set<string>, root: HNode, childrenOf: (n: HNode) => HNode[] | undefined) {
+  let best: [string, string] | null = null;
+  const visit = (n: HNode) => {
+    const px = hits.get(n.value);
+    if (px && shown.has(n.id) && (!best || px.replace('+', '').length > best[1].replace('+', '').length)) best = [n.value, px];
+    (childrenOf(n) ?? []).forEach(visit);
+  };
+  visit(root);
+  const b = best as [string, string] | null;
+  return b ? `longest prefix ${b[1]} → ${b[0]}` : 'no destination here matches the number';
+}
+
+const isNumber = (s: string) => /^\+?\d{2,}$/.test(s);
+
+interface HierarchyViewProps {
+  root: HNode;
+  /** Node values (e.g. destination IDs) a dialled number matches, with the prefix each matched on. */
+  numberLookup?: (num: string) => Promise<Map<string, string>>;
+}
+
+/** Tree on the left, Overview diagram and Details tabs on the right, as on OmniWeb's subscriber page. */
+export default function HierarchyView({ root, numberLookup }: HierarchyViewProps) {
+  const [query, setQuery] = useState('');
+  const deferred = useDeferredValue(query.trim().toLowerCase());
+  const [numberHits, setNumberHits] = useState<{ q: string; ids: Map<string, string> } | null>(null);
+  const [loaded, setLoaded] = useState<Record<string, Loaded>>({});
+  const [extra, setExtra] = useState<Record<string, Partial<HNode>>>({});
+  const requested = useRef(new Set<string>());
+  const [selectedId, setSelectedId] = useState(root.id);
+  const [tab, setTab] = useState(0);
+
+  useEffect(() => {
+    requested.current = new Set();
+    setLoaded({});
+    setExtra({});
+    setSelectedId(root.id);
+    setTab(0);
+  }, [root]);
+
+  const withExtra = useCallback((n: HNode) => (extra[n.id] ? { ...n, ...extra[n.id] } : n), [extra]);
+
+  const childrenOf = useCallback((n: HNode) => {
+    if (n.children) return n.children;
+    const l = loaded[n.id];
+    return Array.isArray(l) ? l : undefined;
+  }, [loaded]);
+
+  const expand = useCallback((n: HNode) => {
+    if (n.children || !n.loadChildren || requested.current.has(`c:${n.id}`)) return;
+    requested.current.add(`c:${n.id}`);
+    setLoaded(s => ({ ...s, [n.id]: 'loading' }));
+    n.loadChildren()
+      .then(kids => setLoaded(s => ({ ...s, [n.id]: kids })))
+      .catch(e => setLoaded(s => ({ ...s, [n.id]: { error: e instanceof Error ? e.message : String(e) } })));
+  }, []);
+
+  const loadDetails = useCallback((n: HNode) => {
+    if (!n.loadDetails || requested.current.has(`d:${n.id}`)) return;
+    requested.current.add(`d:${n.id}`);
+    n.loadDetails()
+      .then(d => setExtra(s => ({ ...s, [n.id]: d })))
+      .catch(e => setExtra(s => ({ ...s, [n.id]: { status: 'error', details: [['Error', e instanceof Error ? e.message : String(e)]] } })));
+  }, []);
+
+  useEffect(() => {
+    if (!numberLookup || !isNumber(deferred)) { setNumberHits(null); return; }
+    let live = true;
+    const t = setTimeout(() => {
+      numberLookup(deferred).then(ids => { if (live) setNumberHits({ q: deferred, ids }); }).catch(() => { if (live) setNumberHits(null); });
+    }, 300);
+    return () => { live = false; clearTimeout(t); };
+  }, [deferred, numberLookup]);
+
+  const filtered = useMemo(() => {
+    if (!deferred) return null;
+    const hits = numberHits?.q === deferred ? numberHits.ids : null;
+    const kids = (n: HNode) => childrenOf(n)?.map(withExtra);
+    return filterTree(withExtra(root), kids, n =>
+      `${n.value} ${n.subtext ?? ''} ${n.badge ?? ''}`.toLowerCase().includes(deferred) || !!hits?.has(n.value));
+  }, [deferred, numberHits, root, childrenOf, withExtra]);
+
+  const tree: LazyTree = useMemo(() => ({
+    match: filtered?.match ?? null,
+    forceOpen: filtered?.forceOpen ?? null,
+    childrenOf: (n: HNode) => childrenOf(n)?.map(withExtra),
+    loading: (id: string) => loaded[id] === 'loading',
+    error: (id: string) => {
+      const l = loaded[id];
+      return l && typeof l === 'object' && 'error' in l ? l.error : undefined;
+    },
+    expand,
+  }), [childrenOf, withExtra, loaded, expand, filtered]);
+
+  const rootNode = withExtra(root);
+  const path = findPath(rootNode, selectedId, tree.childrenOf) ?? [rootNode];
+  const selected = path[path.length - 1];
+
+  useEffect(() => { expand(selected); loadDetails(selected); }, [selected, expand, loadDetails]);
+
+  const pick = (n: HNode, toDetails: boolean) => {
+    if (n.id.endsWith('/__more')) return;
+    setSelectedId(n.id);
+    if (toDetails) setTab(1);
+  };
+
+  const diagramRoot = useMemo(() => focusTree(path, tree.childrenOf), [path, tree]);
+
+  return (
+    <LazyTreeContext.Provider value={tree}>
+      <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: { xs: 'wrap', md: 'nowrap' } }}>
+        <Paper variant="outlined" sx={{ width: { xs: '100%', md: 320 }, minWidth: { md: 320 }, maxHeight: '75vh', overflow: 'auto', flexShrink: 0 }}>
+          <Box sx={{ p: 1, position: 'sticky', top: 0, zIndex: 2, bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
+            <TextField
+              size="small" fullWidth value={query} onChange={e => setQuery(e.target.value)}
+              placeholder={numberLookup ? 'Filter, or type a number to find its rate' : 'Filter loaded items'}
+              slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
+            />
+            {filtered && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                {filtered.match.size ? `${filtered.match.size} shown` : 'No matches'} among loaded items
+                {numberLookup && isNumber(deferred) && (numberHits?.q === deferred ? ` · ${numberMatchText(numberHits.ids, filtered.match, rootNode, tree.childrenOf)}` : ' · looking up number…')}
+              </Typography>
+            )}
+          </Box>
+          <HierarchyTree nodes={filtered && !filtered.match.has(rootNode.id) ? [] : [rootNode]} selectedId={selectedId} onSelect={n => pick(n, tab === 1)} />
+        </Paper>
+        <Paper variant="outlined" sx={{ flex: 1, minWidth: 0 }}>
+          <Tabs value={tab} onChange={(_e, v) => setTab(v)} sx={{ borderBottom: 1, borderColor: 'divider', minHeight: 40 }}>
+            <Tab label="Overview" sx={{ minHeight: 40, textTransform: 'none' }} />
+            <Tab label={`Details: ${selected.label}`} sx={{ minHeight: 40, textTransform: 'none' }} />
+          </Tabs>
+          <Box sx={{ p: 2 }}>
+            {tab === 0 && (
+              <>
+                {path.length > 1 && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                    Showing the path to {selected.value}; select a card or tree item to move down.
+                  </Typography>
+                )}
+                <HierarchyDiagram nodes={[diagramRoot]} selectedId={selectedId} onSelect={id => {
+                  const n = findPath(diagramRoot, id, x => x.children)?.pop();
+                  if (n) pick(n, id === selectedId);
+                }} maxDepth={path.length} />
+              </>
+            )}
+            {tab === 1 && <NodeDetails node={selected} kids={tree.childrenOf(selected)} loading={tree.loading(selected.id)} onSelect={n => pick(n, true)} />}
+          </Box>
+        </Paper>
+      </Box>
+    </LazyTreeContext.Provider>
+  );
+}
+
+function NodeDetails({ node, kids, loading, onSelect }: { node: HNode; kids?: HNode[]; loading: boolean; onSelect: (n: HNode) => void }) {
+  return (
+    <Box>
+      <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', color: node.color }}>{node.label}</Typography>
+      <Typography variant="h6" sx={{ wordBreak: 'break-all', mb: 1 }}>{node.value}</Typography>
+      {node.status === 'error' && <Alert severity="error" sx={{ mb: 1 }}>Failed to load part of this object</Alert>}
+      {node.details && node.details.length > 0 && (
+        <Table size="small" sx={{ mb: 2 }}>
+          <TableBody>
+            {node.details.map(([k, v]) => (
+              <TableRow key={k}>
+                <TableCell sx={{ fontWeight: 'bold', width: 200, verticalAlign: 'top' }}>{k}</TableCell>
+                <TableCell sx={{ wordBreak: 'break-word' }}>{v}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+      {loading && <CircularProgress size={20} sx={{ mb: 2 }} />}
+      {kids && kids.length > 0 && (
+        <>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            Contains {kids.length}{kids.length > DETAIL_CHIPS ? ` (first ${DETAIL_CHIPS} shown; use the tree filter for the rest)` : ''}
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+            {kids.slice(0, DETAIL_CHIPS).map(c => (
+              <Paper key={c.id} variant="outlined" onClick={() => onSelect(c)}
+                sx={{ px: 1, py: 0.5, cursor: 'pointer', borderLeft: `3px solid ${c.color}`, '&:hover': { boxShadow: 2 } }}>
+                <Typography variant="caption" sx={{ color: c.color, fontWeight: 700, fontSize: '0.6rem', textTransform: 'uppercase', display: 'block' }}>{c.label}</Typography>
+                <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{c.value}</Typography>
+              </Paper>
+            ))}
+          </Box>
+        </>
+      )}
+      {node.raw !== undefined && (
+        <>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>Raw</Typography>
+          <Box component="pre" sx={{ m: 0, p: 1, fontSize: '0.75rem', bgcolor: 'action.hover', borderRadius: 1, overflow: 'auto', maxHeight: 400 }}>
+            {rawText(node.raw)}
+          </Box>
+        </>
+      )}
+    </Box>
+  );
+}

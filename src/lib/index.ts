@@ -27,6 +27,7 @@ export const ocsNavGroups: OcsNavGroup[] = [
     label: 'Core',
     items: [
       { label: 'Accounts', path: '' },
+      { label: 'Account Hierarchy', path: 'account-hierarchy' },
       { label: 'CDRs', path: 'cdrs' },
       { label: 'Exported CDRs', path: 'exported-cdrs' },
       { label: 'Sessions', path: 'sessions' },
@@ -42,6 +43,7 @@ export const ocsNavGroups: OcsNavGroup[] = [
       { label: 'Timings', path: 'timings' },
       { label: 'Tariff Plans', path: 'tariff-plans' },
       { label: 'TP Explorer', path: 'tp-explorer' },
+      { label: 'Rating Hierarchy', path: 'rating-hierarchy' },
     ],
   },
   {
