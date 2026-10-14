@@ -27,6 +27,9 @@ export interface HNode {
   loadChildren?: () => Promise<HNode[]>;
   /** Extra fields fetched when the node is selected, e.g. a destination's prefixes. */
   loadDetails?: () => Promise<Partial<HNode>>;
+  /** Dialog body for changing this object; close(true) reloads its details. */
+  editor?: (close: (saved: boolean) => void) => ReactNode;
+  editLabel?: string;
 }
 
 /** Loaded state shared by the tree, diagram and details. */

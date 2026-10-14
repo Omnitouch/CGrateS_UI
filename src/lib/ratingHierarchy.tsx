@@ -8,6 +8,7 @@ import SubdirectoryArrowRightIcon from '@mui/icons-material/SubdirectoryArrowRig
 import * as api from './api';
 import type { HNode } from './components/HierarchyTree';
 import { formatBalanceValue } from './components/BalanceValue';
+import { PrefixEditor, RateSlotsEditor, type RateSlot } from './components/HierarchyEditors';
 
 // Everything below the root loads on expand or select: plans can hold thousands of destinations and rates.
 
@@ -32,14 +33,20 @@ function fmtUnit(n: number, hint: UnitHint): string {
   return formatBalanceValue(n, '*voice');
 }
 
+/** A rate or destination referenced but not defined yet opens empty, so saving creates it. */
+function orMissing<T>(e: unknown, empty: T): T {
+  if (e instanceof Error && e.message.includes('NOT_FOUND')) return empty;
+  throw e;
+}
+
 function plural(n: number, word: string) {
   return `${n} ${word}${n === 1 ? '' : 's'}`;
 }
 
-/** Same object opened from two places is fetched once. */
+/** Same object opened from two places is fetched once; forget() after an edit. */
 function memo<T>(fn: (key: string) => Promise<T>) {
   const cache = new Map<string, Promise<T>>();
-  return (key: string) => {
+  const get = (key: string) => {
     if (!cache.has(key)) {
       const p = fn(key);
       cache.set(key, p);
@@ -47,6 +54,7 @@ function memo<T>(fn: (key: string) => Promise<T>) {
     }
     return cache.get(key)!;
   };
+  return Object.assign(get, { forget: (key: string) => { cache.delete(key); } });
 }
 
 interface Activation { ActivationTime: string; RatingPlanId: string; FallbackKeys?: string[] | null; FallbackSubjects?: string }
@@ -110,6 +118,16 @@ function liveDestinationNode(baseUrl: string, plan: LiveRatingPlan, d: string, p
         details: [['Prefixes', px.length ? px.join(', ') : 'None in DataDB']],
       };
     },
+    editLabel: 'Edit prefixes',
+    editor: d === '*any' ? undefined : close => (
+      <PrefixEditor
+        load={async () => (await api.getDestination(baseUrl, d)).Prefixes || []}
+        save={px => api.setDestination(baseUrl, d, px, true).then(() => undefined)}
+        note="This changes the live destination in DataDB, so rating changes straight away. The tariff plan isn't changed, so a later tariff plan load puts the old prefixes back."
+        noteSeverity="warning"
+        onClose={close}
+      />
+    ),
     children: bindings.map((b, i) => {
       const r = plan.Ratings[b.Rating];
       const t = plan.Timings[b.Timing];
@@ -124,6 +142,7 @@ function liveDestinationNode(baseUrl: string, plan: LiveRatingPlan, d: string, p
           ['Max cost', r.MaxCost ? `${r.MaxCost} (${r.MaxCostStrategy || 'no strategy'})` : 'None'],
           ['Timing', timingText(t)],
           ['Weight', b.Weight],
+          ['To change', 'Live rates are compiled from a tariff plan: switch to Tariff plan, edit the rate there, then load the tariff plan into DataDB.'],
         ] : [['Rating', b.Rating]],
         raw: { binding: b, rating: r, timing: t },
       } as HNode;
@@ -180,6 +199,7 @@ interface TPTiming { ID: string; Years: string; Months: string; MonthDays: strin
 
 function tpLoaders(baseUrl: string, tpid: string) {
   return {
+    baseUrl, tpid,
     plan: memo(id => api.getTPRatingPlan(baseUrl, tpid, id) as Promise<TPRatingPlan>),
     destRate: memo(id => api.getTPDestinationRate(baseUrl, tpid, id) as Promise<TPDestRate>),
     rate: memo(id => api.getTPRate(baseUrl, tpid, id) as Promise<TPRate>),
@@ -197,6 +217,15 @@ function tpRateNode(L: TPLoaders, row: DestRateRow, id: string): HNode {
       ['Rounding', `${row.RoundingMethod}, ${row.RoundingDecimals} decimals`],
       ['Max cost', row.MaxCost ? `${row.MaxCost} (${row.MaxCostStrategy || 'no strategy'})` : 'None'],
     ],
+    editLabel: 'Edit rate',
+    editor: close => (
+      <RateSlotsEditor
+        load={() => L.rate(row.RateId).then(r => r.RateSlots as RateSlot[], e => orMissing(e, [{ ConnectFee: 0, Rate: 0, RateUnit: '60s', RateIncrement: '60s', GroupIntervalStart: '0s' }]))}
+        save={async slots => { await api.setTPRate(L.baseUrl, { TPid: L.tpid, ID: row.RateId, RateSlots: slots }); L.rate.forget(row.RateId); }}
+        note={`Saved to tariff plan ${L.tpid} in StorDB. Load it into DataDB (Tariff Plans page) for rating to use it.`}
+        onClose={close}
+      />
+    ),
     loadDetails: async () => {
       const r = await L.rate(row.RateId);
       const slots = r.RateSlots || [];
@@ -219,6 +248,15 @@ function tpDestinationNode(L: TPLoaders, row: DestRateRow, id: string): HNode {
     id, label: 'Destination', value: row.DestinationId, color: C.destination, icon: PlaceIcon,
     subtext: `→ ${row.RateId}`,
     details: [['Prefixes', any ? 'Every destination' : 'Loading…']],
+    editLabel: 'Edit prefixes',
+    editor: any ? undefined : close => (
+      <PrefixEditor
+        load={() => L.destination(row.DestinationId).then(d => d.Prefixes || [], e => orMissing(e, [] as string[]))}
+        save={async px => { await api.setTPDestination(L.baseUrl, L.tpid, row.DestinationId, px); L.destination.forget(row.DestinationId); }}
+        note={`Saved to tariff plan ${L.tpid} in StorDB. Load it into DataDB (Tariff Plans page) for rating to use it.`}
+        onClose={close}
+      />
+    ),
     loadDetails: any ? undefined : async () => {
       const px = (await L.destination(row.DestinationId)).Prefixes || [];
       return { badge: String(px.length), details: [['Prefixes', px.join(', ') || 'None']] };

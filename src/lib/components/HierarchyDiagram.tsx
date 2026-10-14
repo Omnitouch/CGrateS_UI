@@ -1,96 +1,106 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Paper, Typography } from '@mui/material';
 import type { HNode } from './HierarchyTree';
 
-const NODE_W = 150;
-const NODE_H = 70;
-const GAP_X = 10;
-const ROW_H = 110;
-const PAD = 10;
+const NODE_H = 58;
+const GAP_Y = 8;
+const PAD = 8;
+const MIN_W = 110;
+const MAX_W = 220;
 
-interface Placed { node: HNode; x: number; y: number; }
+interface Placed { node: HNode; depth: number; y: number; }
 
-/** Rows by depth; each leaf takes a column and a parent sits centred over its children. */
-function layout(roots: HNode[], maxDepth: number) {
+/** Columns by depth, left to right; each leaf takes a row and a parent sits level with its first child, like a file tree. */
+function layout(root: HNode) {
   const placed: Placed[] = [];
   const edges: [string, string][] = [];
-  let nextCol = 0;
+  let nextRow = 0;
+  let depthMax = 0;
   const visit = (n: HNode, depth: number): number => {
-    const kids = depth < maxDepth ? n.children ?? [] : [];
-    let x: number;
+    depthMax = Math.max(depthMax, depth);
+    const kids = n.children ?? [];
+    let y: number;
     if (kids.length === 0) {
-      x = PAD + nextCol++ * (NODE_W + GAP_X);
+      y = PAD + nextRow++ * (NODE_H + GAP_Y);
     } else {
-      const xs = kids.map(k => { edges.push([n.id, k.id]); return visit(k, depth + 1); });
-      x = (xs[0] + xs[xs.length - 1]) / 2;
+      const ys = kids.map(k => { edges.push([n.id, k.id]); return visit(k, depth + 1); });
+      y = ys[0];
     }
-    placed.push({ node: n, x, y: PAD + depth * ROW_H });
-    return x;
+    placed.push({ node: n, depth, y });
+    return y;
   };
-  roots.forEach(r => visit(r, 0));
-  return { placed, edges };
+  visit(root, 0);
+  return { placed, edges, columns: depthMax + 1, rows: nextRow };
 }
 
 interface HierarchyDiagramProps {
-  nodes: HNode[];
+  root: HNode;
   selectedId?: string;
   onSelect: (id: string) => void;
-  /** Deeper levels are left to the tree so wide hierarchies stay readable. */
-  maxDepth?: number;
 }
 
-/** Card diagram with dashed connectors, in the style of OmniWeb's subscriber overview. */
-export default function HierarchyDiagram({ nodes, selectedId, onSelect, maxDepth = 4 }: HierarchyDiagramProps) {
-  const { placed, edges } = useMemo(() => layout(nodes, maxDepth), [nodes, maxDepth]);
+/** Card diagram with dashed connectors, read left to right so long child lists grow downwards instead of sideways. */
+export default function HierarchyDiagram({ root, selectedId, onSelect }: HierarchyDiagramProps) {
+  const { placed, edges, columns, rows } = useMemo(() => layout(root), [root]);
   const byId = useMemo(() => new Map(placed.map(p => [p.node.id, p])), [placed]);
-  const scroller = useRef<HTMLDivElement>(null);
-  const focus = selectedId && byId.has(selectedId) ? selectedId : nodes[0]?.id;
+  const box = useRef<HTMLDivElement>(null);
+  const [avail, setAvail] = useState(900);
 
   useEffect(() => {
-    const el = scroller.current;
-    const p = focus ? byId.get(focus) : undefined;
-    if (el && p) el.scrollLeft = p.x + NODE_W / 2 - el.clientWidth / 2;
-  }, [focus, byId]);
+    const el = box.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setAvail(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
-  if (!placed.length) return null;
-  const width = Math.max(...placed.map(p => p.x + NODE_W)) + PAD;
-  const height = Math.max(...placed.map(p => p.y + NODE_H)) + PAD;
+  const gapX = avail < 800 ? 18 : 36;
+  const nodeW = Math.max(MIN_W, Math.min(MAX_W, (avail - 2 * PAD - (columns - 1) * gapX) / columns));
+  const xOf = (depth: number) => PAD + depth * (nodeW + gapX);
+  const width = xOf(columns - 1) + nodeW + PAD;
+  const height = PAD * 2 + rows * (NODE_H + GAP_Y);
 
   return (
-    // inline-size containment keeps a wide diagram scrolling inside its panel instead of widening the page.
-    <Box ref={scroller} sx={{ overflow: 'auto', contain: 'inline-size' }}>
+    // inline-size containment stops a wide diagram widening the page on narrow screens.
+    <Box ref={box} sx={{ overflowX: 'auto', contain: 'inline-size' }}>
       <Box sx={{ position: 'relative', width, height }}>
         <svg width={width} height={height} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
           {edges.map(([from, to]) => {
             const a = byId.get(from)!;
             const b = byId.get(to)!;
-            const x1 = a.x + NODE_W / 2, y1 = a.y + NODE_H, x2 = b.x + NODE_W / 2, y2 = b.y;
-            const mid = (y1 + y2) / 2;
-            return <path key={`${from}>${to}`} d={`M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`}
+            const x1 = xOf(a.depth) + nodeW, y1 = a.y + NODE_H / 2, x2 = xOf(b.depth), y2 = b.y + NODE_H / 2;
+            // Elbow connectors from one trunk per parent keep long child lists tidy.
+            const trunk = x1 + (x2 - x1) / 2;
+            return <path key={`${from}>${to}`} d={`M ${x1} ${y1} H ${trunk} V ${y2} H ${x2}`}
               fill="none" stroke="#888" strokeWidth={1.5} strokeDasharray="5 3" opacity={0.6} />;
           })}
         </svg>
-        {placed.map(({ node, x, y }) => (
+        {placed.map(({ node, depth, y }) => (
           <Paper
             key={node.id}
             variant="outlined"
             onClick={() => onSelect(node.id)}
             sx={{
-              position: 'absolute', left: x, top: y, width: NODE_W, minHeight: NODE_H, p: 1,
-              cursor: 'pointer', borderLeft: `3px solid ${node.color}`, bgcolor: 'background.paper',
+              position: 'absolute', left: xOf(depth), top: y, width: nodeW, height: NODE_H, px: 1, py: 0.5,
+              cursor: 'pointer', borderLeft: `3px solid ${node.color}`, bgcolor: 'background.paper', overflow: 'hidden',
               outline: selectedId === node.id ? `2px solid ${node.color}` : 'none',
-              transition: 'box-shadow 0.15s, transform 0.15s',
-              '&:hover': { boxShadow: 3, transform: 'scale(1.03)', zIndex: 2 },
+              transition: 'box-shadow 0.15s',
+              '&:hover': { boxShadow: 3, zIndex: 2 },
             }}
           >
-            <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.6rem', textTransform: 'uppercase', color: node.color, lineHeight: 1.2, display: 'block' }}>
-              {node.label}
-            </Typography>
-            <Typography variant="body2" title={node.value} sx={{ fontSize: '0.7rem', fontWeight: 500, lineHeight: 1.3, mt: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 0.5 }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.6rem', textTransform: 'uppercase', color: node.color, lineHeight: 1.3 }}>
+                {node.label}
+              </Typography>
+              {node.badge && (
+                <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.secondary', lineHeight: 1.3 }}>{node.badge}</Typography>
+              )}
+            </Box>
+            <Typography variant="body2" title={node.value} sx={{ fontSize: '0.75rem', fontWeight: 500, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {node.value}
             </Typography>
             {node.subtext && (
-              <Typography variant="caption" title={node.subtext} sx={{ fontSize: '0.55rem', color: 'text.secondary', lineHeight: 1.2, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <Typography variant="caption" title={node.subtext} sx={{ fontSize: '0.6rem', color: 'text.secondary', lineHeight: 1.3, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {node.subtext}
               </Typography>
             )}

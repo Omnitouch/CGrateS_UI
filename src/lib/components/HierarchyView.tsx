@@ -1,11 +1,10 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, CircularProgress, InputAdornment, Paper, Tab, Table, TableBody, TableCell, TableRow, Tabs, TextField, Typography } from '@mui/material';
+import { Alert, Box, Breadcrumbs, Button, CircularProgress, Dialog, DialogTitle, Link, InputAdornment, Paper, Tab, Table, TableBody, TableCell, TableRow, Tabs, TextField, Typography } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
+import EditIcon from '@mui/icons-material/Edit';
 import HierarchyTree, { LazyTreeContext, type HNode, type LazyTree } from './HierarchyTree';
 import HierarchyDiagram from './HierarchyDiagram';
 
-/** Children shown under the selected node in the diagram; the rest are one "+N more" card. */
-const DIAGRAM_CHILDREN = 12;
 const DETAIL_CHIPS = 60;
 const RAW_CHARS = 20000;
 
@@ -26,17 +25,32 @@ function findPath(root: HNode, id: string, childrenOf: (n: HNode) => HNode[] | u
   return null;
 }
 
-/** The path to the selected node, then a capped set of its children, so the diagram stays readable at any size. */
+/** Columns in the diagram, counting the parent kept above the selection. */
+const DIAGRAM_COLUMNS = 4;
+const DIAGRAM_BUDGET = 90;
+/** Children shown for the selected node, and for each node below it. */
+const DIAGRAM_CHILDREN_SELECTED = 50;
+const DIAGRAM_CHILDREN_BELOW = 8;
+
+/** The path to the selected node, then a few levels below it, capped per node and overall so the diagram stays readable at any size. */
 function focusTree(path: HNode[], childrenOf: (n: HNode) => HNode[] | undefined): HNode {
-  const sel = path[path.length - 1];
-  const kids = childrenOf(sel) ?? [];
-  const shown: HNode[] = kids.slice(0, DIAGRAM_CHILDREN).map(k => ({ ...k, children: undefined }));
-  if (kids.length > DIAGRAM_CHILDREN) {
-    shown.push({ id: `${sel.id}/__more`, label: 'More', value: `+${kids.length - DIAGRAM_CHILDREN} more`, subtext: 'Use the tree to browse or filter', color: '#757575' });
-  }
-  let node: HNode = { ...sel, children: shown };
-  for (let i = path.length - 2; i >= 0; i--) node = { ...path[i], children: [node] };
-  return node;
+  let budget = DIAGRAM_BUDGET;
+  const levels = DIAGRAM_COLUMNS - (path.length > 1 ? 2 : 1);
+  const below = (n: HNode, level: number): HNode => {
+    const kids = level < levels ? childrenOf(n) ?? [] : [];
+    const cap = level === 0 ? DIAGRAM_CHILDREN_SELECTED : DIAGRAM_CHILDREN_BELOW;
+    const take = kids.slice(0, Math.min(cap, Math.max(budget, 0)));
+    budget -= take.length;
+    const shown = take.map(k => below(k, level + 1));
+    if (kids.length > take.length) {
+      shown.push({ id: `${n.id}/__more`, label: 'More', value: `+${kids.length - take.length} more`, subtext: 'Select to focus here, or filter the tree', color: '#757575' });
+    }
+    return { ...n, children: shown.length ? shown : undefined };
+  };
+  const sel = below(path[path.length - 1], 0);
+  // Only the parent is kept above the selection; the breadcrumb shows the rest of the way up.
+  const parent = path[path.length - 2];
+  return parent ? { ...parent, children: [sel] } : sel;
 }
 
 /** Every loaded node that matches, plus the ancestors that lead to it. */
@@ -136,6 +150,13 @@ export default function HierarchyView({ root, numberLookup }: HierarchyViewProps
       `${n.value} ${n.subtext ?? ''} ${n.badge ?? ''}`.toLowerCase().includes(deferred) || !!hits?.has(n.value));
   }, [deferred, numberHits, root, childrenOf, withExtra]);
 
+  const refresh = useCallback((n: HNode) => {
+    requested.current.delete(`d:${n.id}`);
+    requested.current.delete(`c:${n.id}`);
+    setExtra(s => { const { [n.id]: _gone, ...rest } = s; return rest; });
+    setLoaded(s => { const { [n.id]: _gone, ...rest } = s; return rest; });
+  }, []);
+
   const tree: LazyTree = useMemo(() => ({
     match: filtered?.match ?? null,
     forceOpen: filtered?.forceOpen ?? null,
@@ -153,9 +174,13 @@ export default function HierarchyView({ root, numberLookup }: HierarchyViewProps
   const selected = path[path.length - 1];
 
   useEffect(() => { expand(selected); loadDetails(selected); }, [selected, expand, loadDetails]);
+  const [editing, setEditing] = useState(false);
 
   const pick = (n: HNode, toDetails: boolean) => {
-    if (n.id.endsWith('/__more')) return;
+    if (n.id.endsWith('/__more')) {
+      setSelectedId(n.id.slice(0, -'/__more'.length));
+      return;
+    }
     setSelectedId(n.id);
     if (toDetails) setTab(1);
   };
@@ -189,30 +214,41 @@ export default function HierarchyView({ root, numberLookup }: HierarchyViewProps
           <Box sx={{ p: 2 }}>
             {tab === 0 && (
               <>
-                {path.length > 1 && (
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                    Showing the path to {selected.value}; select a card or tree item to move down.
-                  </Typography>
-                )}
-                <HierarchyDiagram nodes={[diagramRoot]} selectedId={selectedId} onSelect={id => {
+                <Breadcrumbs maxItems={6} sx={{ mb: 1.5, fontSize: '0.8rem' }}>
+                  {path.map((n, i) => (i === path.length - 1
+                    ? <Typography key={n.id} sx={{ fontSize: '0.8rem', color: n.color, fontWeight: 600 }}>{n.value}</Typography>
+                    : <Link key={n.id} component="button" underline="hover" color="inherit" sx={{ fontSize: '0.8rem' }} onClick={() => pick(n, false)}>{n.value}</Link>))}
+                </Breadcrumbs>
+                <HierarchyDiagram root={diagramRoot} selectedId={selectedId} onSelect={id => {
                   const n = findPath(diagramRoot, id, x => x.children)?.pop();
                   if (n) pick(n, id === selectedId);
-                }} maxDepth={path.length} />
+                }} />
               </>
             )}
-            {tab === 1 && <NodeDetails node={selected} kids={tree.childrenOf(selected)} loading={tree.loading(selected.id)} onSelect={n => pick(n, true)} />}
+            {tab === 1 && <NodeDetails node={selected} kids={tree.childrenOf(selected)} loading={tree.loading(selected.id)} onSelect={n => pick(n, true)} onEdit={() => setEditing(true)} />}
           </Box>
         </Paper>
       </Box>
+      {selected.editor && (
+        <Dialog open={editing} onClose={() => setEditing(false)} maxWidth="md" fullWidth>
+          <DialogTitle>{selected.editLabel ?? 'Edit'}: {selected.value}</DialogTitle>
+          {editing && selected.editor(saved => { setEditing(false); if (saved) refresh(selected); })}
+        </Dialog>
+      )}
     </LazyTreeContext.Provider>
   );
 }
 
-function NodeDetails({ node, kids, loading, onSelect }: { node: HNode; kids?: HNode[]; loading: boolean; onSelect: (n: HNode) => void }) {
+function NodeDetails({ node, kids, loading, onSelect, onEdit }: { node: HNode; kids?: HNode[]; loading: boolean; onSelect: (n: HNode) => void; onEdit: () => void }) {
   return (
     <Box>
-      <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', color: node.color }}>{node.label}</Typography>
-      <Typography variant="h6" sx={{ wordBreak: 'break-all', mb: 1 }}>{node.value}</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', color: node.color }}>{node.label}</Typography>
+          <Typography variant="h6" sx={{ wordBreak: 'break-all', mb: 1 }}>{node.value}</Typography>
+        </Box>
+        {node.editor && <Button size="small" variant="outlined" startIcon={<EditIcon />} onClick={onEdit}>{node.editLabel ?? 'Edit'}</Button>}
+      </Box>
       {node.status === 'error' && <Alert severity="error" sx={{ mb: 1 }}>Failed to load part of this object</Alert>}
       {node.details && node.details.length > 0 && (
         <Table size="small" sx={{ mb: 2 }}>
