@@ -13,40 +13,8 @@ import SearchableSelect from '../components/SearchableSelect';
 import ExpiryTimeInput from '../components/ExpiryTimeInput';
 import { BalanceName, BalanceBucket, CompositeId } from '../components/ParsedId';
 import { BALANCE_TYPES, BalanceValueDisplay, BalanceValueInput } from '../components/BalanceValue';
-
-const ACTION_TYPES = [
-  '*log',
-  '*reset_triggers',
-  '*cdrlog',
-  '*set_recurrent',
-  '*unset_recurrent',
-  '*allow_negative',
-  '*deny_negative',
-  '*reset_account',
-  '*topup_reset',
-  '*topup',
-  '*debit_reset',
-  '*debit',
-  '*reset_counters',
-  '*enable_account',
-  '*disable_account',
-  '*http_post',
-  '*http_post_async',
-  '*mail_async',
-  '*set_ddestinations',
-  '*remove_account',
-  '*remove_balance',
-  '*set_balance',
-  '*transfer_monetary_default',
-  '*cgr_rpc',
-  '*topup_zero_negative',
-  '*set_expiry',
-  '*publish_account',
-  '*publish_balance',
-  '*remove_session_costs',
-  '*remove_expired',
-  '*cdr_account',
-];
+import IdMultiSelect, { splitIds, joinIds, stringMapToIds } from '../components/IdMultiSelect';
+import { ACTION_TYPES, EXTRA_PARAMETERS_HINTS } from '../cgrConsts';
 
 const BALANCE_WEIGHT_OPTIONS = ['*time_desc', '*time_asc'];
 
@@ -54,18 +22,18 @@ interface ActionBalance {
   Uuid?: string;
   ID?: string;
   Type?: string;
-  Value?: { Static: number };
+  Value?: { Static: number; Method?: string; Params?: Record<string, unknown> | null } | null;
   ExpirationDate?: string;
-  Weight?: number | string;
-  DestinationIDs?: string | Record<string, boolean>;
+  Weight?: number | string | null;
+  DestinationIDs?: string | Record<string, boolean> | null;
   RatingSubject?: string;
-  Categories?: Record<string, unknown>;
-  SharedGroups?: Record<string, unknown>;
-  TimingIDs?: Record<string, unknown>;
+  Categories?: string | Record<string, boolean> | null;
+  SharedGroups?: string | Record<string, boolean> | null;
+  TimingIDs?: string | Record<string, boolean> | null;
   Timings?: unknown;
   Disabled?: boolean | null;
   Factors?: unknown;
-  Blocker?: boolean;
+  Blocker?: boolean | null;
 }
 
 interface ActionPart {
@@ -93,14 +61,15 @@ function normalizeActionParts(parts: ActionPart[]): ActionPart[] {
   return parts.map((part) => {
     const { Balance, ExtraParameters } = part;
 
+    // StringMaps become ;-joined strings with "!" kept for excluded IDs, as SetActions parses them.
     const updatedBalance: ActionBalance | null = Balance
       ? {
           ...Balance,
-          DestinationIDs: Balance.DestinationIDs
-            ? typeof Balance.DestinationIDs === 'object'
-              ? Object.keys(Balance.DestinationIDs).join(';')
-              : Balance.DestinationIDs
-            : '',
+          DestinationIDs: joinIds(stringMapToIds(Balance.DestinationIDs)),
+          Categories: joinIds(stringMapToIds(Balance.Categories)),
+          SharedGroups: joinIds(stringMapToIds(Balance.SharedGroups)),
+          TimingIDs: joinIds(stringMapToIds(Balance.TimingIDs)),
+          Weight: Balance.Weight ?? '',
         }
       : null;
 
@@ -138,9 +107,9 @@ function makeEmptyPart(): ActionPart {
       Weight: '',
       DestinationIDs: '',
       RatingSubject: '',
-      Categories: {},
-      SharedGroups: {},
-      TimingIDs: {},
+      Categories: '',
+      SharedGroups: '',
+      TimingIDs: '',
       Timings: null,
       Disabled: null,
       Factors: null,
@@ -168,6 +137,7 @@ export function Component() {
   const [accountsLoading, setAccountsLoading] = useState(false);
 
   const [destinationIds, setDestinationIds] = useState<string[]>([]);
+  const [filterIds, setFilterIds] = useState<string[]>([]);
 
   const fetchActions = useCallback(async () => {
     if (!baseUrl || !tenant) return;
@@ -215,18 +185,11 @@ export function Component() {
     }
   }, [baseUrl, tenant]);
 
-  // DataDB has no destination listing API, so offer the IDs defined across all tariff plans.
   const fetchDestinationIds = useCallback(async () => {
     if (!baseUrl) return;
-    try {
-      const tpids = await api.getTPIds(baseUrl) || [];
-      const lists = await Promise.all(tpids.map(tpid =>
-        api.getTPDestinationIDs(baseUrl, tpid).catch(() => [] as string[])));
-      setDestinationIds([...new Set(lists.flatMap(l => l || []))].sort());
-    } catch {
-      setDestinationIds([]);
-    }
-  }, [baseUrl]);
+    setDestinationIds(await api.getAllTPDestinationIds(baseUrl));
+    api.getFilterIDs(baseUrl, tenant).then(r => setFilterIds((r || []).sort())).catch(() => setFilterIds([]));
+  }, [baseUrl, tenant]);
 
   // Fetch accounts when modal opens
   useEffect(() => {
@@ -337,17 +300,14 @@ export function Component() {
           if (typeof part.Balance.Disabled === 'boolean') {
             action.BalanceDisabled = part.Balance.Disabled ? 'true' : 'false';
           }
-          action.Directions = '*out';
-          action.Units = String(part.Balance.Value?.Static || 0);
-          action.DestinationIds =
-            typeof part.Balance.DestinationIDs === 'object' && part.Balance.DestinationIDs
-              ? Object.keys(part.Balance.DestinationIDs as Record<string, boolean>).join(';')
-              : part.Balance.DestinationIDs || '';
+          const value = part.Balance.Value;
+          // A value formula (e.g. *incremental) has to go back as JSON or it would collapse to its Static 0.
+          action.Units = value?.Method ? JSON.stringify(value) : String(value?.Static || 0);
+          action.DestinationIds = String(part.Balance.DestinationIDs || '');
           action.RatingSubject = part.Balance.RatingSubject || '';
-          action.Categories = '';
-          action.SharedGroups = '';
-          action.TimingTags = '';
-          action.TimingIDs = '';
+          action.Categories = String(part.Balance.Categories || '');
+          action.SharedGroups = String(part.Balance.SharedGroups || '');
+          action.TimingTags = String(part.Balance.TimingIDs || '');
           const balanceWeight = String(part.Balance.Weight ?? '').trim();
           if (balanceWeight) action.BalanceWeight = balanceWeight;
         }
@@ -513,12 +473,12 @@ export function Component() {
               <Box sx={{ mb: 1.5 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>DestinationIDs</Typography>
                 {editing ? (
-                  <Autocomplete<string, true, false, true>
-                    multiple freeSolo fullWidth size="small" sx={{ mt: 0.5 }}
+                  <IdMultiSelect
+                    label="DestinationIDs" sx={{ mt: 0.5 }}
                     options={['*any', ...destinationIds]}
-                    value={((part.Balance?.DestinationIDs as string) || '').split(';').filter(Boolean)}
-                    onChange={(_e, v) => handleEditChange(index, 'Balance.DestinationIDs', v.map(d => d.trim()).filter(Boolean).join(';'))}
-                    renderInput={params => <TextField {...params} placeholder="Select or type, prefix ! to exclude" />}
+                    value={splitIds(part.Balance?.DestinationIDs as string)}
+                    onChange={v => handleEditChange(index, 'Balance.DestinationIDs', joinIds(v))}
+                    placeholder="Select or type, prefix ! to exclude"
                   />
                 ) : (
                   <Typography variant="body1">{(part.Balance?.DestinationIDs as string) || 'N/A'}</Typography>
@@ -529,10 +489,11 @@ export function Component() {
               <Box sx={{ mb: 1.5 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>Filters</Typography>
                 {editing ? (
-                  <TextField
-                    fullWidth size="small" sx={{ mt: 0.5 }}
-                    value={Array.isArray(part.Filters) ? part.Filters.join(';') : (part.Filters || '')}
-                    onChange={e => handleEditChange(index, 'Filters', e.target.value)}
+                  <IdMultiSelect
+                    label="Filters" sx={{ mt: 0.5 }} options={filterIds}
+                    value={Array.isArray(part.Filters) ? part.Filters : splitIds(part.Filters)}
+                    onChange={v => handleEditChange(index, 'Filters', joinIds(v))}
+                    helperText="Checked against each balance before the action applies to it"
                   />
                 ) : (
                   <Typography variant="body1">
@@ -619,6 +580,12 @@ export function Component() {
                 ) : (
                   <BalanceValueDisplay value={part.Balance?.Value?.Static ?? 0} balanceType={part.Balance?.Type} />
                 )}
+                {part.Balance?.Value?.Method && (
+                  <Typography variant="caption" color="text.secondary">
+                    Value formula {part.Balance.Value.Method} {JSON.stringify(part.Balance.Value.Params)}
+                    {editing && '; kept unless you change the value'}
+                  </Typography>
+                )}
               </Box>
 
               {/* Balance Weight */}
@@ -637,12 +604,42 @@ export function Component() {
                 )}
               </Box>
 
+              {(['Categories', 'SharedGroups', 'TimingIDs'] as const).map(field => (
+                <Box key={field} sx={{ mb: 1.5 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>Balance {field}</Typography>
+                  {editing ? (
+                    <IdMultiSelect
+                      label={field} sx={{ mt: 0.5 }} options={[]}
+                      value={splitIds(part.Balance?.[field] as string)}
+                      onChange={v => handleEditChange(index, `Balance.${field}`, joinIds(v))}
+                      placeholder="Type and press Enter, prefix ! to exclude"
+                    />
+                  ) : (
+                    <Typography variant="body1">{(part.Balance?.[field] as string) || 'N/A'}</Typography>
+                  )}
+                </Box>
+              ))}
+
+              <Box sx={{ mb: 1.5 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>Rating Subject</Typography>
+                {editing ? (
+                  <TextField
+                    fullWidth size="small" sx={{ mt: 0.5 }}
+                    value={part.Balance?.RatingSubject || ''}
+                    onChange={e => handleEditChange(index, 'Balance.RatingSubject', e.target.value)}
+                  />
+                ) : (
+                  <Typography variant="body1">{part.Balance?.RatingSubject || 'N/A'}</Typography>
+                )}
+              </Box>
+
               {/* ExtraParameters */}
               <Box sx={{ mb: 1.5 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>Extra Parameters</Typography>
                 {editing ? (
                   <TextField
                     fullWidth multiline minRows={2} size="small" sx={{ mt: 0.5, fontFamily: 'monospace' }}
+                    helperText={EXTRA_PARAMETERS_HINTS[part.ActionType || '']}
                     value={typeof part.ExtraParameters === 'string'
                       ? part.ExtraParameters
                       : JSON.stringify(part.ExtraParameters, null, 2)}
@@ -672,6 +669,19 @@ export function Component() {
                   />
                 ) : (
                   <Typography variant="body1">{part.BalanceBlocker ? 'Yes' : 'No'}</Typography>
+                )}
+                {editing ? (
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={!!part.Balance?.Disabled}
+                        onChange={e => handleEditChange(index, 'Balance.Disabled', e.target.checked)}
+                      />
+                    }
+                    label="BalanceDisabled"
+                  />
+                ) : (
+                  <Typography variant="body1">Disabled: {part.Balance?.Disabled ? 'Yes' : 'No'}</Typography>
                 )}
               </Box>
 

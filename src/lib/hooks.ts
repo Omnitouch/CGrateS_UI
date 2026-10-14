@@ -160,7 +160,7 @@ export function useActionTriggers(tenant: string) {
   const baseUrl = useBaseUrl();
   return useQuery({
     queryKey: ['ocs', 'action-triggers', baseUrl, tenant],
-    queryFn: () => api.getActionTriggers(baseUrl!, tenant),
+    queryFn: () => api.getActionTriggers(baseUrl!),
     enabled: !!baseUrl && !!tenant,
   });
 }

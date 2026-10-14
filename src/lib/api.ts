@@ -1,4 +1,4 @@
-import type { CGREventArgs, JsonRpcResponse } from './types';
+import type { ActionPlan, ActionTriggerEntry, CGREventArgs, JsonRpcResponse } from './types';
 
 let rpcId = 0;
 
@@ -35,6 +35,11 @@ export async function jsonRpc<T = unknown>(
   return data.result as T;
 }
 
+/** CGrateS answers an empty lookup with the NOT_FOUND error rather than an empty result. */
+export function isNotFound(e: unknown) {
+  return e instanceof Error && e.message === 'NOT_FOUND';
+}
+
 // --- Accounts ---
 
 export function getAccounts(baseUrl: string, tenant: string, offset = 0, limit = 50, accountIds?: string[]) {
@@ -48,7 +53,7 @@ export function getAccounts(baseUrl: string, tenant: string, offset = 0, limit =
 }
 
 export function setAccount(baseUrl: string, params: Record<string, unknown>) {
-  return jsonRpc(baseUrl, 'ApierV2.SetAccount', [params]);
+  return jsonRpc(baseUrl, 'APIerSv2.SetAccount', [params]);
 }
 
 export function removeAccount(baseUrl: string, tenant: string, account: string) {
@@ -61,6 +66,22 @@ export function executeAction(baseUrl: string, tenant: string, account: string, 
 
 export function removeBalances(baseUrl: string, params: Record<string, unknown>) {
   return jsonRpc(baseUrl, 'APIerSv1.RemoveBalances', [params]);
+}
+
+export function addBalance(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc(baseUrl, 'APIerSv1.AddBalance', [params]);
+}
+
+export function debitBalance(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc(baseUrl, 'APIerSv1.DebitBalance', [params]);
+}
+
+export function setBalance(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc(baseUrl, 'APIerSv1.SetBalance', [params]);
+}
+
+export function transferBalance(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc(baseUrl, 'APIerSv1.TransferBalance', [params]);
 }
 
 // --- CDRs ---
@@ -103,6 +124,13 @@ function tpIdsParams(tpid: string, search?: string) {
 
 export function getTPDestinationIDs(baseUrl: string, tpid: string, search?: string) {
   return jsonRpc<string[] | null>(baseUrl, 'ApierV1.GetTPDestinationIDs', [tpIdsParams(tpid, search)]);
+}
+
+/** DataDB has no destination listing API, so offer the IDs defined across all tariff plans. */
+export async function getAllTPDestinationIds(baseUrl: string): Promise<string[]> {
+  const tpids = await getTPIds(baseUrl).catch(() => [] as string[]) || [];
+  const lists = await Promise.all(tpids.map(tpid => getTPDestinationIDs(baseUrl, tpid).catch(() => [] as string[])));
+  return [...new Set(lists.flatMap(l => l || []))].sort();
 }
 
 export function getTPDestination(baseUrl: string, tpid: string, id: string) {
@@ -277,12 +305,28 @@ export function getActionPlanIDs(baseUrl: string, tenant: string) {
   return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetActionPlanIDs', [{ Tenant: tenant }]);
 }
 
-export function getActionPlan(baseUrl: string, tenant: string, id: string) {
-  return jsonRpc(baseUrl, 'APIerSv1.GetActionPlan', [{ Tenant: tenant, Id: id }]);
+export function getActionPlan(baseUrl: string, id: string) {
+  return jsonRpc<ActionPlan[]>(baseUrl, 'APIerSv1.GetActionPlan', [{ ID: id }]);
 }
 
 export function setActionPlan(baseUrl: string, params: Record<string, unknown>) {
-  return jsonRpc(baseUrl, 'ApierV1.SetActionPlan', [params]);
+  return jsonRpc(baseUrl, 'APIerSv1.SetActionPlan', [params]);
+}
+
+/** Like SetActionPlan, but stores AccountIDs on the plan; it does not queue *asap tasks. */
+export function setActionPlanAccounts(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc(baseUrl, 'APIerSv1.SetActionPlanAccounts', [params]);
+}
+
+/** Rebuilds the account -> action plan index from every plan's AccountIDs. */
+export function computeAccountActionPlans(baseUrl: string, tenant: string) {
+  return jsonRpc(baseUrl, 'APIerSv1.ComputeAccountActionPlans', [{ Tenant: tenant }]);
+}
+
+export function removeAccountFromActionPlan(baseUrl: string, tenant: string, account: string, actionPlanId: string) {
+  return jsonRpc(baseUrl, 'APIerSv1.RemoveActionTiming', [{
+    ActionPlanId: actionPlanId, Tenant: tenant, Account: account, ReloadScheduler: true,
+  }]);
 }
 
 export function removeActionPlan(baseUrl: string, id: string, tenant: string) {
@@ -295,16 +339,17 @@ export function getAccountActionPlan(baseUrl: string, tenant: string, account: s
 
 // --- Action Triggers ---
 
-export function getActionTriggers(baseUrl: string, tenant: string) {
-  return jsonRpc(baseUrl, 'APIerSv1.GetActionTriggers', [{ Tenant: tenant }]);
+export function getActionTriggers(baseUrl: string) {
+  return jsonRpc<ActionTriggerEntry[]>(baseUrl, 'APIerSv1.GetActionTriggers', [{}]);
 }
 
 export function setActionTrigger(baseUrl: string, params: Record<string, unknown>) {
   return jsonRpc(baseUrl, 'APIerSv1.SetActionTrigger', [params]);
 }
 
-export function removeActionTrigger(baseUrl: string, groupId: string, tenant: string) {
-  return jsonRpc(baseUrl, 'APIerSv1.RemoveActionTrigger', [{ GroupID: groupId, Tenant: tenant }]);
+/** Without uniqueId the whole group is removed. */
+export function removeActionTrigger(baseUrl: string, groupId: string, uniqueId = '') {
+  return jsonRpc(baseUrl, 'APIerSv1.RemoveActionTrigger', [{ GroupID: groupId, UniqueID: uniqueId }]);
 }
 
 // --- Upcoming (Scheduled) Action Plans ---
@@ -537,10 +582,6 @@ export function getRouteProfilesForEvent(baseUrl: string, args: CGREventArgs) {
 
 export function getAccountIDs(baseUrl: string, tenant: string) {
   return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetAccountIDs', [{ Tenant: tenant }]);
-}
-
-export function getRatingPlanIDs(baseUrl: string) {
-  return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetRatingPlanIDs', [{}]);
 }
 
 // --- Sessions ---
@@ -848,10 +889,15 @@ export function executeJsonRpc(baseUrl: string, payload: Record<string, unknown>
 
 // --- Account Action Triggers (on-account operations) ---
 
-export function removeAccountActionTriggers(baseUrl: string, tenant: string, account: string, uniqueId: string) {
+export function removeAccountActionTriggers(baseUrl: string, tenant: string, account: string, groupId: string, uniqueId: string) {
   return jsonRpc(baseUrl, 'APIerSv1.RemoveAccountActionTriggers', [{
-    Tenant: tenant, Account: account, UniqueID: uniqueId,
+    Tenant: tenant, Account: account, GroupID: groupId, UniqueID: uniqueId,
   }]);
+}
+
+/** Updates the trigger matching GroupID/UniqueID on the account, or adds it; CGrateS then re-evaluates the account's triggers. */
+export function setAccountActionTriggers(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc(baseUrl, 'APIerSv1.SetAccountActionTriggers', [params]);
 }
 
 export function resetAccountActionTriggers(baseUrl: string, tenant: string, account: string, uniqueId: string) {
@@ -860,8 +906,3 @@ export function resetAccountActionTriggers(baseUrl: string, tenant: string, acco
   }]);
 }
 
-export function removeAccountActionPlans(baseUrl: string, tenant: string, account: string, actionPlanIds: string[]) {
-  return jsonRpc(baseUrl, 'APIerSv1.RemoveAccountActionPlans', [{
-    Tenant: tenant, Account: account, ActionPlanIDs: actionPlanIds,
-  }]);
-}

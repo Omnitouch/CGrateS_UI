@@ -2,10 +2,11 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Box, Typography, Paper, Button, TextField, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Alert,
-  IconButton, Card, CardContent,
+  IconButton, Card, CardContent, Checkbox, FormControlLabel,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import EditIcon from '@mui/icons-material/Edit';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
@@ -14,6 +15,12 @@ import * as api from '../api';
 import { BalanceName, BalanceBucket, CompositeId } from '../components/ParsedId';
 import type { Account, Balance, ActionTriggerEntry, AccountActionPlan } from '../types';
 import SearchableSelect from '../components/SearchableSelect';
+import IdMultiSelect from '../components/IdMultiSelect';
+import { formatBalanceValue } from '../components/BalanceValue';
+import BalanceDialog, { type BalanceDialogMode } from '../components/BalanceDialog';
+import ActionTriggerFormFields, {
+  type TriggerForm, emptyTriggerForm, triggerToForm, formToActionTrigger, triggerFormErrors, clearedBalanceFields,
+} from '../components/ActionTriggerForm';
 
 // --- Utility functions ---
 
@@ -78,6 +85,27 @@ function formatUsage(usage: number, tor: string): React.ReactNode {
   return usage;
 }
 
+function splitAccountId(id: string): [string, string] {
+  const i = id.indexOf(':');
+  return [id.slice(0, i), id.slice(i + 1)];
+}
+
+const errMsg = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
+
+/** UUIDv4 from getRandomValues, which unlike randomUUID also works on plain-HTTP origins. */
+function newUuid() {
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+interface TriggerEdit {
+  form: TriggerForm;
+  original: ActionTriggerEntry | null;
+}
+
 export function Component() {
   const baseUrl = useOcsBaseUrl();
   const { tenants, defaultTenant } = useOcsTenants();
@@ -87,33 +115,42 @@ export function Component() {
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  // Detail modal
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
 
-  // Create account modal
   const [createOpen, setCreateOpen] = useState(false);
   const [newAccountId, setNewAccountId] = useState('');
+  const [newAllowNegative, setNewAllowNegative] = useState(false);
+  const [newDisabled, setNewDisabled] = useState(false);
+  const [newPlanIds, setNewPlanIds] = useState<string[]>([]);
+  const [newTriggerIds, setNewTriggerIds] = useState<string[]>([]);
 
-  // Execute action
   const [executeActionId, setExecuteActionId] = useState('');
-  const [actionsList, setActionsList] = useState<string[]>([]);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  // Action plans for selected account
-  const [accountActionPlans, setAccountActionPlans] = useState<AccountActionPlan[]>([]);
+  // Option lists for the pickers
+  const [actionsList, setActionsList] = useState<string[]>([]);
+  const [planIds, setPlanIds] = useState<string[]>([]);
+  const [triggerGroups, setTriggerGroups] = useState<string[]>([]);
+  const [accountIds, setAccountIds] = useState<string[]>([]);
+  const [destinationIds, setDestinationIds] = useState<string[]>([]);
 
-  // Balance detail sub-modal
+  const [accountActionPlans, setAccountActionPlans] = useState<AccountActionPlan[]>([]);
+  const [attachPlanId, setAttachPlanId] = useState('');
+  const [attachTriggerIds, setAttachTriggerIds] = useState<string[]>([]);
+
   const [balanceModalOpen, setBalanceModalOpen] = useState(false);
   const [selectedBalance, setSelectedBalance] = useState<Balance | null>(null);
+  const [balanceDialog, setBalanceDialog] = useState<{ mode: BalanceDialogMode; balance: Balance | null } | null>(null);
 
-  // Action trigger detail sub-modal
   const [triggerModalOpen, setTriggerModalOpen] = useState(false);
   const [selectedTrigger, setSelectedTrigger] = useState<ActionTriggerEntry | null>(null);
+  const [triggerEdit, setTriggerEdit] = useState<TriggerEdit | null>(null);
+  const [triggerSaving, setTriggerSaving] = useState(false);
 
-  // Ref for auto-refresh to avoid stale closures
   const selectedAccountRef = useRef<Account | null>(null);
   const detailOpenRef = useRef(false);
 
@@ -139,14 +176,26 @@ export function Component() {
       setAccounts(result || []);
       setPage(p);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to fetch accounts');
+      setError(errMsg(e, 'Failed to fetch accounts'));
       setAccounts([]);
     } finally {
       setLoading(false);
     }
   }, [baseUrl, tenant, accountFilter]);
 
-  // Fetch account details (used for initial load and auto-refresh)
+  const loadOptions = useCallback(async (t: string) => {
+    if (!baseUrl) return;
+    api.getActions(baseUrl, t).then(r => setActionsList(Object.keys(r || {}).sort())).catch(() => setActionsList([]));
+    api.getActionPlanIDs(baseUrl, t).then(r => setPlanIds((r || []).sort())).catch(() => setPlanIds([]));
+    api.getActionTriggers(baseUrl)
+      .then(r => setTriggerGroups([...new Set((r || []).map(x => x.ID))].sort()))
+      .catch(() => setTriggerGroups([]));
+    (api.getAccounts(baseUrl, t, 0, 0) as Promise<Account[] | null>)
+      .then(r => setAccountIds((r || []).map(x => splitAccountId(x.ID)[1]).sort()))
+      .catch(() => setAccountIds([]));
+    api.getAllTPDestinationIds(baseUrl).then(setDestinationIds).catch(() => setDestinationIds([]));
+  }, [baseUrl]);
+
   const fetchAccountDetails = useCallback(async (t: string, a: string, autoRefresh = false) => {
     if (!baseUrl) return;
     if (!autoRefresh) setModalLoading(true);
@@ -162,12 +211,29 @@ export function Component() {
     }
   }, [baseUrl]);
 
-  // Auto-refresh account details every 5 seconds when modal is open
+  const fetchAccountPlans = useCallback(async (t: string, a: string) => {
+    if (!baseUrl) return;
+    try {
+      const plans = await api.getAccountActionPlan(baseUrl, t, a) as AccountActionPlan[];
+      setAccountActionPlans(Array.isArray(plans) ? plans : []);
+    } catch {
+      setAccountActionPlans([]);
+    }
+  }, [baseUrl]);
+
+  /** Re-read the account and its plans after a change, without the full-dialog spinner. */
+  const refresh = useCallback(async () => {
+    const acc = selectedAccountRef.current;
+    if (!acc) return;
+    const [t, a] = splitAccountId(acc.ID);
+    await Promise.all([fetchAccountDetails(t, a, true), fetchAccountPlans(t, a)]);
+  }, [fetchAccountDetails, fetchAccountPlans]);
+
   useEffect(() => {
     let intervalId: ReturnType<typeof setInterval>;
 
     if (detailOpen && selectedAccount) {
-      const [t, a] = selectedAccount.ID.split(':');
+      const [t, a] = splitAccountId(selectedAccount.ID);
       intervalId = setInterval(() => {
         if (detailOpenRef.current && selectedAccountRef.current) {
           fetchAccountDetails(t, a, true);
@@ -183,11 +249,11 @@ export function Component() {
   const handleRowClick = useCallback(async (account: Account) => {
     if (!baseUrl) return;
     setModalLoading(true);
-    const [t, a] = account.ID.split(':');
-
-    // Set initial data and open the modal
+    const [t, a] = splitAccountId(account.ID);
     setSelectedAccount(account);
     setDetailOpen(true);
+    setNotice(null);
+    loadOptions(t);
 
     try {
       const details = await api.getAccounts(baseUrl, t, 0, 1, [a]) as Account[];
@@ -195,75 +261,63 @@ export function Component() {
     } catch {
       setSelectedAccount(account);
     }
-
-    // Fetch action plans for the account
-    try {
-      const plans = await api.getAccountActionPlan(baseUrl, t, a) as AccountActionPlan[];
-      setAccountActionPlans(Array.isArray(plans) ? plans : []);
-    } catch {
-      setAccountActionPlans([]);
-    }
-
-    // Fetch available actions for execute dropdown
-    try {
-      const actionsResult = await api.getActions(baseUrl, tenant);
-      if (actionsResult) {
-        setActionsList(Object.keys(actionsResult));
-      }
-    } catch {
-      setActionsList([]);
-    }
-
+    await fetchAccountPlans(t, a);
     setModalLoading(false);
-  }, [baseUrl, tenant]);
+  }, [baseUrl, loadOptions, fetchAccountPlans]);
 
   const handleCloseModal = useCallback(() => {
     setDetailOpen(false);
     setSelectedAccount(null);
-    setActionsList([]);
     setExecuteActionId('');
     setShowConfirm(false);
     setAccountActionPlans([]);
+    setAttachPlanId('');
+    setAttachTriggerIds([]);
+    setNotice(null);
   }, []);
+
+  /** Runs an account change, reporting failure in the page alert and refreshing on success. */
+  const run = useCallback(async (fn: (t: string, a: string) => Promise<unknown>, failure: string, success?: string) => {
+    const acc = selectedAccountRef.current;
+    if (!baseUrl || !acc) return;
+    const [t, a] = splitAccountId(acc.ID);
+    try {
+      await fn(t, a);
+      setError(null);
+      if (success) setNotice(success);
+      await refresh();
+    } catch (e: unknown) {
+      setError(errMsg(e, failure));
+    }
+  }, [baseUrl, refresh]);
 
   const handleDelete = useCallback(async (account: Account) => {
     if (!baseUrl || !window.confirm(`Delete account ${account.ID}?`)) return;
     try {
-      const [t, a] = account.ID.split(':');
+      const [t, a] = splitAccountId(account.ID);
       await api.removeAccount(baseUrl, t, a);
       fetchAccounts(page);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to delete');
+      setError(errMsg(e, 'Failed to delete'));
     }
   }, [baseUrl, page, fetchAccounts]);
 
-  const handleToggleDisabled = useCallback(async () => {
-    if (!baseUrl || !selectedAccount) return;
-    const [t, a] = selectedAccount.ID.split(':');
-    try {
-      await api.setAccount(baseUrl, {
-        Tenant: t, Account: a, ReloadScheduler: true,
-        ExtraOptions: { Disabled: !selectedAccount.Disabled },
-      });
-      fetchAccountDetails(t, a);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to update');
-    }
-  }, [baseUrl, selectedAccount, fetchAccountDetails]);
+  const handleToggle = (option: 'Disabled' | 'AllowNegative') => run(
+    (t, a) => api.setAccount(baseUrl!, {
+      Tenant: t, Account: a, ExtraOptions: { [option]: !selectedAccount?.[option] },
+    }),
+    `Failed to update ${option}`,
+  );
 
-  const handleToggleAllowNegative = useCallback(async () => {
-    if (!baseUrl || !selectedAccount) return;
-    const [t, a] = selectedAccount.ID.split(':');
-    try {
-      await api.setAccount(baseUrl, {
-        Tenant: t, Account: a, ReloadScheduler: true,
-        ExtraOptions: { AllowNegative: !selectedAccount.AllowNegative },
-      });
-      fetchAccountDetails(t, a);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to update AllowNegative');
-    }
-  }, [baseUrl, selectedAccount, fetchAccountDetails]);
+  const openCreate = () => {
+    setNewAccountId('');
+    setNewAllowNegative(false);
+    setNewDisabled(false);
+    setNewPlanIds([]);
+    setNewTriggerIds([]);
+    setCreateOpen(true);
+    loadOptions(tenant);
+  };
 
   const handleCreateAccount = useCallback(async () => {
     if (!baseUrl || !newAccountId.trim()) return;
@@ -271,142 +325,110 @@ export function Component() {
       await api.setAccount(baseUrl, {
         Tenant: tenant,
         Account: newAccountId.trim(),
+        ActionPlanIDs: newPlanIds,
+        ActionTriggerIDs: newTriggerIds,
+        ExtraOptions: { AllowNegative: newAllowNegative, Disabled: newDisabled },
         ReloadScheduler: true,
       });
       setCreateOpen(false);
-      setNewAccountId('');
       fetchAccounts(page);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to create account');
+      setError(errMsg(e, 'Failed to create account'));
     }
-  }, [baseUrl, tenant, newAccountId, page, fetchAccounts]);
+  }, [baseUrl, tenant, newAccountId, newPlanIds, newTriggerIds, newAllowNegative, newDisabled, page, fetchAccounts]);
 
-  // 2-step confirm for execute action
-  const handleExecuteActionClick = useCallback(() => {
-    setShowConfirm(true);
-  }, []);
-
-  const handleConfirmExecuteAction = useCallback(async () => {
-    if (!baseUrl || !selectedAccount || !executeActionId) return;
-    const [t, a] = selectedAccount.ID.split(':');
-    try {
-      await api.executeAction(baseUrl, t, a, executeActionId);
-      fetchAccountDetails(t, a);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to execute action');
-    }
+  const handleConfirmExecuteAction = async () => {
+    if (!executeActionId) return;
+    await run((t, a) => api.executeAction(baseUrl!, t, a, executeActionId), 'Failed to execute action', `Executed ${executeActionId}.`);
     setShowConfirm(false);
-  }, [baseUrl, selectedAccount, executeActionId, fetchAccountDetails]);
+  };
 
-  // Remove balance
-  const handleRemoveBalance = useCallback(async (balance: Balance, category: string) => {
-    if (!baseUrl || !selectedAccount) return;
-    if (!window.confirm(`Are you sure you want to remove the balance with ID: ${balance.ID}?`)) return;
-    const [t, a] = selectedAccount.ID.split(':');
-    try {
-      await api.removeBalances(baseUrl, {
-        Tenant: t,
-        Account: a,
-        BalanceType: category,
-        Balance: { ID: balance.ID },
-        ActionExtraData: null,
-        Cdrlog: true,
+  // CGrateS removes every balance matching the filter, so match on the UUID to remove just this one.
+  const handleRemoveBalance = (balance: Balance, category: string) => {
+    if (!window.confirm(`Remove balance ${balance.ID || balance.Uuid}?`)) return;
+    run((t, a) => api.removeBalances(baseUrl!, {
+      Tenant: t, Account: a, BalanceType: category, Balance: { UUID: balance.Uuid }, Cdrlog: false,
+    }), 'Failed to remove balance', `Removed balance ${balance.ID || balance.Uuid}.`);
+  };
+
+  const handleRemoveActionTrigger = (trigger: ActionTriggerEntry) => {
+    if (!window.confirm(`Remove trigger ${trigger.ID} (${trigger.UniqueID}) from this account?`)) return;
+    run((t, a) => api.removeAccountActionTriggers(baseUrl!, t, a, trigger.ID, trigger.UniqueID),
+      'Failed to remove action trigger');
+  };
+
+  const handleResetActionTrigger = (trigger: ActionTriggerEntry) => run(
+    (t, a) => api.resetAccountActionTriggers(baseUrl!, t, a, trigger.UniqueID),
+    'Failed to reset action trigger', `Trigger ${trigger.ID} reset; it can fire again.`,
+  );
+
+  const handleAttachTriggers = async () => {
+    if (!attachTriggerIds.length) return;
+    await run((t, a) => api.setAccount(baseUrl!, {
+      Tenant: t, Account: a, ActionTriggerIDs: attachTriggerIds, ActionTriggerOverwrite: false,
+    }), 'Failed to attach action triggers', `Attached ${attachTriggerIds.join(', ')}.`);
+    setAttachTriggerIds([]);
+  };
+
+  const openTriggerEdit = (trigger: ActionTriggerEntry | null) => {
+    setTriggerEdit({ form: trigger ? triggerToForm(trigger) : emptyTriggerForm(), original: trigger });
+  };
+
+  const triggerCleared = triggerEdit?.original ? clearedBalanceFields(triggerToForm(triggerEdit.original), triggerEdit.form) : [];
+  const triggerErrors = triggerEdit ? triggerFormErrors(triggerEdit.form) : [];
+
+  const handleSaveTrigger = async () => {
+    if (!triggerEdit || triggerErrors.length) return;
+    const { form, original } = triggerEdit;
+    setTriggerSaving(true);
+    // Without a UniqueID CGrateS leaves it empty, and the trigger could then only be removed with its whole group.
+    const uniqueId = form.UniqueID.trim() || newUuid();
+    await run(async (t, a) => {
+      if (original && triggerCleared.length) {
+        await api.removeAccountActionTriggers(baseUrl!, t, a, original.ID, original.UniqueID);
+      }
+      await api.setAccountActionTriggers(baseUrl!, {
+        Tenant: t, Account: a, GroupID: form.GroupID.trim(), UniqueID: uniqueId,
+        ActionTrigger: formToActionTrigger(form, true),
       });
-      fetchAccountDetails(t, a);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to remove balance');
-    }
-  }, [baseUrl, selectedAccount, fetchAccountDetails]);
+      setTriggerEdit(null);
+    }, 'Failed to save action trigger', `Trigger ${form.GroupID} saved.`);
+    setTriggerSaving(false);
+  };
 
-  // Remove action trigger
-  const handleRemoveActionTrigger = useCallback(async (trigger: ActionTriggerEntry) => {
-    if (!baseUrl || !selectedAccount) return;
-    const [t, a] = selectedAccount.ID.split(':');
-    try {
-      await api.removeAccountActionTriggers(baseUrl, t, a, trigger.UniqueID);
-      fetchAccountDetails(t, a);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to remove action trigger');
-    }
-  }, [baseUrl, selectedAccount, fetchAccountDetails]);
+  const handleAttachPlan = async () => {
+    if (!attachPlanId) return;
+    await run((t, a) => api.setAccount(baseUrl!, {
+      Tenant: t, Account: a, ActionPlanIDs: [attachPlanId], ReloadScheduler: true,
+    }), 'Failed to attach action plan', `Attached ${attachPlanId}.`);
+    setAttachPlanId('');
+  };
 
-  // Reset action trigger
-  const handleResetActionTrigger = useCallback(async (trigger: ActionTriggerEntry) => {
-    if (!baseUrl || !selectedAccount) return;
-    const [t, a] = selectedAccount.ID.split(':');
-    try {
-      await api.resetAccountActionTriggers(baseUrl, t, a, trigger.UniqueID);
-      fetchAccountDetails(t, a);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to reset action trigger');
-    }
-  }, [baseUrl, selectedAccount, fetchAccountDetails]);
+  const handleRemoveActionPlanFromAccount = (plan: AccountActionPlan) => {
+    if (!window.confirm(`Remove action plan ${plan.ActionPlanId} from this account? The plan itself stays.`)) return;
+    run((t, a) => api.removeAccountFromActionPlan(baseUrl!, t, a, plan.ActionPlanId),
+      'Failed to remove action plan from account', `Removed ${plan.ActionPlanId} from the account.`);
+  };
 
-  // Remove action plan from account
-  const handleRemoveActionPlanFromAccount = useCallback(async (plan: AccountActionPlan) => {
-    if (!baseUrl || !selectedAccount) return;
-    const [t, a] = selectedAccount.ID.split(':');
-    try {
-      await api.removeAccountActionPlans(baseUrl, t, a, [plan.ActionPlanId]);
-      fetchAccountDetails(t, a);
-      // Refresh action plans
-      try {
-        const plans = await api.getAccountActionPlan(baseUrl, t, a) as AccountActionPlan[];
-        setAccountActionPlans(Array.isArray(plans) ? plans : []);
-      } catch {
-        setAccountActionPlans([]);
-      }
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to remove action plan from account');
-    }
-  }, [baseUrl, selectedAccount, fetchAccountDetails]);
-
-  // Delete action plan globally
-  const handleDeleteActionPlanGlobal = useCallback(async (plan: AccountActionPlan) => {
-    if (!baseUrl || !selectedAccount) return;
+  const handleDeleteActionPlanGlobal = (plan: AccountActionPlan) => {
     if (!window.confirm(`Are you sure you want to DELETE the action plan "${plan.ActionPlanId}" globally? This will remove it from all accounts.`)) return;
-    const [t, a] = selectedAccount.ID.split(':');
-    try {
-      await api.removeActionPlan(baseUrl, plan.ActionPlanId, t);
-      fetchAccountDetails(t, a);
-      // Refresh action plans
-      try {
-        const plans = await api.getAccountActionPlan(baseUrl, t, a) as AccountActionPlan[];
-        setAccountActionPlans(Array.isArray(plans) ? plans : []);
-      } catch {
-        setAccountActionPlans([]);
-      }
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to delete action plan globally');
-    }
-  }, [baseUrl, selectedAccount, fetchAccountDetails]);
+    run((t) => api.removeActionPlan(baseUrl!, plan.ActionPlanId, t),
+      'Failed to delete action plan globally', `Deleted ${plan.ActionPlanId}.`);
+  };
 
-  // Delete account from modal
   const handleDeleteFromModal = useCallback(async () => {
     if (!baseUrl || !selectedAccount) return;
-    const [t, a] = selectedAccount.ID.split(':');
+    if (!window.confirm(`Delete account ${selectedAccount.ID}?`)) return;
+    const [t, a] = splitAccountId(selectedAccount.ID);
     try {
       await api.removeAccount(baseUrl, t, a);
       handleCloseModal();
       fetchAccounts(page);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to delete account');
+      setError(errMsg(e, 'Failed to delete account'));
     }
   }, [baseUrl, selectedAccount, page, fetchAccounts, handleCloseModal]);
 
-  // Balance detail modal handlers
-  const handleBalanceClick = useCallback((balance: Balance) => {
-    setSelectedBalance(balance);
-    setBalanceModalOpen(true);
-  }, []);
-
-  // Action trigger detail modal handlers
-  const handleTriggerClick = useCallback((trigger: ActionTriggerEntry) => {
-    setSelectedTrigger(trigger);
-    setTriggerModalOpen(true);
-  }, []);
-
-  // Render balance table for a given category
   const renderBalanceTable = (balanceMap: Record<string, Balance[]> | null, category: string) => {
     if (!balanceMap || !balanceMap[category]) return null;
     const balances = balanceMap[category];
@@ -428,7 +450,7 @@ export function Component() {
             {balances.map((balance, i) => {
               const { prettyDate, timeUntil } = formatExpiration(balance.ExpirationDate);
               return (
-                <TableRow key={i}>
+                <TableRow key={balance.Uuid || i}>
                   <TableCell><BalanceName id={balance.ID} /></TableCell>
                   <TableCell>
                     {formatUsage(balance.Value, category)}
@@ -447,13 +469,18 @@ export function Component() {
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                       <Button size="small" variant="outlined" color="success"
                         startIcon={<VisibilityIcon />}
-                        onClick={() => handleBalanceClick(balance)}>
-                        View Balance
+                        onClick={() => { setSelectedBalance(balance); setBalanceModalOpen(true); }}>
+                        View
+                      </Button>
+                      <Button size="small" variant="outlined"
+                        startIcon={<EditIcon />}
+                        onClick={() => setBalanceDialog({ mode: 'set', balance: { ...balance, Type: category } })}>
+                        Edit
                       </Button>
                       <Button size="small" variant="outlined" color="error"
                         startIcon={<DeleteIcon />}
                         onClick={() => handleRemoveBalance(balance, category)}>
-                        Remove Balance
+                        Remove
                       </Button>
                     </Box>
                   </TableCell>
@@ -465,6 +492,8 @@ export function Component() {
       </TableContainer>
     );
   };
+
+  const [selTenant, selAccount] = selectedAccount ? splitAccountId(selectedAccount.ID) : ['', ''];
 
   return (
     <Box>
@@ -479,11 +508,11 @@ export function Component() {
             placeholder="Filter by account ID"
           />
           <Button variant="contained" onClick={() => fetchAccounts(0)}>Search</Button>
-          <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>Create Account</Button>
+          <Button variant="outlined" startIcon={<AddIcon />} onClick={openCreate}>Create Account</Button>
         </Box>
       </Paper>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+      {error && !detailOpen && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
@@ -502,7 +531,7 @@ export function Component() {
             </TableHead>
             <TableBody>
               {accounts.length > 0 ? accounts.map((acc, idx) => {
-                const [t, a] = acc.ID.split(':');
+                const [t, a] = splitAccountId(acc.ID);
                 return (
                   <TableRow key={acc.ID} hover sx={{ cursor: 'pointer' }}>
                     <TableCell>{page * pageSize + idx + 1}</TableCell>
@@ -520,10 +549,10 @@ export function Component() {
                       )) : 'N/A'}
                     </TableCell>
                     <TableCell>
-                      <IconButton size="small" onClick={() => handleRowClick(acc)}>
+                      <IconButton size="small" aria-label="View account" onClick={() => handleRowClick(acc)}>
                         <VisibilityIcon fontSize="small" />
                       </IconButton>
-                      <IconButton size="small" color="error" onClick={() => handleDelete(acc)}>
+                      <IconButton size="small" color="error" aria-label="Delete account" onClick={() => handleDelete(acc)}>
                         <DeleteIcon fontSize="small" />
                       </IconButton>
                     </TableCell>
@@ -549,6 +578,8 @@ export function Component() {
       <Dialog open={detailOpen} onClose={handleCloseModal} maxWidth="lg" fullWidth>
         <DialogTitle>Account Details - {selectedAccount?.ID}</DialogTitle>
         <DialogContent>
+          {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+          {notice && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setNotice(null)}>{notice}</Alert>}
           {modalLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
               <CircularProgress />
@@ -559,15 +590,41 @@ export function Component() {
               <Typography><strong>Disabled:</strong> {selectedAccount.Disabled ? 'Yes' : 'No'}</Typography>
               <Typography><strong>Updated:</strong> {selectedAccount.UpdateTime}</Typography>
 
+              {/* Balances */}
+              <Box sx={{ mt: 3 }}>
+                <Typography variant="h6">Balances</Typography>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
+                  <Button size="small" variant="outlined" onClick={() => setBalanceDialog({ mode: 'add', balance: null })}>Add</Button>
+                  <Button size="small" variant="outlined" onClick={() => setBalanceDialog({ mode: 'debit', balance: null })}>Debit</Button>
+                  <Button size="small" variant="outlined" onClick={() => setBalanceDialog({ mode: 'set', balance: null })}>New balance</Button>
+                  <Button size="small" variant="outlined" onClick={() => setBalanceDialog({ mode: 'transfer', balance: null })}>Transfer</Button>
+                </Box>
+              </Box>
+              {selectedAccount.BalanceMap && Object.entries(selectedAccount.BalanceMap)
+                .filter(([, bs]) => bs && bs.length > 0)
+                .map(([category]) => (
+                  <Box key={category} sx={{ mt: 2 }}>
+                    <Typography variant="subtitle1">{category}</Typography>
+                    {renderBalanceTable(selectedAccount.BalanceMap, category)}
+                  </Box>
+                ))}
+
               {/* Action Triggers */}
               <Box sx={{ mt: 3 }}>
                 <Typography variant="h6">Action Triggers</Typography>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', my: 1 }}>
+                  <IdMultiSelect label="Attach trigger groups" value={attachTriggerIds} options={triggerGroups}
+                    onChange={setAttachTriggerIds} fullWidth={false} sx={{ minWidth: 300 }} />
+                  <Button size="small" variant="contained" onClick={handleAttachTriggers} disabled={!attachTriggerIds.length}>Attach</Button>
+                  <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => openTriggerEdit(null)}>New trigger on this account</Button>
+                </Box>
                 {selectedAccount.ActionTriggers && selectedAccount.ActionTriggers.length > 0 ? (
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
                           <TableCell>Action Trigger ID</TableCell>
+                          <TableCell>Threshold</TableCell>
                           <TableCell>Action</TableCell>
                           <TableCell>Last Execution Time</TableCell>
                           <TableCell>Actions</TableCell>
@@ -577,11 +634,18 @@ export function Component() {
                         {selectedAccount.ActionTriggers.map((trigger, i) => {
                           const { prettyDate, timeUntil } = formatExpiration(trigger.LastExecutionTime);
                           return (
-                            <TableRow key={i}>
+                            <TableRow key={trigger.UniqueID || i}>
                               <TableCell>
                                 {trigger.ID}
                                 <br />
                                 <Typography variant="caption" color="text.secondary">{trigger.UniqueID}</Typography>
+                              </TableCell>
+                              <TableCell>
+                                {trigger.ThresholdType}{' '}
+                                {trigger.ThresholdType !== '*balance_expired'
+                                  && formatBalanceValue(trigger.ThresholdValue, trigger.ThresholdType.includes('event') ? undefined : trigger.Balance?.Type)}
+                                <br />
+                                <Typography variant="caption" color="text.secondary">{trigger.Balance?.Type}</Typography>
                               </TableCell>
                               <TableCell><CompositeId id={trigger.ActionsID} compact /></TableCell>
                               <TableCell>
@@ -597,8 +661,12 @@ export function Component() {
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                                   <Button size="small" variant="outlined" color="success"
                                     startIcon={<VisibilityIcon />}
-                                    onClick={() => handleTriggerClick(trigger)}>
+                                    onClick={() => { setSelectedTrigger(trigger); setTriggerModalOpen(true); }}>
                                     View
+                                  </Button>
+                                  <Button size="small" variant="outlined" startIcon={<EditIcon />}
+                                    onClick={() => openTriggerEdit(trigger)}>
+                                    Edit
                                   </Button>
                                   <Button size="small" variant="outlined" color="error"
                                     startIcon={<RemoveCircleOutlineIcon />}
@@ -626,16 +694,24 @@ export function Component() {
               {/* Action Plans */}
               <Box sx={{ mt: 3 }}>
                 <Typography variant="h6">Action Plans</Typography>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', my: 1 }}>
+                  <SearchableSelect label="Attach action plan" value={attachPlanId} options={planIds}
+                    onChange={setAttachPlanId} sx={{ minWidth: 300 }} />
+                  <Button size="small" variant="contained" onClick={handleAttachPlan} disabled={!attachPlanId}>Attach</Button>
+                  <Typography variant="caption" color="text.secondary">
+                    The plan's *asap timings run for this account straight away.
+                  </Typography>
+                </Box>
                 {accountActionPlans.length > 0 ? (
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
                     {accountActionPlans.map((plan, index) => {
                       const { prettyDate, timeUntil } = formatExpiration(plan.NextExecTime);
                       return (
-                        <Card key={index} variant="outlined" sx={{ bgcolor: 'grey.50' }}>
+                        <Card key={index} variant="outlined">
                           <CardContent>
                             <Typography variant="subtitle2" color="text.secondary">Action Plan ID</Typography>
                             <CompositeId id={plan.ActionPlanId} />
-                            <Box sx={{ display: 'flex', gap: 4, mt: 2 }}>
+                            <Box sx={{ display: 'flex', gap: 4, mt: 2, flexWrap: 'wrap' }}>
                               <Box sx={{ flex: 1 }}>
                                 <Typography variant="subtitle2" color="text.secondary">UUID</Typography>
                                 <Typography variant="body2">{plan.Uuid}</Typography>
@@ -653,7 +729,7 @@ export function Component() {
                             <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
                               <Button size="small" variant="outlined" color="warning"
                                 onClick={() => handleRemoveActionPlanFromAccount(plan)}>
-                                Remove Action from Account
+                                Remove Plan from Account
                               </Button>
                               <Button size="small" variant="outlined" color="error"
                                 onClick={() => handleDeleteActionPlanGlobal(plan)}>
@@ -675,7 +751,7 @@ export function Component() {
                 <Typography variant="h6">Execute Action</Typography>
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end', mt: 1 }}>
                   <SearchableSelect label="Action" value={executeActionId} options={actionsList} onChange={setExecuteActionId} sx={{ minWidth: 250 }} />
-                  <Button variant="contained" onClick={handleExecuteActionClick} disabled={!executeActionId}>
+                  <Button variant="contained" onClick={() => setShowConfirm(true)} disabled={!executeActionId}>
                     Execute
                   </Button>
                 </Box>
@@ -696,17 +772,9 @@ export function Component() {
                 )}
               </Box>
 
-              {/* Balances by category */}
-              {selectedAccount.BalanceMap && Object.entries(selectedAccount.BalanceMap).map(([category]) => (
-                <Box key={category} sx={{ mt: 3 }}>
-                  <Typography variant="h6">{category} Balances</Typography>
-                  {renderBalanceTable(selectedAccount.BalanceMap, category)}
-                </Box>
-              ))}
-
               <Box sx={{ mt: 3 }}>
                 <Typography variant="subtitle2">Raw JSON</Typography>
-                <Paper sx={{ p: 1, maxHeight: 300, overflow: 'auto', bgcolor: 'grey.50' }}>
+                <Paper sx={{ p: 1, maxHeight: 300, overflow: 'auto', bgcolor: 'action.hover' }}>
                   <pre style={{ fontSize: 12, margin: 0 }}>{JSON.stringify(selectedAccount, null, 2)}</pre>
                 </Paper>
               </Box>
@@ -718,12 +786,12 @@ export function Component() {
         <DialogActions>
           {selectedAccount && (
             <>
-              <Button color={selectedAccount.Disabled ? 'success' : 'warning'} onClick={handleToggleDisabled}>
+              <Button color={selectedAccount.Disabled ? 'success' : 'warning'} onClick={() => handleToggle('Disabled')}>
                 {selectedAccount.Disabled ? 'Enable Account' : 'Disable Account'}
               </Button>
               <Button
                 color={selectedAccount.AllowNegative ? 'error' : 'primary'}
-                onClick={handleToggleAllowNegative}
+                onClick={() => handleToggle('AllowNegative')}
               >
                 {selectedAccount.AllowNegative ? 'Disallow Negative' : 'Allow Negative'}
               </Button>
@@ -733,6 +801,51 @@ export function Component() {
             </>
           )}
           <Button onClick={handleCloseModal}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {baseUrl && selectedAccount && (
+        <BalanceDialog
+          open={!!balanceDialog}
+          mode={balanceDialog?.mode ?? 'add'}
+          baseUrl={baseUrl}
+          tenant={selTenant}
+          account={selAccount}
+          balance={balanceDialog?.balance ?? null}
+          balanceMap={selectedAccount.BalanceMap}
+          accountIds={accountIds}
+          destinationIds={destinationIds}
+          onClose={() => setBalanceDialog(null)}
+          onDone={msg => { setBalanceDialog(null); setNotice(msg); refresh(); }}
+        />
+      )}
+
+      {/* Account trigger edit */}
+      <Dialog open={!!triggerEdit} onClose={() => setTriggerEdit(null)} maxWidth="md" fullWidth>
+        <DialogTitle>{triggerEdit?.original ? `Edit trigger on ${selectedAccount?.ID}` : `New trigger on ${selectedAccount?.ID}`}</DialogTitle>
+        <DialogContent>
+          {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+          {triggerEdit && (
+            <>
+              <ActionTriggerFormFields
+                form={triggerEdit.form}
+                onChange={form => setTriggerEdit({ ...triggerEdit, form })}
+                actionIds={actionsList}
+                destinationIds={destinationIds}
+                locked={!!triggerEdit.original}
+                showExecuted
+              />
+              <Alert severity="info" sx={{ mt: 2 }}>
+                This changes only this account's copy. Saving re-evaluates the account's triggers, so one whose threshold is already met fires now.
+                {triggerCleared.length > 0 && ` CGrateS can't unset balance filter fields (${triggerCleared.join(', ')}), so the trigger is removed and added back with the same Unique ID.`}
+              </Alert>
+              {triggerErrors.length > 0 && <Alert severity="warning" sx={{ mt: 2 }}>{triggerErrors.join('. ')}</Alert>}
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button variant="contained" onClick={handleSaveTrigger} disabled={triggerSaving || triggerErrors.length > 0}>Save</Button>
+          <Button onClick={() => setTriggerEdit(null)}>Cancel</Button>
         </DialogActions>
       </Dialog>
 
@@ -813,15 +926,21 @@ export function Component() {
       </Dialog>
 
       {/* Create Account Dialog */}
-      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="xs" fullWidth>
+      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Create Account</DialogTitle>
         <DialogContent>
-          <TextField fullWidth size="small" label="Account ID" value={newAccountId}
-            onChange={e => setNewAccountId(e.target.value)} sx={{ mt: 1 }}
-            placeholder="e.g. 1001" />
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-            Tenant: {tenant}
-          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <TextField fullWidth size="small" label="Account ID" value={newAccountId}
+              onChange={e => setNewAccountId(e.target.value)}
+              placeholder="e.g. 1001" helperText={`Tenant: ${tenant}`} />
+            <IdMultiSelect label="Action plans" value={newPlanIds} options={planIds} onChange={setNewPlanIds}
+              helperText="*asap timings run for the account straight away" />
+            <IdMultiSelect label="Action trigger groups" value={newTriggerIds} options={triggerGroups} onChange={setNewTriggerIds} />
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <FormControlLabel control={<Checkbox checked={newAllowNegative} onChange={e => setNewAllowNegative(e.target.checked)} />} label="Allow negative" />
+              <FormControlLabel control={<Checkbox checked={newDisabled} onChange={e => setNewDisabled(e.target.checked)} />} label="Disabled" />
+            </Box>
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button variant="contained" onClick={handleCreateAccount} disabled={!newAccountId.trim()}>Create</Button>
