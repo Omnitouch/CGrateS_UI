@@ -4,7 +4,7 @@
 export interface JsonRpcResponse<T = unknown> {
   id: number;
   result: T | null;
-  error: JsonRpcError | null;
+  error: JsonRpcError | string | null;
 }
 
 export interface JsonRpcError {
@@ -172,6 +172,7 @@ export interface ChargerProfile {
   Tenant: string;
   ID: string;
   FilterIDs: string[];
+  ActivationInterval: ActivationInterval | null;
   AttributeIDs: string[];
   RunID: string;
   Weight: number;
@@ -223,6 +224,7 @@ export interface ResourceProfile {
   ActivationInterval: ActivationInterval | null;
   UsageTTL: number;
   Limit: number;
+  AllocationMessage: string;
   Blocker: boolean;
   Stored: boolean;
   Weight: number;
@@ -247,6 +249,7 @@ export interface StatQueueProfile {
   Tenant: string;
   ID: string;
   FilterIDs: string[];
+  ActivationInterval: ActivationInterval | null;
   QueueLength: number;
   TTL: number;
   MinItems: number;
@@ -270,11 +273,21 @@ export interface ThresholdProfile {
   ActivationInterval: ActivationInterval | null;
   MaxHits: number;
   MinHits: number;
-  MinSleep: string;
+  /** time.Duration in nanoseconds */
+  MinSleep: number;
   Blocker: boolean;
   Weight: number;
   ActionIDs: string[];
   Async: boolean;
+  EeIDs: string[];
+}
+
+/** Runtime threshold state (ThresholdSv1.GetThreshold) */
+export interface Threshold {
+  Tenant: string;
+  ID: string;
+  Hits: number;
+  Snooze: string;
 }
 
 /** Route profile */
@@ -282,6 +295,7 @@ export interface RouteProfile {
   Tenant: string;
   ID: string;
   FilterIDs: string[];
+  ActivationInterval: ActivationInterval | null;
   Sorting: string;
   SortingParameters: string[];
   Routes: Route[];
@@ -310,11 +324,16 @@ export interface RouteResult {
 export interface RouteEntry {
   RouteID: string;
   RouteParameters: string;
-  SortingData: {
-    Cost: number;
-    RatingPlanID: string;
-    Weight: number;
-  };
+  /** Keys depend on the sorting strategy (Weight, Cost, RatingPlanID, ResourceUsage, Load, Ratio, stat metrics). */
+  SortingData: Record<string, unknown>;
+}
+
+/** utils.CGREvent as sent to the *Sv1 event APIs */
+export interface CGREventArgs {
+  Tenant: string;
+  ID: string;
+  Event: Record<string, unknown>;
+  APIOpts: Record<string, unknown>;
 }
 
 /** Session (SessionSv1.GetActiveSessions) */

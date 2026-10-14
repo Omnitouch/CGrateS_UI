@@ -1,4 +1,4 @@
-import type { JsonRpcResponse } from './types';
+import type { CGREventArgs, JsonRpcResponse } from './types';
 
 let rpcId = 0;
 
@@ -28,7 +28,8 @@ export async function jsonRpc<T = unknown>(
   const data: JsonRpcResponse<T> = await res.json();
 
   if (data.error) {
-    throw new Error(data.error.message || 'JSON-RPC error');
+    // CGrateS sends the error as a plain string (e.g. "NOT_FOUND").
+    throw new Error(typeof data.error === 'string' ? data.error : data.error.message);
   }
 
   return data.result as T;
@@ -216,8 +217,12 @@ export function setChargerProfile(baseUrl: string, params: Record<string, unknow
   return jsonRpc(baseUrl, 'APIerSv1.SetChargerProfile', [params]);
 }
 
-export function removeChargerProfile(baseUrl: string, tenant: string, id: string) {
-  return jsonRpc(baseUrl, 'APIerSv1.RemoveChargerProfile', [{ Tenant: tenant, ID: id }]);
+export function removeChargerProfile(baseUrl: string, tenant: string, id: string, apiOpts: Record<string, unknown> = {}) {
+  return jsonRpc(baseUrl, 'APIerSv1.RemoveChargerProfile', [{ Tenant: tenant, ID: id, APIOpts: apiOpts }]);
+}
+
+export function chargerSEvent(baseUrl: string, method: 'ChargerSv1.GetChargersForEvent' | 'ChargerSv1.ProcessEvent', args: CGREventArgs) {
+  return jsonRpc(baseUrl, method, [args]);
 }
 
 // --- Attributes ---
@@ -234,8 +239,16 @@ export function setAttributeProfile(baseUrl: string, params: Record<string, unkn
   return jsonRpc(baseUrl, 'APIerSv1.SetAttributeProfile', [params]);
 }
 
-export function removeAttributeProfile(baseUrl: string, tenant: string, id: string) {
-  return jsonRpc(baseUrl, 'APIerSv1.RemoveAttributeProfile', [{ Tenant: tenant, Id: id }]);
+export function removeAttributeProfile(baseUrl: string, tenant: string, id: string, apiOpts: Record<string, unknown> = {}) {
+  return jsonRpc(baseUrl, 'APIerSv1.RemoveAttributeProfile', [{ Tenant: tenant, ID: id, APIOpts: apiOpts }]);
+}
+
+export function getAttributeProfileCount(baseUrl: string, tenant: string) {
+  return jsonRpc<number>(baseUrl, 'APIerSv1.GetAttributeProfileCount', [{ Tenant: tenant }]);
+}
+
+export function attributeSEvent(baseUrl: string, method: 'AttributeSv1.ProcessEvent' | 'AttributeSv1.GetAttributeForEvent', args: CGREventArgs) {
+  return jsonRpc(baseUrl, method, [args]);
 }
 
 // --- Filters ---
@@ -252,8 +265,27 @@ export function setFilter(baseUrl: string, params: Record<string, unknown>) {
   return jsonRpc(baseUrl, 'ApierV1.SetFilter', [params]);
 }
 
-export function removeFilter(baseUrl: string, tenant: string, id: string) {
-  return jsonRpc(baseUrl, 'APIerSv1.RemoveFilter', [{ ID: id, Tenant: tenant }]);
+export function removeFilter(baseUrl: string, tenant: string, id: string, apiOpts: Record<string, unknown> = {}) {
+  return jsonRpc(baseUrl, 'APIerSv1.RemoveFilter', [{ ID: id, Tenant: tenant, APIOpts: apiOpts }]);
+}
+
+/** ItemType is *attributes/*chargers/*resources/*stats/*thresholds/*routes/*dispatchers; *attributes and *dispatchers need Context. */
+export function getFilterIndexes(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetFilterIndexes', [params]);
+}
+
+/** Rebuilds the indexes of every profile of the flagged subsystems (AttributeS, ChargerS, ... booleans). */
+export function computeFilterIndexes(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.ComputeFilterIndexes', [params]);
+}
+
+/** Rebuilds indexes only for the listed profile IDs (AttributeIDs, ChargerIDs, ...). */
+export function computeFilterIndexIDs(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.ComputeFilterIndexIDs', [params]);
+}
+
+export function removeFilterIndexes(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.RemoveFilterIndexes', [params]);
 }
 
 // --- Resources ---
@@ -274,8 +306,20 @@ export function setResourceProfile(baseUrl: string, params: Record<string, unkno
   return jsonRpc(baseUrl, 'ApierV1.SetResourceProfile', [params]);
 }
 
-export function removeResourceProfile(baseUrl: string, tenant: string, id: string) {
-  return jsonRpc(baseUrl, 'APIerSv1.RemoveResourceProfile', [{ ID: id, Tenant: tenant }]);
+export function removeResourceProfile(baseUrl: string, tenant: string, id: string, apiOpts: Record<string, unknown> = {}) {
+  return jsonRpc(baseUrl, 'APIerSv1.RemoveResourceProfile', [{ ID: id, Tenant: tenant, APIOpts: apiOpts }]);
+}
+
+export function getResourceWithConfig(baseUrl: string, tenant: string, id: string) {
+  return jsonRpc(baseUrl, 'ResourceSv1.GetResourceWithConfig', [{ Tenant: tenant, ID: id, APIOpts: {} }]);
+}
+
+export function resourceSEvent(
+  baseUrl: string,
+  method: 'ResourceSv1.GetResourcesForEvent' | 'ResourceSv1.AuthorizeResources' | 'ResourceSv1.AllocateResources' | 'ResourceSv1.ReleaseResources',
+  args: CGREventArgs,
+) {
+  return jsonRpc(baseUrl, method, [args]);
 }
 
 // --- Stats ---
@@ -292,8 +336,8 @@ export function setStatQueueProfile(baseUrl: string, params: Record<string, unkn
   return jsonRpc(baseUrl, 'APIerSv1.SetStatQueueProfile', [params]);
 }
 
-export function removeStatQueueProfile(baseUrl: string, tenant: string, id: string) {
-  return jsonRpc(baseUrl, 'APIerSv1.RemoveStatQueueProfile', [{ Tenant: tenant, ID: id }]);
+export function removeStatQueueProfile(baseUrl: string, tenant: string, id: string, apiOpts: Record<string, unknown> = {}) {
+  return jsonRpc(baseUrl, 'APIerSv1.RemoveStatQueueProfile', [{ Tenant: tenant, ID: id, APIOpts: apiOpts }]);
 }
 
 export function getQueueStringMetrics(baseUrl: string, tenant: string, id: string) {
@@ -302,6 +346,18 @@ export function getQueueStringMetrics(baseUrl: string, tenant: string, id: strin
 
 export function resetStatQueue(baseUrl: string, tenant: string, id: string) {
   return jsonRpc(baseUrl, 'StatSv1.ResetStatQueue', [{ Tenant: tenant, ID: id }]);
+}
+
+export function getQueueFloatMetrics(baseUrl: string, tenant: string, id: string) {
+  return jsonRpc<Record<string, number>>(baseUrl, 'StatSv1.GetQueueFloatMetrics', [{ Tenant: tenant, ID: id, APIOpts: {} }]);
+}
+
+export function getStatQueue(baseUrl: string, tenant: string, id: string) {
+  return jsonRpc(baseUrl, 'StatSv1.GetStatQueue', [{ Tenant: tenant, ID: id, APIOpts: {} }]);
+}
+
+export function statSEvent(baseUrl: string, method: 'StatSv1.ProcessEvent' | 'StatSv1.GetStatQueuesForEvent', args: CGREventArgs) {
+  return jsonRpc<string[]>(baseUrl, method, [args]);
 }
 
 // --- Thresholds ---
@@ -318,8 +374,29 @@ export function setThresholdProfile(baseUrl: string, params: Record<string, unkn
   return jsonRpc(baseUrl, 'APIerSv1.SetThresholdProfile', [params]);
 }
 
-export function removeThresholdProfile(baseUrl: string, tenant: string, id: string) {
-  return jsonRpc(baseUrl, 'APIerSv1.RemoveThresholdProfile', [{ Tenant: tenant, ID: id }]);
+export function removeThresholdProfile(baseUrl: string, tenant: string, id: string, apiOpts: Record<string, unknown> = {}) {
+  return jsonRpc(baseUrl, 'APIerSv1.RemoveThresholdProfile', [{ Tenant: tenant, ID: id, APIOpts: apiOpts }]);
+}
+
+/** Runtime state (Hits, Snooze) of a threshold. */
+export function getThreshold(baseUrl: string, tenant: string, id: string) {
+  return jsonRpc<{ Tenant: string; ID: string; Hits: number; Snooze: string }>(
+    baseUrl, 'ThresholdSv1.GetThreshold', [{ Tenant: tenant, ID: id, APIOpts: {} }],
+  );
+}
+
+export function resetThreshold(baseUrl: string, tenant: string, id: string) {
+  return jsonRpc<string>(baseUrl, 'ThresholdSv1.ResetThreshold', [{ Tenant: tenant, ID: id, APIOpts: {} }]);
+}
+
+/** Exporter IDs from the ees config section, for threshold EeIDs. */
+export async function getEEsExporterIDs(baseUrl: string) {
+  const cfg = await jsonRpc<{ ees: { exporters: { id: string }[] } }>(baseUrl, 'ConfigSv1.GetConfig', [{ Section: 'ees' }]);
+  return cfg.ees.exporters.map(e => e.id);
+}
+
+export function thresholdSEvent(baseUrl: string, method: 'ThresholdSv1.GetThresholdsForEvent' | 'ThresholdSv1.ProcessEvent', args: CGREventArgs) {
+  return jsonRpc(baseUrl, method, [args]);
 }
 
 // --- Routes ---
@@ -340,8 +417,20 @@ export function setRouteProfile(baseUrl: string, params: Record<string, unknown>
   return jsonRpc(baseUrl, 'APIerSv1.SetRouteProfile', [params]);
 }
 
-export function removeRouteProfile(baseUrl: string, tenant: string, id: string) {
-  return jsonRpc(baseUrl, 'APIerSv1.RemoveRouteProfile', [{ Tenant: tenant, ID: id }]);
+export function removeRouteProfile(baseUrl: string, tenant: string, id: string, apiOpts: Record<string, unknown> = {}) {
+  return jsonRpc(baseUrl, 'APIerSv1.RemoveRouteProfile', [{ Tenant: tenant, ID: id, APIOpts: apiOpts }]);
+}
+
+export function getRouteProfilesForEvent(baseUrl: string, args: CGREventArgs) {
+  return jsonRpc(baseUrl, 'RouteSv1.GetRouteProfilesForEvent', [args]);
+}
+
+export function getAccountIDs(baseUrl: string, tenant: string) {
+  return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetAccountIDs', [{ Tenant: tenant }]);
+}
+
+export function getRatingPlanIDs(baseUrl: string) {
+  return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetRatingPlanIDs', [{}]);
 }
 
 // --- Sessions ---

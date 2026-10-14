@@ -1,9 +1,9 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Box, Typography, Paper, Button, Select, MenuItem, FormControl,
   InputLabel, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, IconButton,
-  TextField, Chip, List, ListItem, ListItemText, Divider, Checkbox, FormControlLabel,
+  TextField, Chip, List, ListItem, ListItemText, Divider, Checkbox, FormControlLabel, Tabs, Tab,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -11,21 +11,20 @@ import EditIcon from '@mui/icons-material/Edit';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import ClearIcon from '@mui/icons-material/Clear';
 import ClearAllIcon from '@mui/icons-material/ClearAll';
-import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import SearchableSelect from '../components/SearchableSelect';
 import { DurationInput, formatDuration } from '../components/BalanceValue';
+import IdMultiSelect from '../components/IdMultiSelect';
+import CachingSelect, { cachingOpts } from '../components/CachingSelect';
+import ActivationIntervalInput, { formatActivationInterval, type ActivationInterval } from '../components/ActivationIntervalInput';
+import EventTester from '../components/EventTester';
+import { useIdOptions } from '../components/useIdOptions';
 
 interface MetricEntry {
   MetricID: string;
   FilterIDs: string[];
   genericValue?: string;
-}
-
-interface ActivationInterval {
-  ActivationTime: string;
-  ExpiryTime: string;
 }
 
 interface EditProfileData {
@@ -48,26 +47,6 @@ const emptyProfile = (tenant: string): EditProfileData => ({
   Tenant: tenant, ID: '', QueueLength: 0, TTL: -1, MinItems: 0, FilterIDs: [], Metrics: [],
   Stored: false, Blocker: false, Weight: 0, ThresholdIDs: [], ActivationInterval: null,
 });
-
-const ZERO_TIME = '0001-01-01T00:00:00Z';
-
-function isZeroTime(t: string | undefined): boolean {
-  return !t || t.startsWith('0001-01-01');
-}
-
-function toLocalInput(t: string | undefined): string {
-  if (isZeroTime(t)) return '';
-  const d = new Date(t!);
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-}
-
-function fromLocalInput(v: string): string {
-  return v ? new Date(v).toISOString() : ZERO_TIME;
-}
-
-function formatTime(t: string | undefined): string {
-  return isZeroTime(t) ? 'Not set' : new Date(t!).toLocaleString();
-}
 
 function formatTTL(ttl: number): string {
   return ttl > 0 ? `${formatDuration(ttl)} (${ttl} ns)` : `No expiry (${ttl})`;
@@ -105,6 +84,10 @@ function getMetricLabel(metricID: string): string {
   return metric ? metric.label : metricID;
 }
 
+function nonBlank(ids: string[] | null | undefined): string[] {
+  return (ids || []).map(s => s.trim()).filter(Boolean);
+}
+
 function isGenericMetric(metricID: string): boolean {
   return metricID.split('#')[0] in metricParams;
 }
@@ -123,20 +106,17 @@ export function Component() {
   // Structured edit form state
   const [editProfile, setEditProfile] = useState<EditProfileData>(emptyProfile(''));
   const [genericMetricInput, setGenericMetricInput] = useState<Record<number, string>>({});
-  const [thresholdIds, setThresholdIds] = useState<string[]>([]);
-  const [newThresholdId, setNewThresholdId] = useState('');
-
-  useEffect(() => {
-    if (!detailOpen || !editing || !baseUrl || !tenant) return;
-    api.getThresholdProfileIDs(baseUrl, tenant)
-      .then(r => setThresholdIds(((r as string[]) || []).sort((a, b) => a.localeCompare(b))))
-      .catch(() => setThresholdIds([]));
-  }, [detailOpen, editing, baseUrl, tenant]);
+  const [caching, setCaching] = useState('');
+  const idOptions = useIdOptions(['filters', 'thresholds'], tenant, detailOpen && editing);
+  const testerOptions = useIdOptions(['stats'], tenant, true);
 
   // Metrics
   const [metricsOpen, setMetricsOpen] = useState(false);
   const [metricsId, setMetricsId] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<Record<string, string> | null>(null);
+  const [floatMetrics, setFloatMetrics] = useState<Record<string, number> | null>(null);
+  const [rawQueue, setRawQueue] = useState<unknown>(null);
+  const [metricsTab, setMetricsTab] = useState(0);
   const [metricsLoading, setMetricsLoading] = useState(false);
 
   const fetchIds = useCallback(async () => {
@@ -205,7 +185,7 @@ export function Component() {
         ...editProfile,
         TTL: typeof editProfile.TTL === 'string' ? parseInt(editProfile.TTL, 10) : editProfile.TTL,
         QueueLength: typeof editProfile.QueueLength === 'string' ? parseInt(editProfile.QueueLength as string, 10) : editProfile.QueueLength,
-        FilterIDs: editProfile.FilterIDs || [],
+        FilterIDs: nonBlank(editProfile.FilterIDs),
         Metrics: (editProfile.Metrics || []).map((metric, index) => {
           let metricID = metric.MetricID;
           if (isGenericMetric(metricID) && genericMetricInput[index]) {
@@ -214,29 +194,29 @@ export function Component() {
           return {
             ...metric,
             MetricID: metricID,
-            FilterIDs: metric.FilterIDs || [],
+            FilterIDs: nonBlank(metric.FilterIDs),
             genericValue: undefined,
           };
         }),
       };
-      await api.setStatQueueProfile(baseUrl, sanitizedProfile);
+      await api.setStatQueueProfile(baseUrl, { ...sanitizedProfile, APIOpts: cachingOpts(caching) });
       setDetailOpen(false);
       fetchIds();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to save');
     }
-  }, [baseUrl, editProfile, genericMetricInput, fetchIds]);
+  }, [baseUrl, editProfile, genericMetricInput, caching, fetchIds]);
 
   const handleDelete = useCallback(async (id: string) => {
     if (!baseUrl || !window.confirm(`Delete ${id}?`)) return;
     try {
-      await api.removeStatQueueProfile(baseUrl, tenant, id);
+      await api.removeStatQueueProfile(baseUrl, tenant, id, cachingOpts(caching));
       fetchIds();
       setDetailOpen(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to delete');
     }
-  }, [baseUrl, tenant, fetchIds]);
+  }, [baseUrl, tenant, caching, fetchIds]);
 
   const handleCreate = useCallback(() => {
     setSelectedProfile(null);
@@ -250,11 +230,19 @@ export function Component() {
     if (!baseUrl) return;
     setMetricsLoading(true);
     setMetrics(null);
+    setFloatMetrics(null);
+    setRawQueue(null);
     setMetricsId(id);
     setMetricsOpen(true);
     try {
-      const result = await api.getQueueStringMetrics(baseUrl, tenant, id);
-      setMetrics(result as Record<string, string>);
+      const [str, flt, queue] = await Promise.all([
+        api.getQueueStringMetrics(baseUrl, tenant, id),
+        api.getQueueFloatMetrics(baseUrl, tenant, id),
+        api.getStatQueue(baseUrl, tenant, id),
+      ]);
+      setMetrics(str);
+      setFloatMetrics(flt);
+      setRawQueue(queue);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to fetch metrics');
     } finally {
@@ -307,41 +295,6 @@ export function Component() {
     setEditProfile(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleActivationChange = (field: keyof ActivationInterval, value: string) => {
-    setEditProfile(prev => {
-      const ai = { ActivationTime: ZERO_TIME, ExpiryTime: ZERO_TIME, ...prev.ActivationInterval, [field]: fromLocalInput(value) };
-      return { ...prev, ActivationInterval: isZeroTime(ai.ActivationTime) && isZeroTime(ai.ExpiryTime) ? null : ai };
-    });
-  };
-
-  const addThresholdId = () => {
-    const id = newThresholdId.trim();
-    if (id && !editProfile.ThresholdIDs.includes(id)) {
-      handleEditChange('ThresholdIDs', [...editProfile.ThresholdIDs, id]);
-    }
-    setNewThresholdId('');
-  };
-
-  const handleFilterChange = (index: number, value: string) => {
-    setEditProfile(prev => {
-      const updatedFilters = [...prev.FilterIDs];
-      updatedFilters[index] = value;
-      return { ...prev, FilterIDs: updatedFilters };
-    });
-  };
-
-  const addFilter = () => {
-    setEditProfile(prev => ({ ...prev, FilterIDs: [...(prev.FilterIDs || []), ''] }));
-  };
-
-  const removeFilter = (index: number) => {
-    setEditProfile(prev => {
-      const updatedFilters = [...prev.FilterIDs];
-      updatedFilters.splice(index, 1);
-      return { ...prev, FilterIDs: updatedFilters };
-    });
-  };
-
   const handleMetricChange = (index: number, newValue: string) => {
     setEditProfile(prev => {
       const updatedMetrics = [...prev.Metrics];
@@ -372,33 +325,10 @@ export function Component() {
     });
   };
 
-  const handleMetricFilterChange = (metricIndex: number, filterIndex: number, value: string) => {
+  const handleMetricFiltersChange = (metricIndex: number, value: string[]) => {
     setEditProfile(prev => {
       const updatedMetrics = [...prev.Metrics];
-      const updatedFilterIDs = [...(updatedMetrics[metricIndex].FilterIDs || [])];
-      updatedFilterIDs[filterIndex] = value;
-      updatedMetrics[metricIndex] = { ...updatedMetrics[metricIndex], FilterIDs: updatedFilterIDs };
-      return { ...prev, Metrics: updatedMetrics };
-    });
-  };
-
-  const addMetricFilter = (metricIndex: number) => {
-    setEditProfile(prev => {
-      const updatedMetrics = [...prev.Metrics];
-      updatedMetrics[metricIndex] = {
-        ...updatedMetrics[metricIndex],
-        FilterIDs: [...(updatedMetrics[metricIndex].FilterIDs || []), ''],
-      };
-      return { ...prev, Metrics: updatedMetrics };
-    });
-  };
-
-  const removeMetricFilter = (metricIndex: number, filterIndex: number) => {
-    setEditProfile(prev => {
-      const updatedMetrics = [...prev.Metrics];
-      const updatedFilterIDs = [...(updatedMetrics[metricIndex].FilterIDs || [])];
-      updatedFilterIDs.splice(filterIndex, 1);
-      updatedMetrics[metricIndex] = { ...updatedMetrics[metricIndex], FilterIDs: updatedFilterIDs };
+      updatedMetrics[metricIndex] = { ...updatedMetrics[metricIndex], FilterIDs: value };
       return { ...prev, Metrics: updatedMetrics };
     });
   };
@@ -411,6 +341,7 @@ export function Component() {
           <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
           <Button variant="contained" onClick={fetchIds}>Fetch</Button>
           <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>
+          <CachingSelect value={caching} onChange={setCaching} />
           <Button
             variant="outlined"
             color="warning"
@@ -422,6 +353,18 @@ export function Component() {
           </Button>
         </Box>
       </Paper>
+
+      <EventTester
+        tenant={tenant}
+        methods={['StatSv1.GetStatQueuesForEvent', 'StatSv1.ProcessEvent']}
+        opts={[
+          { key: '*stsProfileIDs', label: 'Profile IDs', kind: 'ids', options: testerOptions.get('stats') },
+          { key: '*stsProfileIgnoreFilters', label: 'Ignore filters', kind: 'bool' },
+        ]}
+        initialFields={[['Account', ''], ['Usage', '60s'], ['Cost', '']]}
+        warning="ProcessEvent adds the event to every matching queue and changes its metrics. Use GetStatQueuesForEvent to only see what matches."
+        run={(method, args) => api.statSEvent(baseUrl!, method, args)}
+      />
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
@@ -469,6 +412,7 @@ export function Component() {
       <Dialog open={detailOpen} onClose={() => setDetailOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>{editing ? (editProfile.ID ? `Edit: ${editProfile.ID}` : 'Create New') : (selectedProfile ? `${(selectedProfile as Record<string, unknown>).ID}` : '')}</DialogTitle>
         <DialogContent>
+          {editing && idOptions.error && <Alert severity="warning" sx={{ mt: 1 }}>{idOptions.error}</Alert>}
           {editing ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
               {/* ID */}
@@ -529,73 +473,22 @@ export function Component() {
                 />
               </Box>
 
-              {/* Activation Interval */}
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <TextField
-                  label="Activation Time"
-                  type="datetime-local"
-                  value={toLocalInput(editProfile.ActivationInterval?.ActivationTime)}
-                  onChange={e => handleActivationChange('ActivationTime', e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  fullWidth
-                  size="small"
-                />
-                <TextField
-                  label="Expiry Time"
-                  type="datetime-local"
-                  value={toLocalInput(editProfile.ActivationInterval?.ExpiryTime)}
-                  onChange={e => handleActivationChange('ExpiryTime', e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  fullWidth
-                  size="small"
-                />
-              </Box>
+              <ActivationIntervalInput
+                value={editProfile.ActivationInterval}
+                onChange={v => handleEditChange('ActivationInterval', v)}
+              />
 
-              {/* Threshold IDs */}
-              <Box>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>Threshold IDs</Typography>
-                <Box sx={{ mb: 1 }}>
-                  {editProfile.ThresholdIDs.map(t => (
-                    <Chip
-                      key={t}
-                      label={t}
-                      size="small"
-                      onDelete={() => handleEditChange('ThresholdIDs', editProfile.ThresholdIDs.filter(x => x !== t))}
-                      sx={{ mr: 0.5, mb: 0.5 }}
-                    />
-                  ))}
-                </Box>
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                  <SearchableSelect
-                    label="Threshold"
-                    value={newThresholdId}
-                    options={['*none', ...thresholdIds].filter(t => !editProfile.ThresholdIDs.includes(t))}
-                    onChange={setNewThresholdId}
-                    fullWidth
-                  />
-                  <Button size="small" startIcon={<AddIcon />} onClick={addThresholdId} disabled={!newThresholdId}>Add</Button>
-                </Box>
-              </Box>
+              <IdMultiSelect
+                label="Threshold IDs" value={editProfile.ThresholdIDs} options={['*none', ...idOptions.get('thresholds')]}
+                onChange={v => handleEditChange('ThresholdIDs', v)}
+                helperText="Empty checks every matching threshold; *none checks none"
+              />
 
-              {/* Filters */}
-              <Box>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>Filters</Typography>
-                {(editProfile.FilterIDs || []).map((filter, index) => (
-                  <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                    <TextField
-                      value={filter}
-                      onChange={e => handleFilterChange(index, e.target.value)}
-                      fullWidth
-                      size="small"
-                      placeholder="Filter ID"
-                    />
-                    <IconButton size="small" color="error" onClick={() => removeFilter(index)}>
-                      <RemoveCircleOutlineIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
-                ))}
-                <Button size="small" startIcon={<AddIcon />} onClick={addFilter}>Add Filter</Button>
-              </Box>
+              <IdMultiSelect
+                label="Filter IDs" value={editProfile.FilterIDs} options={idOptions.get('filters')}
+                onChange={v => handleEditChange('FilterIDs', v)}
+                placeholder="Filter ID or inline *string:~*req.Account:1001"
+              />
 
               {/* Metrics */}
               <Box>
@@ -635,25 +528,10 @@ export function Component() {
                       />
                     )}
 
-                    {/* Per-metric FilterIDs */}
-                    <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>Metric Filters</Typography>
-                    {(metric.FilterIDs || []).map((filter, filterIndex) => (
-                      <Box key={filterIndex} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                        <TextField
-                          value={filter}
-                          onChange={e => handleMetricFilterChange(index, filterIndex, e.target.value)}
-                          fullWidth
-                          size="small"
-                          placeholder="Filter ID"
-                        />
-                        <IconButton size="small" color="error" onClick={() => removeMetricFilter(index, filterIndex)}>
-                          <RemoveCircleOutlineIcon fontSize="small" />
-                        </IconButton>
-                      </Box>
-                    ))}
-                    <Button size="small" startIcon={<AddIcon />} onClick={() => addMetricFilter(index)}>
-                      Add Filter
-                    </Button>
+                    <IdMultiSelect
+                      label="Metric Filter IDs" value={metric.FilterIDs || []} options={idOptions.get('filters')}
+                      onChange={v => handleMetricFiltersChange(index, v)}
+                    />
                   </Paper>
                 ))}
                 <Button size="small" startIcon={<AddIcon />} onClick={addMetric}>Add Metric</Button>
@@ -693,9 +571,7 @@ export function Component() {
                 <ListItem>
                   <ListItemText
                     primary="Activation Interval"
-                    secondary={selectedProfile.ActivationInterval
-                      ? `${formatTime((selectedProfile.ActivationInterval as ActivationInterval).ActivationTime)} → ${formatTime((selectedProfile.ActivationInterval as ActivationInterval).ExpiryTime)}`
-                      : 'Always active'}
+                    secondary={formatActivationInterval(selectedProfile.ActivationInterval as ActivationInterval | null)}
                   />
                 </ListItem>
                 <Divider />
@@ -754,8 +630,16 @@ export function Component() {
       <Dialog open={metricsOpen} onClose={() => setMetricsOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Metrics: {metricsId}</DialogTitle>
         <DialogContent>
+          <Tabs value={metricsTab} onChange={(_, v) => setMetricsTab(v)} sx={{ mb: 1 }}>
+            <Tab label="Metrics" />
+            <Tab label="Raw queue" />
+          </Tabs>
           {metricsLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+          ) : metricsTab === 1 ? (
+            <Paper variant="outlined" sx={{ p: 1, maxHeight: 400, overflow: 'auto', bgcolor: 'grey.50' }}>
+              <pre style={{ fontSize: 12, margin: 0 }}>{JSON.stringify(rawQueue, null, 2)}</pre>
+            </Paper>
           ) : metrics ? (
             <TableContainer>
               <Table size="small">
@@ -763,6 +647,7 @@ export function Component() {
                   <TableRow>
                     <TableCell>Metric</TableCell>
                     <TableCell>Value</TableCell>
+                    <TableCell>Raw (float)</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -774,6 +659,7 @@ export function Component() {
                       <TableRow key={k}>
                         <TableCell><Chip label={displayText} size="small" /></TableCell>
                         <TableCell>{v}</TableCell>
+                        <TableCell>{floatMetrics?.[k] ?? '-'}</TableCell>
                       </TableRow>
                     );
                   })}
