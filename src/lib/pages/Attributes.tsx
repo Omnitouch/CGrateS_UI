@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react';
 import {
-  Box, Typography, Paper, Button, Select, MenuItem, FormControl,
-  InputLabel, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
+  Box, Typography, Paper, Button,
+  CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, IconButton,
-  TextField, Accordion, AccordionSummary, AccordionDetails, Chip, Divider,
+  TextField, Accordion, AccordionSummary, AccordionDetails, Chip, Divider, Autocomplete,
+  Checkbox, FormControlLabel,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -13,18 +14,40 @@ import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import type { AttributeProfile, AttributeEntry } from '../types';
 import SearchableSelect from '../components/SearchableSelect';
+import IdMultiSelect from '../components/IdMultiSelect';
+import CachingSelect, { cachingOpts } from '../components/CachingSelect';
+import ActivationIntervalInput, { formatActivationInterval } from '../components/ActivationIntervalInput';
+import EventTester from '../components/EventTester';
+import { useIdOptions } from '../components/useIdOptions';
 
+// Substitution types handled by engine.ParseAttribute; a value of *remove deletes the field instead.
 const attributeTypeHints: Record<string, string> = {
-  '*constant': 'Sets the attribute to a fixed constant value',
-  '*variable': 'Sets the attribute to a dynamic value from another field (e.g. ~*req.Account)',
-  '*composed': 'Appends/composes values together from multiple sources',
-  '*usage_difference': 'Calculates the difference between two usage timestamps',
-  '*sum': 'Sums up numeric values',
-  '*value_exponent': 'Applies exponent to the value (value * 10^exponent)',
-  '*none': 'No transformation, used for filtering only',
+  '*constant': '1 value: set the field to this text (*remove deletes the field)',
+  '*variable': 'Value(s) parsed from the event and concatenated, e.g. ~*req.Account',
+  '*composed': "Like *variable, but appended to the field's current value",
+  '*usage_difference': '2 values: end time, start time; sets the duration between them',
+  '*sum': '2+ values: their sum',
+  '*difference': '2+ values: first minus the rest (numbers, durations or times)',
+  '*multiply': '2+ values: their product',
+  '*divide': '2+ values: first divided by the rest',
+  '*value_exponent': '2 values: number, exponent; sets number * 10^exponent',
+  '*unix_timestamp': '1 value: a time, converted to Unix seconds',
+  '*datetime': '1 value: a time, converted to RFC3339',
+  '*prefix': "1 value: put in front of the field's current value",
+  '*suffix': "1 value: appended to the field's current value",
+  '*cc_usage': '3 values: CC request number, used time, debit interval; sets the total usage',
+  '*sipcid': '1+ values: SIP Call-ID followed by tags, joined with ";" (tags sorted)',
+  '*none': 'No change to the event',
+  '*http#': 'Type *http#<url>: POSTs the event to the URL and uses the reply; values unused',
 };
 
-const attributeTypes = Object.keys(attributeTypeHints);
+const attributeTypes = Object.keys(attributeTypeHints).map(t => (t === '*http#' ? '*http#https://' : t));
+
+const CONTEXTS = ['*any', '*sessions', '*cdrs', '*chargers', '*routes', '*thresholds', '*stats', '*resources'];
+
+function typeHint(type: string): string | undefined {
+  return attributeTypeHints[type.startsWith('*http#') ? '*http#' : type];
+}
 
 function nonBlank(ids: string[] | null | undefined): string[] {
   return (ids || []).map(s => s.trim()).filter(Boolean);
@@ -63,14 +86,22 @@ export function Component() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<AttributeProfile>(emptyProfile(defaultTenant));
+  const [caching, setCaching] = useState('');
+  const [count, setCount] = useState<number | null>(null);
+  const idOptions = useIdOptions(['filters'], tenant, detailOpen && editing);
+  const testerOptions = useIdOptions(['attributes'], tenant, true);
 
   const fetchIds = useCallback(async () => {
     if (!baseUrl || !tenant) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await api.getAttributeProfileIDs(baseUrl, tenant) as string[];
+      const [result, total] = await Promise.all([
+        api.getAttributeProfileIDs(baseUrl, tenant),
+        api.getAttributeProfileCount(baseUrl, tenant),
+      ]);
       setIds(result || []);
+      setCount(total);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to fetch');
       setIds([]);
@@ -100,24 +131,25 @@ export function Component() {
         ...editData,
         FilterIDs: nonBlank(editData.FilterIDs),
         Attributes: editData.Attributes.map(a => ({ ...a, FilterIDs: nonBlank(a.FilterIDs) })),
+        APIOpts: cachingOpts(caching),
       });
       setDetailOpen(false);
       fetchIds();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to save');
     }
-  }, [baseUrl, editData, fetchIds]);
+  }, [baseUrl, editData, caching, fetchIds]);
 
   const handleDelete = useCallback(async (id: string) => {
     if (!baseUrl || !window.confirm(`Delete ${id}?`)) return;
     try {
-      await api.removeAttributeProfile(baseUrl, tenant, id);
+      await api.removeAttributeProfile(baseUrl, tenant, id, cachingOpts(caching));
       fetchIds();
       setDetailOpen(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to delete');
     }
-  }, [baseUrl, tenant, fetchIds]);
+  }, [baseUrl, tenant, caching, fetchIds]);
 
   const handleCreate = useCallback(() => {
     setDetail(null);
@@ -180,59 +212,6 @@ export function Component() {
     });
   };
 
-  // FilterIDs on attribute level
-  const addAttrFilterId = (attrIdx: number) => {
-    setEditData(prev => {
-      const attrs = [...prev.Attributes];
-      attrs[attrIdx] = {
-        ...attrs[attrIdx],
-        FilterIDs: [...(attrs[attrIdx].FilterIDs || []), ''],
-      };
-      return { ...prev, Attributes: attrs };
-    });
-  };
-
-  const removeAttrFilterId = (attrIdx: number, fIdx: number) => {
-    setEditData(prev => {
-      const attrs = [...prev.Attributes];
-      attrs[attrIdx] = {
-        ...attrs[attrIdx],
-        FilterIDs: attrs[attrIdx].FilterIDs.filter((_, i) => i !== fIdx),
-      };
-      return { ...prev, Attributes: attrs };
-    });
-  };
-
-  const updateAttrFilterId = (attrIdx: number, fIdx: number, value: string) => {
-    setEditData(prev => {
-      const attrs = [...prev.Attributes];
-      const fids = [...(attrs[attrIdx].FilterIDs || [])];
-      fids[fIdx] = value;
-      attrs[attrIdx] = { ...attrs[attrIdx], FilterIDs: fids };
-      return { ...prev, Attributes: attrs };
-    });
-  };
-
-  // Profile-level FilterIDs
-  const addProfileFilterId = () => {
-    setEditData(prev => ({ ...prev, FilterIDs: [...(prev.FilterIDs || []), ''] }));
-  };
-
-  const removeProfileFilterId = (idx: number) => {
-    setEditData(prev => ({
-      ...prev,
-      FilterIDs: (prev.FilterIDs || []).filter((_, i) => i !== idx),
-    }));
-  };
-
-  const updateProfileFilterId = (idx: number, value: string) => {
-    setEditData(prev => {
-      const fids = [...(prev.FilterIDs || [])];
-      fids[idx] = value;
-      return { ...prev, FilterIDs: fids };
-    });
-  };
-
   return (
     <Box>
       <Typography variant="h5" gutterBottom>Attribute Profiles</Typography>
@@ -241,8 +220,24 @@ export function Component() {
           <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
           <Button variant="contained" onClick={fetchIds}>Fetch</Button>
           <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>
+          <CachingSelect value={caching} onChange={setCaching} />
+          {count !== null && <Typography variant="body2" color="text.secondary">{count} profiles</Typography>}
         </Box>
       </Paper>
+
+      <EventTester
+        tenant={tenant}
+        methods={['AttributeSv1.ProcessEvent', 'AttributeSv1.GetAttributeForEvent']}
+        opts={[
+          { key: '*context', label: 'Context', kind: 'text', options: CONTEXTS },
+          { key: '*attrProfileIDs', label: 'Profile IDs', kind: 'ids', options: testerOptions.get('attributes') },
+          { key: '*attrProcessRuns', label: 'Process runs', kind: 'number' },
+          { key: '*attrProfileRuns', label: 'Profile runs', kind: 'number' },
+          { key: '*attrProfileIgnoreFilters', label: 'Ignore profile filters', kind: 'bool' },
+        ]}
+        initialFields={[['Account', ''], ['Destination', '']]}
+        run={(method, args) => api.attributeSEvent(baseUrl!, method, args)}
+      />
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
@@ -279,6 +274,7 @@ export function Component() {
       <Dialog open={detailOpen} onClose={() => setDetailOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>{selectedId ? `${selectedId}` : 'Create New Attribute Profile'}</DialogTitle>
         <DialogContent dividers>
+          {editing && idOptions.error && <Alert severity="warning" sx={{ mb: 1 }}>{idOptions.error}</Alert>}
           {editing ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
               <TextField
@@ -296,27 +292,24 @@ export function Component() {
                 value={editData.Weight}
                 onChange={e => setEditData(prev => ({ ...prev, Weight: Number(e.target.value) }))}
               />
-              <TextField
-                label="Contexts (comma-separated)" size="small" fullWidth
-                value={(editData.Contexts || []).join(', ')}
-                onChange={e => setEditData(prev => ({ ...prev, Contexts: e.target.value.split(',').map(s => s.trim()).filter(Boolean) }))}
+              <IdMultiSelect
+                label="Contexts" value={editData.Contexts || []} options={CONTEXTS}
+                onChange={v => setEditData(prev => ({ ...prev, Contexts: v }))}
+                helperText="*any matches every context; custom contexts can be typed"
               />
-
-              {/* Profile-level FilterIDs */}
-              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Profile FilterIDs</Typography>
-              {(editData.FilterIDs || []).map((fid, idx) => (
-                <Box key={idx} sx={{ display: 'flex', gap: 1 }}>
-                  <TextField
-                    size="small" fullWidth value={fid}
-                    onChange={e => updateProfileFilterId(idx, e.target.value)}
-                    placeholder="Filter ID"
-                  />
-                  <IconButton size="small" color="error" onClick={() => removeProfileFilterId(idx)}>
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Box>
-              ))}
-              <Button size="small" startIcon={<AddIcon />} onClick={addProfileFilterId}>Add FilterID</Button>
+              <IdMultiSelect
+                label="Filter IDs" value={editData.FilterIDs || []} options={idOptions.get('filters')}
+                onChange={v => setEditData(prev => ({ ...prev, FilterIDs: v }))}
+                placeholder="Filter ID or inline *string:~*req.Account:1001"
+              />
+              <ActivationIntervalInput
+                value={editData.ActivationInterval}
+                onChange={v => setEditData(prev => ({ ...prev, ActivationInterval: v }))}
+              />
+              <FormControlLabel
+                label="Blocker (stop processing further profiles after this one)"
+                control={<Checkbox checked={!!editData.Blocker} onChange={e => setEditData(prev => ({ ...prev, Blocker: e.target.checked }))} />}
+              />
 
               <Divider sx={{ my: 1 }} />
               <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Attributes</Typography>
@@ -337,21 +330,20 @@ export function Component() {
                     placeholder="e.g. *req.Subject"
                   />
 
-                  <FormControl size="small" fullWidth sx={{ mb: 1 }}>
-                    <InputLabel>Type</InputLabel>
-                    <Select
-                      value={attr.Type}
-                      label="Type"
-                      onChange={e => updateAttr(attrIdx, 'Type', e.target.value)}
-                    >
-                      {(attributeTypes.includes(attr.Type) ? attributeTypes : [attr.Type, ...attributeTypes]).map(at => (
-                        <MenuItem key={at} value={at}>{at}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  {attributeTypeHints[attr.Type] && (
+                  <Autocomplete<string, false, false, true>
+                    freeSolo size="small" sx={{ mb: 1 }}
+                    options={attributeTypes}
+                    value={attr.Type}
+                    onInputChange={(_e, v) => updateAttr(attrIdx, 'Type', v)}
+                    renderInput={p => <TextField {...p} label="Type" />}
+                  />
+                  {typeHint(attr.Type) ? (
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                      {attributeTypeHints[attr.Type]}
+                      {typeHint(attr.Type)}
+                    </Typography>
+                  ) : (
+                    <Typography variant="caption" color="warning.main" sx={{ display: 'block', mb: 1 }}>
+                      Not a substitution type CGrateS knows; processing will fail with "unsupported type"
                     </Typography>
                   )}
 
@@ -372,21 +364,10 @@ export function Component() {
                   ))}
                   <Button size="small" startIcon={<AddIcon />} onClick={() => addAttrRule(attrIdx)}>Add Rule</Button>
 
-                  {/* Attribute-level FilterIDs */}
-                  <Typography variant="body2" sx={{ mt: 1, mb: 0.5, fontWeight: 500 }}>FilterIDs</Typography>
-                  {(attr.FilterIDs || []).map((fid, fIdx) => (
-                    <Box key={fIdx} sx={{ display: 'flex', gap: 1, mb: 0.5 }}>
-                      <TextField
-                        size="small" fullWidth value={fid}
-                        onChange={e => updateAttrFilterId(attrIdx, fIdx, e.target.value)}
-                        placeholder="Filter ID"
-                      />
-                      <IconButton size="small" color="error" onClick={() => removeAttrFilterId(attrIdx, fIdx)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  ))}
-                  <Button size="small" startIcon={<AddIcon />} onClick={() => addAttrFilterId(attrIdx)}>Add FilterID</Button>
+                  <IdMultiSelect
+                    label="Filter IDs" value={attr.FilterIDs || []} options={idOptions.get('filters')}
+                    onChange={v => updateAttr(attrIdx, 'FilterIDs', v)} sx={{ mt: 1.5 }}
+                  />
                 </Paper>
               ))}
 
@@ -404,9 +385,7 @@ export function Component() {
                   <Typography variant="body2"><strong>Contexts:</strong> {(detail.Contexts || []).join(', ') || 'None'}</Typography>
                   <Typography variant="body2">
                     <strong>Activation Interval:</strong>{' '}
-                    {detail.ActivationInterval
-                      ? `${detail.ActivationInterval.ActivationTime} - ${detail.ActivationInterval.ExpiryTime}`
-                      : 'None'}
+                    {formatActivationInterval(detail.ActivationInterval)}
                   </Typography>
                   {detail.FilterIDs && detail.FilterIDs.length > 0 && (
                     <Box sx={{ mt: 0.5 }}>

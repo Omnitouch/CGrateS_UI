@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import {
   Box, Typography, Paper, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, IconButton,
-  TextField, List, ListItem, ListItemText, Divider, Chip,
+  TextField, List, ListItem, ListItemText, Divider, Chip, Autocomplete,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -11,6 +11,13 @@ import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import type { ChargerProfile } from '../types';
 import SearchableSelect from '../components/SearchableSelect';
+import IdMultiSelect from '../components/IdMultiSelect';
+import CachingSelect, { cachingOpts } from '../components/CachingSelect';
+import ActivationIntervalInput, { formatActivationInterval } from '../components/ActivationIntervalInput';
+import EventTester from '../components/EventTester';
+import { useIdOptions } from '../components/useIdOptions';
+
+const CONTEXTS = ['*any', '*sessions', '*cdrs', '*chargers'];
 
 function emptyCharger(tenant: string): ChargerProfile {
   return {
@@ -36,6 +43,8 @@ export function Component() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<ChargerProfile>(emptyCharger(defaultTenant));
+  const [caching, setCaching] = useState('');
+  const idOptions = useIdOptions(['filters', 'attributes'], tenant, detailOpen && editing);
 
   const fetchIds = useCallback(async () => {
     if (!baseUrl || !tenant) return;
@@ -76,28 +85,24 @@ export function Component() {
   const handleSave = useCallback(async () => {
     if (!baseUrl) return;
     try {
-      await api.setChargerProfile(baseUrl, {
-        ...editData,
-        FilterIDs: (editData.FilterIDs || []).map(s => s.trim()).filter(Boolean),
-        AttributeIDs: (editData.AttributeIDs || []).map(s => s.trim()).filter(Boolean),
-      });
+      await api.setChargerProfile(baseUrl, { ...editData, APIOpts: cachingOpts(caching) });
       setDetailOpen(false);
       fetchIds();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to save');
     }
-  }, [baseUrl, editData, fetchIds]);
+  }, [baseUrl, editData, caching, fetchIds]);
 
   const handleDelete = useCallback(async (id: string) => {
     if (!baseUrl || !window.confirm(`Delete ${id}?`)) return;
     try {
-      await api.removeChargerProfile(baseUrl, tenant, id);
+      await api.removeChargerProfile(baseUrl, tenant, id, cachingOpts(caching));
       fetchIds();
       setDetailOpen(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to delete');
     }
-  }, [baseUrl, tenant, fetchIds]);
+  }, [baseUrl, tenant, caching, fetchIds]);
 
   const handleCreate = useCallback(() => {
     setDetail(null);
@@ -107,45 +112,6 @@ export function Component() {
     setDetailOpen(true);
   }, [tenant]);
 
-  // --- Edit helpers ---
-  const addFilterId = () => {
-    setEditData(prev => ({ ...prev, FilterIDs: [...(prev.FilterIDs || []), ''] }));
-  };
-
-  const removeFilterId = (idx: number) => {
-    setEditData(prev => ({
-      ...prev,
-      FilterIDs: (prev.FilterIDs || []).filter((_, i) => i !== idx),
-    }));
-  };
-
-  const updateFilterId = (idx: number, value: string) => {
-    setEditData(prev => {
-      const fids = [...(prev.FilterIDs || [])];
-      fids[idx] = value;
-      return { ...prev, FilterIDs: fids };
-    });
-  };
-
-  const addAttributeId = () => {
-    setEditData(prev => ({ ...prev, AttributeIDs: [...(prev.AttributeIDs || []), ''] }));
-  };
-
-  const removeAttributeId = (idx: number) => {
-    setEditData(prev => ({
-      ...prev,
-      AttributeIDs: (prev.AttributeIDs || []).filter((_, i) => i !== idx),
-    }));
-  };
-
-  const updateAttributeId = (idx: number, value: string) => {
-    setEditData(prev => {
-      const aids = [...(prev.AttributeIDs || [])];
-      aids[idx] = value;
-      return { ...prev, AttributeIDs: aids };
-    });
-  };
-
   return (
     <Box>
       <Typography variant="h5" gutterBottom>Charger Profiles</Typography>
@@ -154,8 +120,17 @@ export function Component() {
           <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
           <Button variant="contained" onClick={fetchIds}>Fetch</Button>
           <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>
+          <CachingSelect value={caching} onChange={setCaching} />
         </Box>
       </Paper>
+
+      <EventTester
+        tenant={tenant}
+        methods={['ChargerSv1.GetChargersForEvent', 'ChargerSv1.ProcessEvent']}
+        opts={[{ key: '*context', label: 'Attribute context', kind: 'text', options: CONTEXTS, helperText: 'ProcessEvent passes this to AttributeS' }]}
+        initialFields={[['Account', ''], ['Destination', '']]}
+        run={(method, args) => api.chargerSEvent(baseUrl!, method, args)}
+      />
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
@@ -192,6 +167,7 @@ export function Component() {
       <Dialog open={detailOpen} onClose={() => setDetailOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>{selectedId ? `${selectedId}` : 'Create New Charger'}</DialogTitle>
         <DialogContent dividers>
+          {editing && idOptions.error && <Alert severity="warning" sx={{ mb: 1 }}>{idOptions.error}</Alert>}
           {editing ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
               <TextField
@@ -204,50 +180,30 @@ export function Component() {
                 value={editData.ID}
                 onChange={e => setEditData(prev => ({ ...prev, ID: e.target.value }))}
               />
-              <TextField
-                label="RunID" size="small" fullWidth
-                value={editData.RunID}
-                onChange={e => setEditData(prev => ({ ...prev, RunID: e.target.value }))}
+              <Autocomplete<string, false, false, true>
+                freeSolo size="small" options={['*default']}
+                value={editData.RunID} onInputChange={(_e, v) => setEditData(prev => ({ ...prev, RunID: v }))}
+                renderInput={p => <TextField {...p} label="RunID" helperText="*default is the main charging run; other names create extra runs" />}
               />
               <TextField
                 label="Weight" size="small" fullWidth type="number"
                 value={editData.Weight}
                 onChange={e => setEditData(prev => ({ ...prev, Weight: Number(e.target.value) }))}
               />
-
-              {/* FilterIDs */}
-              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>FilterIDs</Typography>
-              {(editData.FilterIDs || []).map((fid, idx) => (
-                <Box key={idx} sx={{ display: 'flex', gap: 1 }}>
-                  <TextField
-                    size="small" fullWidth value={fid}
-                    onChange={e => updateFilterId(idx, e.target.value)}
-                    placeholder="Filter ID"
-                  />
-                  <IconButton size="small" color="error" onClick={() => removeFilterId(idx)}>
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Box>
-              ))}
-              <Button size="small" startIcon={<AddIcon />} onClick={addFilterId}>Add FilterID</Button>
-
-              <Divider />
-
-              {/* AttributeIDs */}
-              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>AttributeIDs</Typography>
-              {(editData.AttributeIDs || []).map((aid, idx) => (
-                <Box key={idx} sx={{ display: 'flex', gap: 1 }}>
-                  <TextField
-                    size="small" fullWidth value={aid}
-                    onChange={e => updateAttributeId(idx, e.target.value)}
-                    placeholder="Attribute ID (or *none)"
-                  />
-                  <IconButton size="small" color="error" onClick={() => removeAttributeId(idx)}>
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Box>
-              ))}
-              <Button size="small" startIcon={<AddIcon />} onClick={addAttributeId}>Add AttributeID</Button>
+              <IdMultiSelect
+                label="Filter IDs" value={editData.FilterIDs || []} options={idOptions.get('filters')}
+                onChange={v => setEditData(prev => ({ ...prev, FilterIDs: v }))}
+                placeholder="Filter ID or inline *string:~*req.Account:1001"
+              />
+              <ActivationIntervalInput
+                value={editData.ActivationInterval}
+                onChange={v => setEditData(prev => ({ ...prev, ActivationInterval: v }))}
+              />
+              <IdMultiSelect
+                label="Attribute IDs" value={editData.AttributeIDs || []} options={['*none', ...idOptions.get('attributes')]}
+                onChange={v => setEditData(prev => ({ ...prev, AttributeIDs: v }))}
+                helperText="*none skips AttributeS; inline attributes like *constant:*req.RequestType:*prepaid are accepted"
+              />
             </Box>
           ) : (
             /* --- View mode --- */
@@ -267,6 +223,10 @@ export function Component() {
                 <Divider />
                 <ListItem>
                   <ListItemText primary="Weight" secondary={detail.Weight} />
+                </ListItem>
+                <Divider />
+                <ListItem>
+                  <ListItemText primary="Activation Interval" secondary={formatActivationInterval(detail.ActivationInterval)} />
                 </ListItem>
                 <Divider />
                 <ListItem sx={{ flexDirection: 'column', alignItems: 'flex-start' }}>
