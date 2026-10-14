@@ -43,6 +43,12 @@ export function Component() {
     setResult(null);
     if (m === 'data') { setCategory('data'); setUsage(1024 ** 2); }
     if (m === 'cost') { setCategory('call'); setUsage(60e9); }
+    if (m === 'maxusage') { setCategory('call'); changeTor('*voice'); }
+  };
+
+  const changeTor = (t: string) => {
+    setTor(t);
+    setUsage(t === '*voice' ? 60e9 : t === '*data' ? 1024 ** 2 : 1);
   };
 
   const fetchCost = useCallback(async () => {
@@ -94,7 +100,7 @@ export function Component() {
           <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
           {mode === 'maxusage' && (
             <>
-              <TextField select size="small" label="ToR" value={tor} onChange={e => setTor(e.target.value)} sx={{ minWidth: 130 }}>
+              <TextField select size="small" label="ToR" value={tor} onChange={e => changeTor(e.target.value)} sx={{ minWidth: 130 }}>
                 {TORS.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
               </TextField>
               <TextField select size="small" label="Request type" value={requestType} onChange={e => setRequestType(e.target.value)} sx={{ minWidth: 160 }}>
