@@ -3,6 +3,8 @@ import { Box, Typography, Paper, Button, TextField, CircularProgress, Alert } fr
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import SearchableSelect from '../components/SearchableSelect';
+import { DurationInput } from '../components/BalanceValue';
+import { toLocalInput } from '../components/ActivationIntervalInput';
 
 
 export function Component() {
@@ -12,31 +14,41 @@ export function Component() {
   const [category, setCategory] = useState('call');
   const [subject, setSubject] = useState('');
   const [destination, setDestination] = useState('');
-  const [usage, setUsage] = useState('60');
+  const [usageNs, setUsageNs] = useState(60e9);
+  const [answerTime, setAnswerTime] = useState(() => toLocalInput(new Date().toISOString()));
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchCost = useCallback(async () => {
     if (!baseUrl) return;
+    if (!answerTime) { setError('Answer time is required'); return; }
     setLoading(true); setError(null); setResult(null);
     try {
-      const r = await api.getCost(baseUrl, { Tenant: tenant, Category: category, Subject: subject, AnswerTime: new Date().toISOString(), Destination: destination, Usage: usage, APIOpts: {} });
+      const r = await api.getCost(baseUrl, {
+        Tenant: tenant, Category: category, Subject: subject, Destination: destination,
+        AnswerTime: new Date(answerTime).toISOString(),
+        // A bare number is read as nanoseconds, so always send the unit.
+        Usage: `${usageNs}ns`,
+        APIOpts: {},
+      });
       setResult(r as Record<string, unknown>);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed'); }
     finally { setLoading(false); }
-  }, [baseUrl, tenant, category, subject, destination, usage]);
+  }, [baseUrl, tenant, category, subject, destination, usageNs, answerTime]);
 
   return (
     <Box>
       <Typography variant="h5" gutterBottom>Get Cost</Typography>
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
           <TextField size="small" label="Category" value={category} onChange={e => setCategory(e.target.value)} />
           <TextField size="small" label="Subject" value={subject} onChange={e => setSubject(e.target.value)} />
           <TextField size="small" label="Destination" value={destination} onChange={e => setDestination(e.target.value)} />
-          <TextField size="small" label="Usage (seconds)" value={usage} onChange={e => setUsage(e.target.value)} />
+          <TextField size="small" label="Answer time" type="datetime-local" value={answerTime}
+            onChange={e => setAnswerTime(e.target.value)} slotProps={{ inputLabel: { shrink: true }, htmlInput: { step: 1 } }} />
+          <DurationInput value={usageNs} onChange={setUsageNs} sx={{ minWidth: 260 }} />
           <Button variant="contained" onClick={fetchCost} disabled={loading}>{loading ? <CircularProgress size={20} /> : 'Fetch Cost'}</Button>
         </Box>
       </Paper>

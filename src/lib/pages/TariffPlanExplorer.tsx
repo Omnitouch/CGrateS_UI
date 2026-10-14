@@ -61,7 +61,7 @@ function detailQueryFn(baseUrl: string, tpid: string, tenant: string, node: ExNo
     case 'destinationrate': return api.getTPDestinationRate(baseUrl, tpid, node.id);
     case 'rate': return api.getTPRate(baseUrl, tpid, node.id);
     case 'destination': return api.getTPDestination(baseUrl, tpid, node.id);
-    case 'timing': return api.getTiming(baseUrl, tpid, node.id);
+    case 'timing': return api.getTPTiming(baseUrl, tpid, node.id);
   }
 }
 
@@ -248,11 +248,16 @@ function DetailBody({ node, detail, onOpen }: { node: ExNode; detail: unknown; o
     );
   }
 
-  // timing
+  // timing (StorDB form: ";"-joined lists, Time "start;end")
+  const [start, end] = String(d.Time || '').split(';');
+  const rows: [string, string][] = [
+    ['Years', String(d.Years)], ['Months', String(d.Months)], ['MonthDays', String(d.MonthDays)],
+    ['WeekDays', String(d.WeekDays)], ['Start time', start || '-'], ['End time', end || '-'],
+  ];
   return (
     <Table size="small"><TableBody>
-      {['Years', 'Months', 'MonthDays', 'WeekDays', 'Time'].map(k => (
-        <TableRow key={k}><TableCell sx={{ fontWeight: 600 }}>{k}</TableCell><TableCell>{String((d[k] as unknown) ?? '*any')}</TableCell></TableRow>
+      {rows.map(([k, v]) => (
+        <TableRow key={k}><TableCell sx={{ fontWeight: 600 }}>{k}</TableCell><TableCell>{v}</TableCell></TableRow>
       ))}
     </TableBody></Table>
   );

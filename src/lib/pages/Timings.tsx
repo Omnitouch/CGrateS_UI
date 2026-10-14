@@ -57,26 +57,16 @@ export function Component() {
   const fetchDetail = useCallback(async (id: string) => {
     if (!baseUrl) return;
     try {
-      const result = await api.getTiming(baseUrl, selectedTpid, id) as Record<string, unknown>;
-      // Parse Time field or use StartTime/EndTime
-      let startTime = '*any';
-      let endTime = '*any';
-      if (result.StartTime && result.EndTime) {
-        startTime = String(result.StartTime);
-        endTime = String(result.EndTime);
-      } else if (result.Time) {
-        const [start, end] = String(result.Time).split(';');
-        startTime = start || '*any';
-        endTime = end || '*any';
-      }
+      const result = await api.getTPTiming(baseUrl, selectedTpid, id) as Record<string, string>;
+      const [startTime, endTime] = (result.Time || '').split(';');
       setDetail({
-        ID: String(result.ID || ''),
-        Years: result.Years && Array.isArray(result.Years) && (result.Years as string[]).length > 0 ? (result.Years as string[]).join(',') : String(result.Years || '*any'),
-        Months: result.Months && Array.isArray(result.Months) && (result.Months as string[]).length > 0 ? (result.Months as string[]).join(',') : String(result.Months || '*any'),
-        MonthDays: result.MonthDays && Array.isArray(result.MonthDays) && (result.MonthDays as string[]).length > 0 ? (result.MonthDays as string[]).join(',') : String(result.MonthDays || '*any'),
-        WeekDays: result.WeekDays && Array.isArray(result.WeekDays) && (result.WeekDays as string[]).length > 0 ? (result.WeekDays as string[]).join(',') : String(result.WeekDays || '*any'),
-        StartTime: startTime,
-        EndTime: endTime,
+        ID: result.ID,
+        Years: result.Years,
+        Months: result.Months,
+        MonthDays: result.MonthDays,
+        WeekDays: result.WeekDays,
+        StartTime: startTime || '',
+        EndTime: endTime || '',
       });
       setEditing(false);
       setDetailOpen(true);
@@ -88,7 +78,8 @@ export function Component() {
   const handleSave = useCallback(async () => {
     if (!baseUrl || !detail) return;
     try {
-      const combinedTime = `${detail.StartTime || '*any'};${detail.EndTime || '*any'}`;
+      if (!detail.StartTime) { setError('Start Time is required'); return; }
+      const combinedTime = detail.EndTime ? `${detail.StartTime};${detail.EndTime}` : detail.StartTime;
       await api.setTPTiming(baseUrl, {
         TPid: selectedTpid,
         ID: detail.ID,
@@ -108,7 +99,7 @@ export function Component() {
   const handleCreate = () => {
     setDetail({
       ID: '', Years: '*any', Months: '*any', MonthDays: '*any',
-      WeekDays: '*any', StartTime: '*any', EndTime: '*any',
+      WeekDays: '*any', StartTime: '00:00:00', EndTime: '',
     });
     setEditing(true);
     setDetailOpen(true);
@@ -161,6 +152,9 @@ export function Component() {
       </Paper>
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+        The list and editor work on the StorDB tariff plan. The Test buttons use TimingIsActiveAt, which only sees timings already loaded into DataDB.
+      </Typography>
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
@@ -174,8 +168,8 @@ export function Component() {
                   <TableCell>{idx + 1}</TableCell>
                   <TableCell sx={{ cursor: 'pointer' }} onClick={() => fetchDetail(id)}>{id}</TableCell>
                   <TableCell>
-                    <Button size="small" onClick={() => handleTestNow(id)} sx={{ mr: 1 }}>Test Now</Button>
-                    <Button size="small" onClick={() => { setTestTimingId(id); setTestTimeValue(''); setTestTimeResult(null); setTestTimeOpen(true); }}>Test Time</Button>
+                    <Button size="small" onClick={() => handleTestNow(id)} sx={{ mr: 1 }}>Test Now (DataDB)</Button>
+                    <Button size="small" onClick={() => { setTestTimingId(id); setTestTimeValue(''); setTestTimeResult(null); setTestTimeOpen(true); }}>Test Time (DataDB)</Button>
                   </TableCell>
                 </TableRow>
               )) : (
@@ -193,12 +187,12 @@ export function Component() {
           {detail && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
               <TextField size="small" label="ID" value={detail.ID} onChange={e => handleEditChange('ID', e.target.value)} disabled={!editing} />
-              <TextField size="small" label="Years" value={detail.Years} onChange={e => handleEditChange('Years', e.target.value)} disabled={!editing} />
-              <TextField size="small" label="Months" value={detail.Months} onChange={e => handleEditChange('Months', e.target.value)} disabled={!editing} />
-              <TextField size="small" label="Month Days" value={detail.MonthDays} onChange={e => handleEditChange('MonthDays', e.target.value)} disabled={!editing} />
-              <TextField size="small" label="Week Days" value={detail.WeekDays} onChange={e => handleEditChange('WeekDays', e.target.value)} disabled={!editing} />
+              <TextField size="small" label="Years" helperText="; separated, or *any" value={detail.Years} onChange={e => handleEditChange('Years', e.target.value)} disabled={!editing} />
+              <TextField size="small" label="Months" helperText="; separated, or *any" value={detail.Months} onChange={e => handleEditChange('Months', e.target.value)} disabled={!editing} />
+              <TextField size="small" label="Month Days" helperText="; separated, or *any" value={detail.MonthDays} onChange={e => handleEditChange('MonthDays', e.target.value)} disabled={!editing} />
+              <TextField size="small" label="Week Days" helperText="; separated (0 or 7 = Sunday), or *any" value={detail.WeekDays} onChange={e => handleEditChange('WeekDays', e.target.value)} disabled={!editing} />
               <TextField size="small" label="Start Time" value={detail.StartTime} onChange={e => handleEditChange('StartTime', e.target.value)} disabled={!editing} placeholder="e.g. 08:00:00" />
-              <TextField size="small" label="End Time" value={detail.EndTime} onChange={e => handleEditChange('EndTime', e.target.value)} disabled={!editing} placeholder="e.g. 17:00:00" />
+              <TextField size="small" label="End Time" value={detail.EndTime} onChange={e => handleEditChange('EndTime', e.target.value)} disabled={!editing} placeholder="e.g. 17:00:00 (optional)" />
             </Box>
           )}
         </DialogContent>
@@ -214,7 +208,7 @@ export function Component() {
 
       {/* Test Now Result Dialog */}
       <Dialog open={testNowOpen} onClose={() => setTestNowOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Timing Test Result</DialogTitle>
+        <DialogTitle>Timing Test Result (DataDB)</DialogTitle>
         <DialogContent>
           <Typography align="center" sx={{ py: 2, fontSize: 18 }}>
             {testNowResult !== null ? `Timing active = ${testNowResult}` : 'No result yet.'}
@@ -225,7 +219,7 @@ export function Component() {
 
       {/* Test Specific Time Dialog */}
       <Dialog open={testTimeOpen} onClose={() => setTestTimeOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Test Timing at Specific Time</DialogTitle>
+        <DialogTitle>Test Timing at Specific Time (DataDB)</DialogTitle>
         <DialogContent>
           <TextField fullWidth size="small" label="Date/Time" placeholder="YYYY-MM-DDTHH:mm:ssZ" value={testTimeValue}
             onChange={e => setTestTimeValue(e.target.value)} sx={{ mt: 1 }} />

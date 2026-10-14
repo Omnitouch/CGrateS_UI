@@ -68,6 +68,10 @@ export function getCDRs(baseUrl: string, params: Record<string, unknown>) {
   return jsonRpc(baseUrl, 'CDRsV2.GetCDRs', [params]);
 }
 
+export function getCDRsCount(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc<number>(baseUrl, 'CDRsV1.GetCDRsCount', [params]);
+}
+
 export function exportCDRs(baseUrl: string, params: Record<string, unknown>) {
   return jsonRpc(baseUrl, 'APIerSv1.ExportCDRs', [params]);
 }
@@ -76,44 +80,120 @@ export function removeCDRs(baseUrl: string, params: Record<string, unknown>) {
   return jsonRpc(baseUrl, 'APIerSv1.RemoveCDRs', [params]);
 }
 
+/** CDRsV1.RateCDRs / ReprocessCDRs take engine.ArgRateCDRs: Flags + RPCCDRsFilter fields + Tenant + APIOpts. */
+export function rateCDRs(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc<string>(baseUrl, 'CDRsV1.RateCDRs', [params]);
+}
+
+export function reprocessCDRs(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc<string>(baseUrl, 'CDRsV1.ReprocessCDRs', [params]);
+}
+
 // --- Destinations (TP) ---
 
 export function getTPIds(baseUrl: string) {
   return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetTPIds', []);
 }
 
-export function getTPDestinationIDs(baseUrl: string, tpid: string) {
-  return jsonRpc<string[]>(baseUrl, 'ApierV1.GetTPDestinationIDs', [{ TPid: tpid }]);
+/** TP id lists take PaginatorWithSearch; Search is a SQL LIKE on the id. An empty TP replies null. */
+function tpIdsParams(tpid: string, search?: string) {
+  return search ? { TPid: tpid, Search: search } : { TPid: tpid };
+}
+
+export function getTPDestinationIDs(baseUrl: string, tpid: string, search?: string) {
+  return jsonRpc<string[] | null>(baseUrl, 'ApierV1.GetTPDestinationIDs', [tpIdsParams(tpid, search)]);
 }
 
 export function getTPDestination(baseUrl: string, tpid: string, id: string) {
   return jsonRpc(baseUrl, 'ApierV1.GetTPDestination', [{ TPid: tpid, ID: id }]);
 }
 
+export function setTPDestination(baseUrl: string, tpid: string, id: string, prefixes: string[]) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.SetTPDestination', [{ TPid: tpid, ID: id, Prefixes: prefixes }]);
+}
+
+export function removeTPDestination(baseUrl: string, tpid: string, id: string) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.RemoveTPDestination', [{ TPid: tpid, ID: id }]);
+}
+
+// --- Destinations (live DataDB) ---
+
+export interface LiveDestination { Id: string; Prefixes: string[] }
+
+/** DataDB destinations; no IDs lists every one. */
+export function getDestinations(baseUrl: string, ids: string[] = []) {
+  return jsonRpc<LiveDestination[]>(baseUrl, 'APIerSv2.GetDestinations', [{ DestinationIDs: ids }]);
+}
+
+export function getDestination(baseUrl: string, id: string) {
+  return jsonRpc<LiveDestination>(baseUrl, 'APIerSv1.GetDestination', [id]);
+}
+
+export function setDestination(baseUrl: string, id: string, prefixes: string[], overwrite: boolean) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.SetDestination', [{ Id: id, Prefixes: prefixes, Overwrite: overwrite }]);
+}
+
+export function removeDestination(baseUrl: string, id: string) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.RemoveDestination', [{ DestinationIDs: [id] }]);
+}
+
+/** Destination IDs holding this exact prefix. */
+export function getReverseDestination(baseUrl: string, prefix: string) {
+  return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetReverseDestination', [prefix]);
+}
+
 // --- Destination Rates (TP) ---
 
-export function getTPDestinationRateIds(baseUrl: string, tpid: string) {
-  return jsonRpc<string[]>(baseUrl, 'ApierV1.GetTPDestinationRateIds', [{ TPid: tpid }]);
+export function getTPDestinationRateIds(baseUrl: string, tpid: string, search?: string) {
+  return jsonRpc<string[] | null>(baseUrl, 'ApierV1.GetTPDestinationRateIds', [tpIdsParams(tpid, search)]);
 }
 
 export function getTPDestinationRate(baseUrl: string, tpid: string, id: string) {
   return jsonRpc(baseUrl, 'ApierV1.GetTPDestinationRate', [{ TPid: tpid, ID: id }]);
 }
 
+export function setTPDestinationRate(baseUrl: string, params: { TPid: string; ID: string; DestinationRates: unknown[] }) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.SetTPDestinationRate', [params]);
+}
+
+export function removeTPDestinationRate(baseUrl: string, tpid: string, id: string) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.RemoveTPDestinationRate', [{ TPid: tpid, ID: id }]);
+}
+
 // --- Rating Plans (TP) ---
 
-export function getTPRatingPlanIds(baseUrl: string, tpid: string) {
-  return jsonRpc<string[]>(baseUrl, 'ApierV1.GetTPRatingPlanIds', [{ TPid: tpid }]);
+export function getTPRatingPlanIds(baseUrl: string, tpid: string, search?: string) {
+  return jsonRpc<string[] | null>(baseUrl, 'ApierV1.GetTPRatingPlanIds', [tpIdsParams(tpid, search)]);
 }
 
 export function getTPRatingPlan(baseUrl: string, tpid: string, id: string) {
   return jsonRpc(baseUrl, 'ApierV1.GetTPRatingPlan', [{ TPid: tpid, ID: id }]);
 }
 
+export function setTPRatingPlan(baseUrl: string, params: { TPid: string; ID: string; RatingPlanBindings: unknown[] }) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.SetTPRatingPlan', [params]);
+}
+
+export function removeTPRatingPlan(baseUrl: string, tpid: string, id: string) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.RemoveTPRatingPlan', [{ TPid: tpid, ID: id }]);
+}
+
+// --- Rating Plans (live DataDB) ---
+
+/** Rating plans loaded into DataDB; NOT_FOUND when there are none. */
+export function getRatingPlanIDs(baseUrl: string, search?: string) {
+  return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetRatingPlanIDs', [search ? { Search: search } : {}]);
+}
+
+export function getRatingPlan(baseUrl: string, id: string) {
+  return jsonRpc(baseUrl, 'APIerSv1.GetRatingPlan', [id]);
+}
+
 // --- Rating Profiles ---
 
-export function getRatingProfileIDs(baseUrl: string, tenant: string) {
-  return jsonRpc<string[]>(baseUrl, 'ApierV1.GetRatingProfileIDs', [{ Tenant: tenant }]);
+/** DataDB rating profile IDs as "category:subject"; NOT_FOUND when the tenant has none. */
+export function getRatingProfileIDs(baseUrl: string, tenant: string, search?: string) {
+  return jsonRpc<string[]>(baseUrl, 'ApierV1.GetRatingProfileIDs', [search ? { Tenant: tenant, Search: search } : { Tenant: tenant }]);
 }
 
 export function getRatingProfile(baseUrl: string, tenant: string, category: string, subject: string) {
@@ -124,24 +204,54 @@ export function setRatingProfile(baseUrl: string, params: Record<string, unknown
   return jsonRpc(baseUrl, 'APIerSv1.SetRatingProfile', [params]);
 }
 
-export function removeRatingProfile(baseUrl: string, tenant: string, category: string, subject: string) {
-  return jsonRpc(baseUrl, 'APIerSv1.RemoveRatingProfile', [{ Tenant: tenant, Category: category, Subject: subject }]);
+export function removeRatingProfile(baseUrl: string, tenant: string, category: string, subject: string, apiOpts: Record<string, unknown> = {}) {
+  return jsonRpc(baseUrl, 'APIerSv1.RemoveRatingProfile', [{ Tenant: tenant, Category: category, Subject: subject, APIOpts: apiOpts }]);
+}
+
+// --- Rating Profiles (TP) ---
+
+/** IDs are "loadid:tenant:category:subject". */
+export function getTPRatingProfileIds(baseUrl: string, tpid: string, search?: string) {
+  return jsonRpc<string[] | null>(baseUrl, 'APIerSv1.GetTPRatingProfileIds', [tpIdsParams(tpid, search)]);
+}
+
+export function getTPRatingProfile(baseUrl: string, tpid: string, ratingProfileId: string) {
+  return jsonRpc(baseUrl, 'APIerSv1.GetTPRatingProfile', [{ TPid: tpid, RatingProfileID: ratingProfileId }]);
+}
+
+export function setTPRatingProfile(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.SetTPRatingProfile', [params]);
+}
+
+export function removeTPRatingProfile(baseUrl: string, tpid: string, ratingProfileId: string) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.RemoveTPRatingProfile', [{ TPid: tpid, RatingProfileID: ratingProfileId }]);
 }
 
 // --- Timings (TP) ---
 
-export function getTPTimingIds(baseUrl: string, tpid: string) {
-  return jsonRpc<string[]>(baseUrl, 'ApierV1.GetTPTimingIds', [{ TPid: tpid }]);
+export function getTPTimingIds(baseUrl: string, tpid: string, search?: string) {
+  return jsonRpc<string[] | null>(baseUrl, 'ApierV1.GetTPTimingIds', [tpIdsParams(tpid, search)]);
 }
 
-export function getTiming(baseUrl: string, tpid: string, id: string) {
-  return jsonRpc(baseUrl, 'ApierV1.GetTiming', [{ TPid: tpid, ID: id }]);
+/** StorDB timing: Years/Months/MonthDays/WeekDays ";"-joined, Time "start;end". */
+export function getTPTiming(baseUrl: string, tpid: string, id: string) {
+  return jsonRpc(baseUrl, 'APIerSv1.GetTPTiming', [{ TPid: tpid, ID: id }]);
 }
 
 export function setTPTiming(baseUrl: string, params: Record<string, unknown>) {
-  return jsonRpc(baseUrl, 'ApierV2.SetTPTiming', [params]);
+  return jsonRpc(baseUrl, 'APIerSv1.SetTPTiming', [params]);
 }
 
+export function removeTPTiming(baseUrl: string, tpid: string, id: string) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.RemoveTPTiming', [{ TPid: tpid, ID: id }]);
+}
+
+/** Live DataDB timing (no TPid): arrays plus StartTime/EndTime. */
+export function getTiming(baseUrl: string, id: string) {
+  return jsonRpc(baseUrl, 'APIerSv1.GetTiming', [{ ID: id }]);
+}
+
+/** Checks the timing loaded in DataDB, not the StorDB tariff plan copy. */
 export function timingIsActiveAt(baseUrl: string, timingId: string, time: string) {
   return jsonRpc<boolean>(baseUrl, 'APIerSv1.TimingIsActiveAt', [{ TimingID: timingId, Time: time }]);
 }
@@ -365,10 +475,24 @@ export function getConfigAsJSON(baseUrl: string) {
   return jsonRpc<string>(baseUrl, 'ConfigSv1.GetConfigAsJSON', [{}]);
 }
 
+export function getConfigSection(baseUrl: string, section: string) {
+  return jsonRpc<Record<string, unknown>>(baseUrl, 'ConfigSv1.GetConfig', [{ Section: section }]);
+}
+
 // --- GetCost ---
 
 export function getCost(baseUrl: string, params: Record<string, unknown>) {
   return jsonRpc(baseUrl, 'APIerSv1.GetCost', [params]);
+}
+
+/** Usage is a number (bytes) and options go in Opts, not APIOpts (AttrGetDataCost). */
+export function getDataCost(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc(baseUrl, 'APIerSv1.GetDataCost', [params]);
+}
+
+/** Replies in nanoseconds for *voice, units otherwise; -1 means unlimited. */
+export function getMaxUsage(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc<number>(baseUrl, 'APIerSv1.GetMaxUsage', [params]);
 }
 
 // --- Charge Tester ---
@@ -402,22 +526,49 @@ export function removeTP(baseUrl: string, tpid: string) {
   return jsonRpc(baseUrl, 'APIerSv1.RemTP', [{ TPid: tpid }]);
 }
 
-export function loadTariffPlanFromStorDb(baseUrl: string, tpid: string) {
-  return jsonRpc(baseUrl, 'APIerSv1.LoadTariffPlanFromStorDb', [{ TPid: tpid }]);
+/** AttrLoadTpFromStorDb: TPid, DryRun, Validate, Caching (top-level, not APIOpts), APIOpts. */
+export function loadTariffPlanFromStorDb(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.LoadTariffPlanFromStorDb', [params]);
 }
 
-export function exportTPToFolder(baseUrl: string, tpid: string, folderPath = '/tmp') {
-  return jsonRpc(baseUrl, 'APIerSv1.ExportTPToFolder', [{ TPid: tpid, FolderPath: folderPath }]);
+/** AttrLoadTpFromFolder: FolderPath, DryRun, Validate, Caching, APIOpts. */
+export function loadTariffPlanFromFolder(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.LoadTariffPlanFromFolder', [params]);
+}
+
+/** CSV folder on the CGrateS host into StorDB under TPid (AttrImportTPFromFolder). */
+export function importTariffPlanFromFolder(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.ImportTariffPlanFromFolder', [params]);
+}
+
+export interface ExportedTPStats { ExportPath: string; ExportedFiles: string[]; Compressed: boolean }
+
+/** AttrDirExportTP: TPid, ExportPath, FileFormat, FieldSeparator, Compress; omitted ones use the server config. */
+export function exportTPToFolder(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc<ExportedTPStats>(baseUrl, 'APIerSv1.ExportTPToFolder', [params]);
+}
+
+/** Base64 of a zip holding the TP CSVs. */
+export function exportTPToZipString(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.ExportTPToZipString', [params]);
 }
 
 // --- TP Rates ---
 
-export function getTPRateIds(baseUrl: string, tpid: string) {
-  return jsonRpc<string[]>(baseUrl, 'ApierV1.GetTPRateIds', [{ TPid: tpid }]);
+export function getTPRateIds(baseUrl: string, tpid: string, search?: string) {
+  return jsonRpc<string[] | null>(baseUrl, 'ApierV1.GetTPRateIds', [tpIdsParams(tpid, search)]);
 }
 
 export function getTPRate(baseUrl: string, tpid: string, id: string) {
   return jsonRpc(baseUrl, 'ApierV1.GetTPRate', [{ TPid: tpid, ID: id }]);
+}
+
+export function setTPRate(baseUrl: string, params: { TPid: string; ID: string; RateSlots: unknown[] }) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.SetTPRate', [params]);
+}
+
+export function removeTPRate(baseUrl: string, tpid: string, id: string) {
+  return jsonRpc<string>(baseUrl, 'APIerSv1.RemoveTPRate', [{ TPid: tpid, ID: id }]);
 }
 
 // --- Generic JSON-RPC (Execute JSON page) ---
