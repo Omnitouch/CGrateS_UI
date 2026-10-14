@@ -114,6 +114,14 @@ const routes: RouteObject[] = [
     lazy: () => import('./pages/EventExporterService'),
   },
   {
+    path: 'cache',
+    lazy: () => import('./pages/Cache'),
+  },
+  {
+    path: 'core',
+    lazy: () => import('./pages/Core'),
+  },
+  {
     path: 'execute-json',
     lazy: () => import('./pages/ExecuteJSON'),
   },

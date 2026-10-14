@@ -5,7 +5,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Select, MenuItem, FormControl, InputLabel, Chip, IconButton,
   Accordion, AccordionSummary, AccordionDetails, Link, Grid,
-  InputAdornment,
+  Checkbox, FormControlLabel,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -14,6 +14,8 @@ import { useOcsBaseUrl } from '../OcsContext';
 import * as api from '../api';
 import type { AnalyzerResult } from '../types';
 import SearchableSelect from '../components/SearchableSelect';
+import { FILTER_TYPES, VALUELESS_FILTER_TYPES, negateFilterType } from '../cgrConsts';
+import { parseGoDuration } from '../expiryTime';
 
 // --- Constants ---
 
@@ -48,7 +50,11 @@ const commonMethods = [
   'RouteSv1.GetRoutes',
   'SessionSv1.AuthorizeEvent', 'SessionSv1.InitiateSession',
   'SessionSv1.UpdateSession', 'SessionSv1.TerminateSession',
-  'SessionSv1.ProcessCDR', 'SessionSv1.GetActiveSessions', 'SessionSv1.ForceDisconnect',
+  'SessionSv1.ProcessCDR', 'SessionSv1.ProcessEvent', 'SessionSv1.ProcessMessage',
+  'SessionSv1.GetActiveSessions', 'SessionSv1.GetPassiveSessions', 'SessionSv1.ForceDisconnect',
+  'CacheSv1.GetCacheStats', 'CacheSv1.GetItemIDs', 'CacheSv1.HasItem', 'CacheSv1.GetItem', 'CacheSv1.RemoveItems',
+  'CacheSv1.Clear', 'CacheSv1.ReloadCache', 'CacheSv1.LoadCache', 'CacheSv1.ReplicateSet', 'CacheSv1.ReplicateRemove',
+  'EeSv1.ProcessEvent', 'ErSv1.RunReader', 'AgentV1.DisconnectPeer',
   'StatSv1.ProcessEvent', 'StatSv1.GetStatQueuesForEvent',
   'ThresholdSv1.ProcessEvent',
   'ResourceSv1.AuthorizeResources', 'ResourceSv1.AllocateResources', 'ResourceSv1.ReleaseResources',
@@ -60,19 +66,6 @@ const encodingOptions = [
   { label: 'GOB', value: '*gob' },
   { label: 'Internal', value: '*internal' },
   { label: 'BIRPC JSON', value: '*birpc_json' },
-];
-
-const contentFilterTypes = [
-  { label: 'String Equals', value: '*string' },
-  { label: 'String Prefix', value: '*prefix' },
-  { label: 'String Suffix', value: '*suffix' },
-  { label: 'Not String', value: '*notstring' },
-  { label: 'Greater Than', value: '*gt' },
-  { label: 'Greater or Equal', value: '*gte' },
-  { label: 'Less Than', value: '*lt' },
-  { label: 'Less or Equal', value: '*lte' },
-  { label: 'Exists', value: '*exists' },
-  { label: 'Not Exists', value: '*notexists' },
 ];
 
 const contentFilterPaths = [
@@ -87,6 +80,7 @@ const contentFilterPaths = [
 interface ContentFilter {
   id: number;
   type: string;
+  negate: boolean;
   path: string;
   field: string;
   value: string;
@@ -100,7 +94,23 @@ interface SearchParams {
   encoding: string;
   source: string;
   destination: string;
+  requestId: string;
+  minDuration: string;
+  maxDuration: string;
+  errorsOnly: boolean;
   limit: number;
+}
+
+/** Go duration (e.g. 250ms, 1m) as nanoseconds for Bleve's numeric RequestDuration field. */
+function durationToNs(s: string): number | null {
+  const ms = parseGoDuration(s.trim());
+  return ms === null ? null : Math.round(ms * 1e6);
+}
+
+function contentFilterRule(f: ContentFilter): string {
+  const type = f.negate ? negateFilterType(f.type) : f.type;
+  const element = f.field ? `~${f.path}.${f.field}` : `~${f.path}`;
+  return `${type}:${element}:${VALUELESS_FILTER_TYPES.includes(f.type) ? '' : f.value}`;
 }
 
 // --- Helpers ---
@@ -330,7 +340,7 @@ export function Component() {
   // Search params
   const [searchParams, setSearchParams] = useState<SearchParams>({
     timeStart: '', timeEnd: '', past: '', method: '', encoding: '',
-    source: '', destination: '', limit: 50,
+    source: '', destination: '', requestId: '', minDuration: '', maxDuration: '', errorsOnly: false, limit: 50,
   });
 
   // Pagination
@@ -361,7 +371,7 @@ export function Component() {
 
   // --- Handlers ---
 
-  const handleParamChange = (name: keyof SearchParams, value: string | number) => {
+  const handleParamChange = (name: keyof SearchParams, value: string | number | boolean) => {
     setSearchParams(prev => ({ ...prev, [name]: value }));
   };
 
@@ -394,11 +404,11 @@ export function Component() {
   const addContentFilter = () => {
     setContentFilters(prev => [
       ...prev,
-      { id: Date.now(), type: '*string', path: '*req', field: '', value: '' },
+      { id: Date.now(), type: '*string', negate: false, path: '*req', field: '', value: '' },
     ]);
   };
 
-  const updateContentFilter = (id: number, key: keyof ContentFilter, value: string) => {
+  const updateContentFilter = (id: number, key: keyof ContentFilter, value: string | boolean) => {
     setContentFilters(prev => prev.map(f => (f.id === id ? { ...f, [key]: value } : f)));
   };
 
@@ -430,6 +440,16 @@ export function Component() {
     if (searchParams.destination) {
       filters.push(`+RequestDestination:${searchParams.destination}*`);
     }
+    if (searchParams.requestId.trim()) {
+      filters.push(`+RequestID:${searchParams.requestId.trim()}`);
+    }
+    const minNs = searchParams.minDuration ? durationToNs(searchParams.minDuration) : null;
+    if (minNs !== null) filters.push(`+RequestDuration:>=${minNs}`);
+    const maxNs = searchParams.maxDuration ? durationToNs(searchParams.maxDuration) : null;
+    if (maxNs !== null) filters.push(`+RequestDuration:<=${maxNs}`);
+    if (searchParams.errorsOnly) {
+      filters.push('+ReplyError:*');
+    }
     return filters.join(' ');
   }, [showAdvanced, rawHeaderFilters, searchParams]);
 
@@ -438,8 +458,8 @@ export function Component() {
       return rawContentFilters.split(/[\n,]/).map(f => f.trim()).filter(f => f.length > 0);
     }
     return contentFilters
-      .filter(f => f.field && f.value)
-      .map(f => `${f.type}:~${f.path}.${f.field}:${f.value}`);
+      .filter(f => VALUELESS_FILTER_TYPES.includes(f.type) || f.value)
+      .map(contentFilterRule);
   }, [showAdvanced, rawContentFilters, contentFilters]);
 
   const fetchResults = useCallback(async (off = 0) => {
@@ -607,6 +627,37 @@ export function Component() {
               onChange={e => handleParamChange('destination', e.target.value)}
             />
           </Grid>
+          <Grid item xs={12} md={2}>
+            <TextField
+              size="small" fullWidth label="Request ID" type="number"
+              value={searchParams.requestId}
+              onChange={e => handleParamChange('requestId', e.target.value)}
+            />
+          </Grid>
+          <Grid item xs={12} md={2}>
+            <TextField
+              size="small" fullWidth label="Min duration" placeholder="e.g. 100ms"
+              value={searchParams.minDuration}
+              error={!!searchParams.minDuration && durationToNs(searchParams.minDuration) === null}
+              helperText="Go duration"
+              onChange={e => handleParamChange('minDuration', e.target.value)}
+            />
+          </Grid>
+          <Grid item xs={12} md={2}>
+            <TextField
+              size="small" fullWidth label="Max duration" placeholder="e.g. 2s"
+              value={searchParams.maxDuration}
+              error={!!searchParams.maxDuration && durationToNs(searchParams.maxDuration) === null}
+              helperText="Go duration"
+              onChange={e => handleParamChange('maxDuration', e.target.value)}
+            />
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <FormControlLabel
+              control={<Checkbox checked={searchParams.errorsOnly} onChange={e => handleParamChange('errorsOnly', e.target.checked)} />}
+              label="Errors only (ReplyError set)"
+            />
+          </Grid>
         </Grid>
       </Paper>
 
@@ -625,15 +676,21 @@ export function Component() {
         ) : (
           contentFilters.map(filter => (
             <Grid container spacing={1} key={filter.id} sx={{ mb: 1, alignItems: 'center' }}>
-              <Grid item xs={12} md={2}>
+              <Grid item xs={8} md={2}>
                 <FormControl size="small" fullWidth>
                   <Select
                     value={filter.type}
                     onChange={e => updateContentFilter(filter.id, 'type', e.target.value)}
                   >
-                    {contentFilterTypes.map(o => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
+                    {FILTER_TYPES.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
                   </Select>
                 </FormControl>
+              </Grid>
+              <Grid item xs={4} md={1}>
+                <FormControlLabel
+                  control={<Checkbox size="small" checked={filter.negate} onChange={e => updateContentFilter(filter.id, 'negate', e.target.checked)} />}
+                  label="Not"
+                />
               </Grid>
               <Grid item xs={12} md={2}>
                 <FormControl size="small" fullWidth>
@@ -652,9 +709,10 @@ export function Component() {
                   onChange={e => updateContentFilter(filter.id, 'field', e.target.value)}
                 />
               </Grid>
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={3}>
                 <TextField
-                  size="small" fullWidth placeholder="Value"
+                  size="small" fullWidth placeholder={VALUELESS_FILTER_TYPES.includes(filter.type) ? 'No value needed' : 'Value'}
+                  disabled={VALUELESS_FILTER_TYPES.includes(filter.type)}
                   value={filter.value}
                   onChange={e => updateContentFilter(filter.id, 'value', e.target.value)}
                 />
@@ -667,9 +725,15 @@ export function Component() {
             </Grid>
           ))
         )}
-        <Typography variant="caption" color="text.secondary">
-          Examples: Field "Event.Account" = "1001", Field "APIOpts.EventSource" = "*attributes"
+        <Typography variant="caption" color="text.secondary" component="div">
+          Examples: Field "Event.Account" = "1001", Field "APIOpts.EventSource" = "*attributes". Empty field matches the whole request/reply.
         </Typography>
+        {contentFilters.length > 0 && (
+          <Alert severity="warning" sx={{ mt: 1 }}>
+            The analyzer pages the header-filtered results first and applies content filters to each page afterwards,
+            so a page can come back short or empty while later pages still have matches. Narrow with header filters where you can.
+          </Alert>
+        )}
       </Paper>
 
       {/* Advanced Raw Query Mode */}
@@ -809,7 +873,7 @@ export function Component() {
         <Typography variant="body2">
           Page {currentPage} {results.length > 0 && `(${results.length} results)`}
         </Typography>
-        <Button disabled={results.length < limit || loading} onClick={handleNext}>Next</Button>
+        <Button disabled={(results.length < limit && buildContentFilters().length === 0) || loading} onClick={handleNext}>Next</Button>
       </Box>
 
       {/* Detail Modal */}

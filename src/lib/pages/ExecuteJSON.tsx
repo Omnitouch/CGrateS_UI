@@ -2,7 +2,9 @@ import { useState, useCallback, useRef, useMemo } from 'react';
 import {
   Box, Typography, Paper, Button, TextField, CircularProgress, Alert, Chip,
   Select, MenuItem, FormControl, InputLabel, IconButton, Tooltip, List, ListItemButton, ListItemIcon, ListItemText,
+  Menu, ListSubheader,
 } from '@mui/material';
+import PostAddIcon from '@mui/icons-material/PostAdd';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
@@ -10,7 +12,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DownloadIcon from '@mui/icons-material/Download';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
-import { useOcsBaseUrl } from '../OcsContext';
+import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import { diagnose, explainResponseError, type Problem, type ResponseHint } from '../jsonDoctor';
 
 interface HistoryEntry {
@@ -19,6 +21,47 @@ interface HistoryEntry {
   request: string;
   timestamp: number;
 }
+
+interface Template {
+  group: string;
+  method: string;
+  params: (tenant: string) => unknown[];
+}
+
+const sampleEvent = (tenant: string) => ({
+  Tenant: tenant,
+  ID: 'cgrui-template',
+  Event: {
+    Tenant: tenant, Account: '1001', Subject: '1001', Destination: '1002', Category: 'call',
+    ToR: '*voice', RequestType: '*prepaid', OriginID: 'cgrui-template-1', OriginHost: 'CGrateS_UI',
+    SetupTime: '*now', AnswerTime: '*now', Usage: 60000000000,
+  },
+  APIOpts: {},
+});
+
+// Request shapes from the CGrateS argument structs (apier/v1, sessions, engine).
+const TEMPLATES: Template[] = [
+  { group: 'Core', method: 'CoreSv1.Ping', params: () => [{}] },
+  { group: 'Core', method: 'CoreSv1.Status', params: t => [{ Debug: false, Timezone: '', Tenant: t, APIOpts: {} }] },
+  { group: 'Core', method: 'ConfigSv1.GetConfig', params: t => [{ Section: 'general', Tenant: t, APIOpts: {} }] },
+  { group: 'Core', method: 'CacheSv1.GetCacheStats', params: t => [{ CacheIDs: [], Tenant: t, APIOpts: {} }] },
+  { group: 'Core', method: 'CacheSv1.GetItemIDs', params: t => [{ CacheID: '*attribute_profiles', ItemIDPrefix: '', Tenant: t, APIOpts: {} }] },
+  { group: 'Accounts', method: 'APIerSv2.GetAccounts', params: t => [{ Tenant: t, AccountIDs: [], Offset: 0, Limit: 10 }] },
+  { group: 'Accounts', method: 'APIerSv2.GetAccount', params: t => [{ Tenant: t, Account: '1001' }] },
+  { group: 'Accounts', method: 'APIerSv2.SetAccount', params: t => [{ Tenant: t, Account: '1001', ActionPlanIDs: [], ActionPlansOverwrite: false, ActionTriggerIDs: [], ActionTriggerOverwrite: false, ExtraOptions: {}, ReloadScheduler: true }] },
+  { group: 'Rating', method: 'APIerSv1.GetCost', params: t => [{ Tenant: t, Category: 'call', Subject: '1001', AnswerTime: '*now', Destination: '1002', Usage: '1m', APIOpts: {} }] },
+  { group: 'Rating', method: 'CDRsV2.GetCDRs', params: t => [{ Tenants: [t], Accounts: ['1001'], Limit: 10, Offset: 0, OrderBy: 'OrderID;desc', APIOpts: {} }] },
+  { group: 'Sessions', method: 'SessionSv1.GetActiveSessions', params: t => [{ Tenant: t, Filters: [], Limit: 10, APIOpts: {} }] },
+  { group: 'Sessions', method: 'SessionSv1.AuthorizeEvent', params: t => [{ GetAttributes: true, GetMaxUsage: true, ...sampleEvent(t) }] },
+  { group: 'Sessions', method: 'SessionSv1.ProcessEvent', params: t => [{ Flags: ['*attributes', '*rals:*authorize'], ...sampleEvent(t) }] },
+  { group: 'Sessions', method: 'SessionSv1.GetCost', params: t => [{ Flags: ['*attributes'], ...sampleEvent(t) }] },
+  { group: 'Profiles', method: 'AttributeSv1.ProcessEvent', params: t => [{ ...sampleEvent(t), APIOpts: { '*context': '*sessions' } }] },
+  { group: 'Profiles', method: 'ChargerSv1.ProcessEvent', params: t => [sampleEvent(t)] },
+  { group: 'Profiles', method: 'RouteSv1.GetRoutes', params: t => [sampleEvent(t)] },
+  { group: 'Profiles', method: 'ResourceSv1.GetResourcesForEvent', params: t => [{ ...sampleEvent(t), APIOpts: { '*rsUsageID': 'cgrui-template-1' } }] },
+  { group: 'Profiles', method: 'StatSv1.GetQueueStringMetrics', params: t => [{ Tenant: t, ID: 'STATS_1', APIOpts: {} }] },
+  { group: 'Profiles', method: 'ThresholdSv1.GetThresholdsForEvent', params: t => [sampleEvent(t)] },
+];
 
 const HISTORY_KEY = 'cgrates_jsonrpc_history';
 const MAX_HISTORY = 50;
@@ -36,6 +79,8 @@ function saveHistory(entries: HistoryEntry[]) {
 
 export function Component() {
   const baseUrl = useOcsBaseUrl();
+  const { defaultTenant } = useOcsTenants();
+  const [templatesAnchor, setTemplatesAnchor] = useState<HTMLElement | null>(null);
   const [requestText, setRequestText] = useState('{\n  "jsonrpc": "2.0",\n  "id": 1,\n  "method": "CoreSv1.Ping",\n  "params": [{}]\n}');
   const [responseText, setResponseText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -123,6 +168,11 @@ export function Component() {
     handleCursorChange();
   }, [handleCursorChange]);
 
+  const loadTemplate = useCallback((t: Template) => {
+    setRequestText(JSON.stringify({ jsonrpc: '2.0', id: 1, method: t.method, params: t.params(defaultTenant) }, null, 2));
+    setTemplatesAnchor(null);
+  }, [defaultTenant]);
+
   const handleHistorySelect = useCallback((id: number | '') => {
     setSelectedHistory(id);
     if (id === '') return;
@@ -208,7 +258,18 @@ export function Component() {
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-          <Typography variant="subtitle2">Request</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="subtitle2">Request</Typography>
+            <Button size="small" startIcon={<PostAddIcon />} onClick={e => setTemplatesAnchor(e.currentTarget)}>Templates</Button>
+            <Menu anchorEl={templatesAnchor} open={!!templatesAnchor} onClose={() => setTemplatesAnchor(null)}>
+              {[...new Set(TEMPLATES.map(t => t.group))].flatMap(g => [
+                <ListSubheader key={`h-${g}`}>{g}</ListSubheader>,
+                ...TEMPLATES.filter(t => t.group === g).map(t => (
+                  <MenuItem key={t.method} dense onClick={() => loadTemplate(t)}>{t.method}</MenuItem>
+                )),
+              ])}
+            </Menu>
+          </Box>
           <Typography variant="caption" color="text.secondary">
             Ln {cursorPos.line}, Col {cursorPos.col}
           </Typography>

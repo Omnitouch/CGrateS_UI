@@ -10,6 +10,8 @@ interface SearchableSelectProps {
   disableClearable?: boolean;
   fullWidth?: boolean;
   disabled?: boolean;
+  /** Also accept a typed value that isn't in options. */
+  freeSolo?: boolean;
   sx?: SxProps<Theme>;
 }
 
@@ -18,12 +20,12 @@ interface SearchableSelectProps {
  * Empty string means nothing selected.
  */
 export default function SearchableSelect({
-  label, value, options, onChange, placeholder, groupBy, disableClearable, fullWidth, disabled, sx,
+  label, value, options, onChange, placeholder, groupBy, disableClearable, fullWidth, disabled, freeSolo, sx,
 }: SearchableSelectProps) {
   // Keep the current value displayable even before its option list has loaded.
   const opts = value && !options.includes(value) ? [value, ...options] : options;
   return (
-    <Autocomplete<string, false, boolean, false>
+    <Autocomplete<string, false, boolean, boolean>
       size="small"
       options={opts}
       value={value || null}
@@ -33,6 +35,8 @@ export default function SearchableSelect({
       fullWidth={fullWidth}
       disabled={disabled}
       autoHighlight
+      freeSolo={freeSolo}
+      autoSelect={freeSolo}
       sx={sx}
       renderInput={params => <TextField {...params} label={label} placeholder={placeholder} />}
     />

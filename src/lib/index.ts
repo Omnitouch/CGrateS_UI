@@ -25,6 +25,7 @@ export const ocsNavItems = [
   { label: 'Rating Profiles', path: 'rating-profiles' },
   { label: 'Timings', path: 'timings' },
   { label: 'Tariff Plans', path: 'tariff-plans' },
+  { label: 'TP Explorer', path: 'tp-explorer' },
   // Actions
   { label: 'Actions', path: 'actions' },
   { label: 'Action Plans', path: 'action-plans' },
@@ -42,11 +43,14 @@ export const ocsNavItems = [
   { label: 'Route Profiles', path: 'route-profiles' },
   // Tools
   { label: 'Get Cost', path: 'get-cost' },
-  { label: 'Charge Tester', path: 'charge-tester' },
+  { label: 'Event Tester', path: 'charge-tester' },
   { label: 'Analyzer', path: 'analyzer' },
   { label: 'Event Reader', path: 'event-reader' },
+  { label: 'Event Exporter', path: 'event-exporter' },
   { label: 'Execute JSON', path: 'execute-json' },
   { label: 'Config', path: 'config' },
+  { label: 'Cache', path: 'cache' },
+  { label: 'Core', path: 'core' },
 ] as const;
 
 // Route configuration for embedding

@@ -43,7 +43,7 @@ export function Component() {
       setResults(r || []);
       setPage(p);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed');
+      if (!api.isNotFound(e)) setError(e instanceof Error ? e.message : 'Failed');
       setResults([]);
     } finally {
       setLoading(false);
