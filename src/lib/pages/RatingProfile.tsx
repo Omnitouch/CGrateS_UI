@@ -60,11 +60,6 @@ function splitLiveId(id: string) {
   return { category: id.slice(0, i), subject: id.slice(i + 1) };
 }
 
-/** TP ids are "loadid:tenant:category:subject". */
-function tpProfileId(f: { LoadId: string; Tenant: string; Category: string; Subject: string }) {
-  return [f.LoadId, f.Tenant, f.Category, f.Subject].join(':');
-}
-
 const fallbackSubject = (key: string) => parseLiveKey(key).subject;
 
 function liveToForm(p: LiveProfile): ProfileForm {
