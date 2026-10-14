@@ -45,8 +45,11 @@ export const ocsNavItems = [
   { label: 'Event Tester', path: 'charge-tester' },
   { label: 'Analyzer', path: 'analyzer' },
   { label: 'Event Reader', path: 'event-reader' },
+  { label: 'Event Exporter', path: 'event-exporter' },
   { label: 'Execute JSON', path: 'execute-json' },
   { label: 'Config', path: 'config' },
+  { label: 'Cache', path: 'cache' },
+  { label: 'Core', path: 'core' },
 ] as const;
 
 // Route configuration for embedding

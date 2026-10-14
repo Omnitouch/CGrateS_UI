@@ -68,6 +68,8 @@ const NAV_ITEMS = [
   { label: 'Event Exporter', path: 'event-exporter' },
   { label: 'Execute JSON', path: 'execute-json' },
   { label: 'Config', path: 'config' },
+  { label: 'Cache', path: 'cache' },
+  { label: 'Core', path: 'core' },
 ] as const;
 
 function Layout() {
