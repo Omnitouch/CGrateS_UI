@@ -10,19 +10,8 @@ import EditIcon from '@mui/icons-material/Edit';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import SearchableSelect from '../components/SearchableSelect';
-
-interface ThresholdForm {
-  Tenant: string;
-  ID: string;
-  Weight: number;
-  MaxHits: number;
-  MinHits: number;
-  MinSleep: string;
-  Blocker: boolean;
-  Async: boolean;
-  FilterIDs: string[];
-  ActionIDs: string[];
-}
+import { DurationInput, formatDuration } from '../components/BalanceValue';
+import type { ThresholdProfile as ThresholdForm } from '../types';
 
 const emptyForm = (tenant: string): ThresholdForm => ({
   Tenant: tenant,
@@ -30,24 +19,20 @@ const emptyForm = (tenant: string): ThresholdForm => ({
   Weight: 0,
   MaxHits: -1,
   MinHits: 0,
-  MinSleep: '0',
+  MinSleep: 0,
   Blocker: false,
   Async: false,
   FilterIDs: [],
   ActionIDs: [],
+  EeIDs: [],
+  ActivationInterval: null,
 });
 
-const toForm = (data: Record<string, unknown>, tenant: string): ThresholdForm => ({
-  Tenant: (data.Tenant as string) || tenant,
-  ID: (data.ID as string) || '',
-  Weight: (data.Weight as number) ?? 0,
-  MaxHits: (data.MaxHits as number) ?? -1,
-  MinHits: (data.MinHits as number) ?? 0,
-  MinSleep: (data.MinSleep as string) || '0',
-  Blocker: (data.Blocker as boolean) ?? false,
-  Async: (data.Async as boolean) ?? false,
-  FilterIDs: (data.FilterIDs as string[]) || [],
-  ActionIDs: (data.ActionIDs as string[]) || [],
+const toForm = (data: ThresholdForm): ThresholdForm => ({
+  ...data,
+  FilterIDs: data.FilterIDs || [],
+  ActionIDs: data.ActionIDs || [],
+  EeIDs: data.EeIDs || [],
 });
 
 export function Component() {
@@ -86,7 +71,7 @@ export function Component() {
     try {
       const result = await api.getThresholdProfile(baseUrl, tenant, id);
       setDetail(result);
-      setForm(toForm(result as Record<string, unknown>, tenant));
+      setForm(toForm(result as ThresholdForm));
       setSelectedId(id);
       setEditing(false);
       setDialogTab(0);
@@ -99,7 +84,7 @@ export function Component() {
   const handleSave = useCallback(async () => {
     if (!baseUrl) return;
     try {
-      await api.setThresholdProfile(baseUrl, form as unknown as Record<string, unknown>);
+      await api.setThresholdProfile(baseUrl, { ...form });
       setDetailOpen(false);
       fetchIds();
     } catch (e: unknown) {
@@ -165,7 +150,7 @@ export function Component() {
             <TableRow><TableCell sx={{ fontWeight: 'bold' }}>Weight</TableCell><TableCell>{String(d.Weight)}</TableCell></TableRow>
             <TableRow><TableCell sx={{ fontWeight: 'bold' }}>MaxHits</TableCell><TableCell>{String(d.MaxHits)}</TableCell></TableRow>
             <TableRow><TableCell sx={{ fontWeight: 'bold' }}>MinHits</TableCell><TableCell>{String(d.MinHits)}</TableCell></TableRow>
-            <TableRow><TableCell sx={{ fontWeight: 'bold' }}>MinSleep</TableCell><TableCell>{d.MinSleep as string}</TableCell></TableRow>
+            <TableRow><TableCell sx={{ fontWeight: 'bold' }}>MinSleep</TableCell><TableCell>{formatDuration(d.MinSleep as number)}</TableCell></TableRow>
             <TableRow><TableCell sx={{ fontWeight: 'bold' }}>Blocker</TableCell><TableCell>{d.Blocker ? 'Yes' : 'No'}</TableCell></TableRow>
             <TableRow><TableCell sx={{ fontWeight: 'bold' }}>Async</TableCell><TableCell>{d.Async ? 'Yes' : 'No'}</TableCell></TableRow>
             <TableRow>
@@ -203,7 +188,10 @@ export function Component() {
           <TextField label="Weight" size="small" fullWidth type="number" value={form.Weight} onChange={e => updateForm('Weight', Number(e.target.value))} />
           <TextField label="MaxHits" size="small" fullWidth type="number" value={form.MaxHits} onChange={e => updateForm('MaxHits', Number(e.target.value))} helperText="-1 for unlimited" />
           <TextField label="MinHits" size="small" fullWidth type="number" value={form.MinHits} onChange={e => updateForm('MinHits', Number(e.target.value))} />
-          <TextField label="MinSleep" size="small" fullWidth value={form.MinSleep} onChange={e => updateForm('MinSleep', e.target.value)} helperText="e.g. 1s, 1m, 0" />
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>MinSleep</Typography>
+            <DurationInput key={selectedId ?? 'new'} value={form.MinSleep} onChange={raw => updateForm('MinSleep', raw)} />
+          </Box>
           <FormControlLabel control={<Checkbox checked={form.Blocker} onChange={e => updateForm('Blocker', e.target.checked)} />} label="Blocker" />
           <FormControlLabel control={<Checkbox checked={form.Async} onChange={e => updateForm('Async', e.target.checked)} />} label="Async" />
 
@@ -291,7 +279,7 @@ export function Component() {
           {editing ? (
             <Button variant="contained" onClick={handleSave}>Save</Button>
           ) : (
-            <Button onClick={() => { setForm(toForm(detail as Record<string, unknown>, tenant)); setEditing(true); }}>Edit</Button>
+            <Button onClick={() => { setForm(toForm(detail as ThresholdForm)); setEditing(true); }}>Edit</Button>
           )}
           {selectedId && <Button color="error" onClick={() => handleDelete(selectedId)}>Delete</Button>}
           <Button onClick={() => setDetailOpen(false)}>Close</Button>

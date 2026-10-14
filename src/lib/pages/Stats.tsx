@@ -105,6 +105,10 @@ function getMetricLabel(metricID: string): string {
   return metric ? metric.label : metricID;
 }
 
+function nonBlank(ids: string[] | null | undefined): string[] {
+  return (ids || []).map(s => s.trim()).filter(Boolean);
+}
+
 function isGenericMetric(metricID: string): boolean {
   return metricID.split('#')[0] in metricParams;
 }
@@ -205,7 +209,7 @@ export function Component() {
         ...editProfile,
         TTL: typeof editProfile.TTL === 'string' ? parseInt(editProfile.TTL, 10) : editProfile.TTL,
         QueueLength: typeof editProfile.QueueLength === 'string' ? parseInt(editProfile.QueueLength as string, 10) : editProfile.QueueLength,
-        FilterIDs: editProfile.FilterIDs || [],
+        FilterIDs: nonBlank(editProfile.FilterIDs),
         Metrics: (editProfile.Metrics || []).map((metric, index) => {
           let metricID = metric.MetricID;
           if (isGenericMetric(metricID) && genericMetricInput[index]) {
@@ -214,7 +218,7 @@ export function Component() {
           return {
             ...metric,
             MetricID: metricID,
-            FilterIDs: metric.FilterIDs || [],
+            FilterIDs: nonBlank(metric.FilterIDs),
             genericValue: undefined,
           };
         }),

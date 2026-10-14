@@ -17,6 +17,7 @@ function emptyCharger(tenant: string): ChargerProfile {
     Tenant: tenant,
     ID: '',
     FilterIDs: [],
+    ActivationInterval: null,
     AttributeIDs: [],
     RunID: '*default',
     Weight: 0,
@@ -75,7 +76,11 @@ export function Component() {
   const handleSave = useCallback(async () => {
     if (!baseUrl) return;
     try {
-      await api.setChargerProfile(baseUrl, editData as unknown as Record<string, unknown>);
+      await api.setChargerProfile(baseUrl, {
+        ...editData,
+        FilterIDs: (editData.FilterIDs || []).map(s => s.trim()).filter(Boolean),
+        AttributeIDs: (editData.AttributeIDs || []).map(s => s.trim()).filter(Boolean),
+      });
       setDetailOpen(false);
       fetchIds();
     } catch (e: unknown) {

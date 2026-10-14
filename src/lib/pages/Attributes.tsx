@@ -26,6 +26,10 @@ const attributeTypeHints: Record<string, string> = {
 
 const attributeTypes = Object.keys(attributeTypeHints);
 
+function nonBlank(ids: string[] | null | undefined): string[] {
+  return (ids || []).map(s => s.trim()).filter(Boolean);
+}
+
 function emptyAttributeRule(): { Rules: string } {
   return { Rules: '' };
 }
@@ -92,7 +96,11 @@ export function Component() {
   const handleSave = useCallback(async () => {
     if (!baseUrl) return;
     try {
-      await api.setAttributeProfile(baseUrl, editData as unknown as Record<string, unknown>);
+      await api.setAttributeProfile(baseUrl, {
+        ...editData,
+        FilterIDs: nonBlank(editData.FilterIDs),
+        Attributes: editData.Attributes.map(a => ({ ...a, FilterIDs: nonBlank(a.FilterIDs) })),
+      });
       setDetailOpen(false);
       fetchIds();
     } catch (e: unknown) {
@@ -336,7 +344,7 @@ export function Component() {
                       label="Type"
                       onChange={e => updateAttr(attrIdx, 'Type', e.target.value)}
                     >
-                      {attributeTypes.map(at => (
+                      {(attributeTypes.includes(attr.Type) ? attributeTypes : [attr.Type, ...attributeTypes]).map(at => (
                         <MenuItem key={at} value={at}>{at}</MenuItem>
                       ))}
                     </Select>

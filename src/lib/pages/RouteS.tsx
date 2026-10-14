@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { Box, Typography, Paper, Button, TextField, CircularProgress, Alert, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
-import type { RouteResult } from '../types';
+import type { FilterProfile, RouteResult } from '../types';
 import SearchableSelect from '../components/SearchableSelect';
 
 export function Component() {
@@ -11,6 +11,9 @@ export function Component() {
   const [tenant, setTenant] = useState(defaultTenant);
   const [account, setAccount] = useState('');
   const [destination, setDestination] = useState('');
+  const [eventId, setEventId] = useState('OmniWeb');
+  const [usage, setUsage] = useState('1m');
+  const [searchedDestination, setSearchedDestination] = useState('');
   const [results, setResults] = useState<RouteResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,18 +28,19 @@ export function Component() {
     if (!baseUrl) return;
     setLoading(true); setError(null);
     const startTime = Date.now();
-    const params = {
-      IgnoreErrors: true,
+    const event: Record<string, unknown> = {
+      Account: account,
       Tenant: tenant,
-      ID: 'OmniWeb',
-      Event: {
-        Account: account,
-        Tenant: tenant,
-        Subject: account,
-        SetupTime: new Date().toISOString().slice(0, 19),
-        Destination: destination,
-        Usage: '1m',
-      },
+      Subject: account,
+      SetupTime: new Date().toISOString().slice(0, 19),
+      Destination: destination,
+    };
+    if (usage.trim()) event.Usage = usage.trim();
+    const params = {
+      Tenant: tenant,
+      ID: eventId,
+      Event: event,
+      APIOpts: { '*rouIgnoreErrors': true },
     };
     setApiQuery(JSON.stringify({ method: 'RouteSv1.GetRoutes', params: [params], id: 1 }, null, 2));
     try {
@@ -44,9 +48,10 @@ export function Component() {
       const endTime = Date.now();
       setResponseTime(((endTime - startTime) / 1000).toFixed(2));
       setResults(r || []);
+      setSearchedDestination(destination);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed'); setResults([]); }
     finally { setLoading(false); }
-  }, [baseUrl, tenant, account, destination]);
+  }, [baseUrl, tenant, account, destination, eventId, usage]);
 
   const blockRoute = useCallback(async (routeDestination: string, ratingPlanID: string) => {
     if (!baseUrl) return;
@@ -54,17 +59,18 @@ export function Component() {
       const operatorName = ratingPlanID.split('_').pop();
       const filterId = `Filter_Operator_Route_Blacklist_${operatorName}`;
 
-      // Fetch existing filter
-      const existingFilter = await api.getFilter(baseUrl, tenant, filterId) as Record<string, unknown>;
-      const existingRules = (existingFilter?.Rules || []) as Record<string, unknown>[];
-
-      // Add new rule
-      const updatedRules = [...existingRules, { Type: '*notprefix', Element: '~*req.Destination', Values: [routeDestination] }];
-
+      let existing: FilterProfile | null = null;
+      try {
+        existing = await api.getFilter(baseUrl, tenant, filterId) as FilterProfile;
+      } catch (e) {
+        if (!(e instanceof Error && e.message === 'NOT_FOUND')) throw e;
+      }
+      const rule = { Type: '*notprefix', Element: '~*req.Destination', Values: [routeDestination] };
       await api.setFilter(baseUrl, {
+        ...existing,
+        Tenant: tenant,
         ID: filterId,
-        Rules: updatedRules,
-        ActivationInterval: { ActivationTime: '0001-01-01T00:00:00Z', ExpiryTime: '0001-01-01T00:00:00Z' },
+        Rules: [...(existing?.Rules || []), rule],
       });
 
       alert(`Route for destination ${routeDestination} blocked for operator ${operatorName}.`);
@@ -81,6 +87,8 @@ export function Component() {
           <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
           <TextField size="small" label="Account" value={account} onChange={e => setAccount(e.target.value)} />
           <TextField size="small" label="Destination" value={destination} onChange={e => setDestination(e.target.value)} />
+          <TextField size="small" label="Usage" value={usage} onChange={e => setUsage(e.target.value)} helperText="Empty: RouteS uses 1m" />
+          <TextField size="small" label="Event ID" value={eventId} onChange={e => setEventId(e.target.value)} />
           <Button variant="contained" onClick={fetchRoutes}>Search</Button>
         </Box>
       </Paper>
@@ -119,7 +127,7 @@ export function Component() {
                   <TableCell>
                     {r.Routes?.map((rt, ri) => (
                       <Box key={ri} sx={{ mb: 0.5 }}>
-                        <strong>{rt.RouteID}</strong> - Cost: {rt.SortingData?.Cost} | RatingPlanID: {rt.SortingData?.RatingPlanID}
+                        <strong>{rt.RouteID}</strong> - Cost: {String(rt.SortingData?.Cost ?? '')} | RatingPlanID: {String(rt.SortingData?.RatingPlanID ?? '')}
                       </Box>
                     ))}
                   </TableCell>
@@ -155,12 +163,12 @@ export function Component() {
                     {detail.Routes?.map((rt, i) => (
                       <TableRow key={i}>
                         <TableCell>{rt.RouteID}</TableCell>
-                        <TableCell>{rt.SortingData?.Cost}</TableCell>
-                        <TableCell>{rt.SortingData?.RatingPlanID}</TableCell>
-                        <TableCell>{rt.SortingData?.Weight}</TableCell>
+                        <TableCell>{String(rt.SortingData?.Cost ?? '')}</TableCell>
+                        <TableCell>{String(rt.SortingData?.RatingPlanID ?? '')}</TableCell>
+                        <TableCell>{String(rt.SortingData?.Weight ?? '')}</TableCell>
                         <TableCell>
                           <Button size="small" color="error" variant="outlined"
-                            onClick={() => blockRoute(destination, rt.SortingData?.RatingPlanID)}>
+                            onClick={() => blockRoute(searchedDestination, String(rt.SortingData?.RatingPlanID))}>
                             Block for Destination
                           </Button>
                         </TableCell>

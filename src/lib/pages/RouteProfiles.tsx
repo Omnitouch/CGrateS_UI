@@ -10,38 +10,38 @@ import EditIcon from '@mui/icons-material/Edit';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import SearchableSelect from '../components/SearchableSelect';
+import type { Route as RouteEntry, RouteProfile as RouteProfileForm } from '../types';
 
-interface RouteEntry {
-  RouteID: string;
-  RouteParameters: string;
-  Weight: number;
-}
-
-interface RouteProfileForm {
-  Tenant: string;
-  ID: string;
-  Weight: number;
-  Routes: RouteEntry[];
-}
-
-const emptyRoute = (): RouteEntry => ({ RouteID: '', RouteParameters: '', Weight: 0 });
+const emptyRoute = (): RouteEntry => ({
+  ID: '', FilterIDs: [], AccountIDs: [], RatingPlanIDs: [], ResourceIDs: [], StatIDs: [],
+  RouteParameters: '', Weight: 0, Blocker: false,
+});
 
 const emptyForm = (tenant: string): RouteProfileForm => ({
   Tenant: tenant,
   ID: '',
+  FilterIDs: [],
+  ActivationInterval: null,
+  Sorting: '*weight',
+  SortingParameters: [],
   Weight: 0,
   Routes: [emptyRoute()],
 });
 
-const toForm = (data: Record<string, unknown>, tenant: string): RouteProfileForm => ({
-  Tenant: (data.Tenant as string) || tenant,
-  ID: (data.ID as string) || '',
-  Weight: (data.Weight as number) ?? 0,
-  Routes: Array.isArray(data.Routes) ? (data.Routes as RouteEntry[]).map(r => ({
-    RouteID: r.RouteID || '',
-    RouteParameters: r.RouteParameters || '',
-    Weight: r.Weight ?? 0,
-  })) : [emptyRoute()],
+// Keeps every field of the loaded profile so a save does not wipe what the form does not show.
+const toForm = (data: RouteProfileForm): RouteProfileForm => ({
+  ...data,
+  FilterIDs: data.FilterIDs || [],
+  SortingParameters: data.SortingParameters || [],
+  Routes: (data.Routes || []).map(r => ({
+    ...emptyRoute(),
+    ...r,
+    FilterIDs: r.FilterIDs || [],
+    AccountIDs: r.AccountIDs || [],
+    RatingPlanIDs: r.RatingPlanIDs || [],
+    ResourceIDs: r.ResourceIDs || [],
+    StatIDs: r.StatIDs || [],
+  })),
 });
 
 export function Component() {
@@ -78,7 +78,7 @@ export function Component() {
     try {
       const result = await api.getRouteProfile(baseUrl, tenant, id);
       setDetail(result);
-      setForm(toForm(result as Record<string, unknown>, tenant));
+      setForm(toForm(result as RouteProfileForm));
       setSelectedId(id);
       setEditing(false);
       setDialogTab(0);
@@ -91,7 +91,7 @@ export function Component() {
   const handleSave = useCallback(async () => {
     if (!baseUrl) return;
     try {
-      await api.setRouteProfile(baseUrl, form as unknown as Record<string, unknown>);
+      await api.setRouteProfile(baseUrl, { ...form });
       setDetailOpen(false);
       fetchIds();
     } catch (e: unknown) {
@@ -158,7 +158,7 @@ export function Component() {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>RouteID</TableCell>
+                  <TableCell>ID</TableCell>
                   <TableCell>RouteParameters</TableCell>
                   <TableCell>Weight</TableCell>
                 </TableRow>
@@ -166,7 +166,7 @@ export function Component() {
               <TableBody>
                 {routes.map((r, i) => (
                   <TableRow key={i}>
-                    <TableCell>{r.RouteID}</TableCell>
+                    <TableCell>{r.ID}</TableCell>
                     <TableCell>{r.RouteParameters || '-'}</TableCell>
                     <TableCell>{r.Weight}</TableCell>
                   </TableRow>
@@ -204,7 +204,7 @@ export function Component() {
                 <IconButton size="small" color="error" onClick={() => removeRoute(idx)} disabled={form.Routes.length <= 1}><DeleteIcon fontSize="small" /></IconButton>
               </Box>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                <TextField label="RouteID" size="small" fullWidth value={route.RouteID} onChange={e => updateRoute(idx, 'RouteID', e.target.value)} />
+                <TextField label="ID" size="small" fullWidth value={route.ID} onChange={e => updateRoute(idx, 'ID', e.target.value)} />
                 <TextField label="RouteParameters" size="small" fullWidth value={route.RouteParameters} onChange={e => updateRoute(idx, 'RouteParameters', e.target.value)} />
                 <TextField label="Weight" size="small" fullWidth type="number" value={route.Weight} onChange={e => updateRoute(idx, 'Weight', Number(e.target.value))} />
               </Box>
@@ -271,7 +271,7 @@ export function Component() {
           {editing ? (
             <Button variant="contained" onClick={handleSave}>Save</Button>
           ) : (
-            <Button onClick={() => { setForm(toForm(detail as Record<string, unknown>, tenant)); setEditing(true); }}>Edit</Button>
+            <Button onClick={() => { setForm(toForm(detail as RouteProfileForm)); setEditing(true); }}>Edit</Button>
           )}
           {selectedId && <Button color="error" onClick={() => handleDelete(selectedId)}>Delete</Button>}
           <Button onClick={() => setDetailOpen(false)}>Close</Button>
