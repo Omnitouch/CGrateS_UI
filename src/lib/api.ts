@@ -346,17 +346,27 @@ export function removeRouteProfile(baseUrl: string, tenant: string, id: string) 
 
 // --- Sessions ---
 
-export function getActiveSessions(baseUrl: string, tenant: string) {
-  return jsonRpc(baseUrl, 'SessionSv1.GetActiveSessions', [{
-    Limit: null,
-    Filters: null,
-    Tenant: tenant,
-    APIOpts: {},
-  }]);
+/** utils.SessionFilter; Filters are filter IDs or inline filters, Limit null means no limit. */
+function sessionFilter(tenant: string, filters: string[], limit: number | null) {
+  return { Tenant: tenant, Filters: filters, Limit: limit, APIOpts: {} };
+}
+
+export function getActiveSessions(baseUrl: string, tenant: string, filters: string[] = [], limit: number | null = null) {
+  return jsonRpc(baseUrl, 'SessionSv1.GetActiveSessions', [sessionFilter(tenant, filters, limit)]);
 }
 
 export function terminateSession(baseUrl: string, params: Record<string, unknown>) {
   return jsonRpc(baseUrl, 'SessionSv1.TerminateSession', [params]);
+}
+
+/** SessionSv1.ProcessCDR takes a plain CGREvent and always rates it (*rals). */
+export function processCDR(baseUrl: string, params: Record<string, unknown>) {
+  return jsonRpc(baseUrl, 'SessionSv1.ProcessCDR', [params]);
+}
+
+/** Any SessionSv1 method taking a single argument object (event tester). */
+export function sessionCall(baseUrl: string, method: string, params: Record<string, unknown>) {
+  return jsonRpc(baseUrl, `SessionSv1.${method}`, [params]);
 }
 
 // --- Config ---
@@ -371,12 +381,6 @@ export function getCost(baseUrl: string, params: Record<string, unknown>) {
   return jsonRpc(baseUrl, 'APIerSv1.GetCost', [params]);
 }
 
-// --- Charge Tester ---
-
-export function processCDR(baseUrl: string, params: Record<string, unknown>) {
-  return jsonRpc(baseUrl, 'SessionSv1.ProcessCDR', [params]);
-}
-
 // --- Analyzer ---
 
 export function analyzerStringQuery(baseUrl: string, params: Record<string, unknown>) {
@@ -385,8 +389,11 @@ export function analyzerStringQuery(baseUrl: string, params: Record<string, unkn
 
 // --- Event Reader ---
 
-export function runReader(baseUrl: string, readerId: string) {
-  return jsonRpc(baseUrl, 'ErSv1.RunReader', [{ ID: readerId, ReaderID: readerId }]);
+/** ID identifies the request (RPC caching), ReaderID names the configured reader. */
+export function runReader(baseUrl: string, tenant: string, readerId: string, apiOpts: Record<string, unknown> = {}) {
+  return jsonRpc<string>(baseUrl, 'ErSv1.RunReader', [{
+    Tenant: tenant, ID: crypto.randomUUID(), ReaderID: readerId, APIOpts: apiOpts,
+  }]);
 }
 
 // --- Event Exporter ---

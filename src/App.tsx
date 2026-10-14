@@ -62,7 +62,7 @@ const NAV_ITEMS = [
   { label: 'Route Profiles', path: 'route-profiles' },
   { section: 'Tools' },
   { label: 'Get Cost', path: 'get-cost' },
-  { label: 'Charge Tester', path: 'charge-tester' },
+  { label: 'Event Tester', path: 'charge-tester' },
   { label: 'Analyzer', path: 'analyzer' },
   { label: 'Event Reader', path: 'event-reader' },
   { label: 'Event Exporter', path: 'event-exporter' },

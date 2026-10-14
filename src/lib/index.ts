@@ -42,7 +42,7 @@ export const ocsNavItems = [
   { label: 'Route Profiles', path: 'route-profiles' },
   // Tools
   { label: 'Get Cost', path: 'get-cost' },
-  { label: 'Charge Tester', path: 'charge-tester' },
+  { label: 'Event Tester', path: 'charge-tester' },
   { label: 'Analyzer', path: 'analyzer' },
   { label: 'Event Reader', path: 'event-reader' },
   { label: 'Execute JSON', path: 'execute-json' },
