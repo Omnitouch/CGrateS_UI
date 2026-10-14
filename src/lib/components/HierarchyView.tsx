@@ -89,32 +89,38 @@ function filterTree(root: HNode, childrenOf: (n: HNode) => HNode[] | undefined, 
   return { match, forceOpen, matches };
 }
 
-/** The longest prefix wins in CGrateS, so name the destination in this hierarchy that the number would rate against. */
-function numberMatchText(hits: Map<string, string>, shown: Set<string>, root: HNode, childrenOf: (n: HNode) => HNode[] | undefined) {
-  let best: [string, string] | null = null;
+const digitsOf = (s: string) => s.replace(/^\+/, '');
+const isDigits = (s: string) => /^\+?\d+$/.test(s);
+
+/** CGrateS rates a number against the destination with the longest prefix the number starts with. */
+function longestPrefix(q: string, index: Map<string, string[]>, shown: Set<string>, root: HNode, childrenOf: (n: HNode) => HNode[] | undefined) {
+  let best: { dest: string; prefix: string } | null = null;
   const visit = (n: HNode) => {
-    const px = hits.get(n.value);
-    if (px && shown.has(n.id) && (!best || px.replace('+', '').length > best[1].replace('+', '').length)) best = [n.value, px];
+    if (n.label === 'Destination' && shown.has(n.id)) {
+      for (const p of index.get(n.value) ?? []) {
+        const d = digitsOf(p);
+        if (q.startsWith(d) && (!best || d.length > digitsOf(best.prefix).length)) best = { dest: n.value, prefix: p };
+      }
+    }
     (childrenOf(n) ?? []).forEach(visit);
   };
   visit(root);
-  const b = best as [string, string] | null;
-  return b ? `longest prefix ${b[1]} → ${b[0]}` : 'no destination here matches the number';
+  return best as { dest: string; prefix: string } | null;
 }
 
-const isNumber = (s: string) => /^\+?\d{2,}$/.test(s);
+type IndexState = Map<string, string[]> | 'loading' | { error: string } | null;
 
 interface HierarchyViewProps {
   root: HNode;
-  /** Node values (e.g. destination IDs) a dialled number matches, with the prefix each matched on. */
-  numberLookup?: (num: string) => Promise<Map<string, string>>;
+  /** Destination ID → prefixes, loaded the first time the search is a number, so prefixes are searchable. */
+  prefixIndex?: () => Promise<Map<string, string[]>>;
 }
 
 /** Tree on the left, Overview diagram and Details tabs on the right, as on OmniWeb's subscriber page. */
-export default function HierarchyView({ root, numberLookup }: HierarchyViewProps) {
+export default function HierarchyView({ root, prefixIndex }: HierarchyViewProps) {
   const [query, setQuery] = useState('');
   const deferred = useDeferredValue(query.trim().toLowerCase());
-  const [numberHits, setNumberHits] = useState<{ q: string; ids: Map<string, string> } | null>(null);
+  const [index, setIndex] = useState<IndexState>(null);
   const [loaded, setLoaded] = useState<Record<string, Loaded>>({});
   const [extra, setExtra] = useState<Record<string, Partial<HNode>>>({});
   const requested = useRef(new Set<string>());
@@ -125,6 +131,7 @@ export default function HierarchyView({ root, numberLookup }: HierarchyViewProps
     requested.current = new Set();
     setLoaded({});
     setExtra({});
+    setIndex(null);
     setSelectedId(root.id);
     setTab(0);
   }, [root]);
@@ -154,22 +161,27 @@ export default function HierarchyView({ root, numberLookup }: HierarchyViewProps
       .catch(e => setExtra(s => ({ ...s, [n.id]: { status: 'error', details: [['Error', e instanceof Error ? e.message : String(e)]] } })));
   }, []);
 
+  const prefixSearch = isDigits(deferred) && !!prefixIndex;
   useEffect(() => {
-    if (!numberLookup || !isNumber(deferred)) { setNumberHits(null); return; }
-    let live = true;
-    const t = setTimeout(() => {
-      numberLookup(deferred).then(ids => { if (live) setNumberHits({ q: deferred, ids }); }).catch(() => { if (live) setNumberHits(null); });
-    }, 300);
-    return () => { live = false; clearTimeout(t); };
-  }, [deferred, numberLookup]);
+    if (!prefixSearch || index !== null) return;
+    setIndex('loading');
+    prefixIndex!().then(setIndex).catch(e => setIndex({ error: e instanceof Error ? e.message : String(e) }));
+  }, [prefixSearch, index, prefixIndex]);
 
   const filtered = useMemo(() => {
     if (!deferred) return null;
-    const hits = numberHits?.q === deferred ? numberHits.ids : null;
+    const q = digitsOf(deferred);
+    const idx = prefixSearch && index instanceof Map ? index : null;
     const kids = (n: HNode) => childrenOf(n)?.map(withExtra);
     return filterTree(withExtra(root), kids, n =>
-      `${n.value} ${n.subtext ?? ''} ${n.badge ?? ''}`.toLowerCase().includes(deferred) || !!hits?.has(n.value));
-  }, [deferred, numberHits, root, childrenOf, withExtra]);
+      `${n.value} ${n.subtext ?? ''} ${n.badge ?? ''}`.toLowerCase().includes(deferred)
+      || (!!idx && n.label === 'Destination' && (idx.get(n.value) ?? []).some(p => {
+        const d = digitsOf(p);
+        return d.startsWith(q) || q.startsWith(d);
+      })));
+  }, [deferred, prefixSearch, index, root, childrenOf, withExtra]);
+
+  const best = filtered && prefixSearch && index instanceof Map ? longestPrefix(digitsOf(deferred), index, filtered.match, withExtra(root), n => childrenOf(n)?.map(withExtra)) : null;
 
   const refresh = useCallback((n: HNode) => {
     requested.current.delete(`d:${n.id}`);
@@ -225,14 +237,16 @@ export default function HierarchyView({ root, numberLookup }: HierarchyViewProps
       <Paper variant="outlined" sx={{ p: 1.5, mb: 2, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
         <TextField
           size="small" value={query} onChange={e => setQuery(e.target.value)} sx={{ flex: '1 1 320px', maxWidth: 520 }}
-          placeholder={numberLookup ? 'Search destinations, rates, plans… or type a number to find its rate' : 'Search destinations, rates, plans…'}
+          placeholder={prefixIndex ? 'Search names, prefixes or a phone number' : 'Search destinations, rates, plans…'}
           slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
         />
         {filtered && (
           <Typography variant="body2" color="text.secondary">
             {filtered.match.size ? `${filtered.matches} match${filtered.matches === 1 ? '' : 'es'}` : 'No matches'}
             {pendingLoads > 0 && ` · loading ${pendingLoads} more…`}
-            {numberLookup && isNumber(deferred) && (numberHits?.q === deferred ? ` · ${numberMatchText(numberHits.ids, filtered.match, rootNode, tree.childrenOf)}` : ' · looking up number…')}
+            {prefixSearch && index === 'loading' && ' · loading prefixes…'}
+            {prefixSearch && index && typeof index === 'object' && 'error' in index && ` · prefixes unavailable: ${index.error}`}
+            {best && ` · a call to ${digitsOf(deferred)} rates against ${best.dest} (prefix ${best.prefix})`}
           </Typography>
         )}
       </Paper>

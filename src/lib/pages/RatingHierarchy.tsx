@@ -8,7 +8,7 @@ import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import SearchableSelect from '../components/SearchableSelect';
 import HierarchyView from '../components/HierarchyView';
-import { liveRatingPlanNode, liveRatingProfileTree, tpTree, unitHintForCategory, type TPRootType } from '../ratingHierarchy';
+import { livePrefixIndex, liveRatingPlanNode, liveRatingProfileTree, tpPrefixIndex, tpTree, unitHintForCategory, type TPRootType } from '../ratingHierarchy';
 
 type Source = 'live' | 'tp';
 type LiveRootType = 'ratingprofile' | 'ratingplan';
@@ -61,18 +61,10 @@ export function Component() {
   const setType = (v: string) => update({ type: v, id: '' });
   const setRootId = (v: string) => update({ id: v });
 
-  const numberLookup = useCallback(async (num: string) => {
-    const digits = num.replace(/^\+/, '');
-    const prefixes = Array.from({ length: digits.length }, (_, i) => digits.slice(0, i + 1));
-    const all = [...prefixes, ...prefixes.map(p => `+${p}`)];
-    const lists = await Promise.all(all.map(p => api.getReverseDestination(baseUrl!, p).catch(() => [] as string[])));
-    const hits = new Map<string, string>();
-    lists.forEach((ids, i) => (ids || []).forEach(id => {
-      const prev = hits.get(id);
-      if (!prev || all[i].replace('+', '').length > prev.replace('+', '').length) hits.set(id, all[i]);
-    }));
-    return hits;
-  }, [baseUrl]);
+  const prefixIndex = useCallback(
+    () => (source === 'tp' ? tpPrefixIndex(baseUrl!, tpid) : livePrefixIndex(baseUrl!)),
+    [baseUrl, source, tpid],
+  );
 
   const tpids = useQuery({ queryKey: ['rh-tpids', baseUrl], queryFn: () => api.getTPIds(baseUrl!), enabled: !!baseUrl && source === 'tp' });
 
@@ -140,7 +132,7 @@ export function Component() {
         <Alert severity="info" sx={{ mb: 2 }}>Nothing of this type {source === 'tp' ? `in tariff plan ${tpid}` : `for tenant ${tenant}`}.</Alert>
       )}
       {tree.error && <Alert severity="error" sx={{ mb: 2 }}>{(tree.error as Error).message}</Alert>}
-      {tree.data && <HierarchyView root={tree.data} numberLookup={source === 'live' ? numberLookup : undefined} />}
+      {tree.data && <HierarchyView root={tree.data} prefixIndex={prefixIndex} />}
     </Box>
   );
 }

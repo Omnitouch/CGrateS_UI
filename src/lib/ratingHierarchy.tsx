@@ -9,6 +9,7 @@ import * as api from './api';
 import type { HNode } from './components/HierarchyTree';
 import { formatBalanceValue } from './components/BalanceValue';
 import { PrefixEditor, RateSlotsEditor, type RateSlot } from './components/HierarchyEditors';
+import { readZipEntry } from './tpZip';
 
 // Everything below the root loads on expand or select: plans can hold thousands of destinations and rates.
 
@@ -330,4 +331,29 @@ export async function tpTree(baseUrl: string, tpid: string, type: TPRootType, ro
       tpRatingPlanNode(L, a.RatingPlanId, `${id}/act${i}/plan`),
       (a.FallbackSubjects || '').split(';').filter(Boolean))),
   };
+}
+
+// --- Prefix index for search ---
+
+/** Destination ID → prefixes, fetched in one request so search can match prefixes without opening every destination. */
+export type PrefixIndex = Map<string, string[]>;
+
+export async function livePrefixIndex(baseUrl: string): Promise<PrefixIndex> {
+  const dests = await api.getDestinations(baseUrl);
+  return new Map((dests || []).map(d => [d.Id, d.Prefixes || []]));
+}
+
+export async function tpPrefixIndex(baseUrl: string, tpid: string): Promise<PrefixIndex> {
+  const zip = await api.exportTPToZipString(baseUrl, { TPid: tpid });
+  const csv = await readZipEntry(zip, 'Destinations.csv');
+  const index: PrefixIndex = new Map();
+  for (const line of (csv ?? '').split('\n')) {
+    if (!line || line.startsWith('#')) continue;
+    const i = line.indexOf(',');
+    const id = line.slice(0, i);
+    const prefix = line.slice(i + 1).trim();
+    if (!index.has(id)) index.set(id, []);
+    index.get(id)!.push(prefix);
+  }
+  return index;
 }
