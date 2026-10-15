@@ -11,6 +11,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createHashRouter, RouterProvider, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { OcsProvider } from './lib/OcsContext';
 import ocsRouteDefs from './lib/routes';
+import { ocsNavGroups } from './lib';
 
 const DRAWER_WIDTH = 240;
 
@@ -31,46 +32,7 @@ interface AppConfig {
   tenants: string;
 }
 
-const NAV_ITEMS = [
-  { section: 'Core' },
-  { label: 'Accounts', path: '' },
-  { label: 'CDRs', path: 'cdrs' },
-  { label: 'Exported CDRs', path: 'exported-cdrs' },
-  { label: 'Sessions', path: 'sessions' },
-  { section: 'Rating' },
-  { label: 'Destinations', path: 'destinations' },
-  { label: 'Destination Rates', path: 'destination-rates' },
-  { label: 'Rating Plans', path: 'rating-plans' },
-  { label: 'Rating Profiles', path: 'rating-profiles' },
-  { label: 'Timings', path: 'timings' },
-  { label: 'Tariff Plans', path: 'tariff-plans' },
-  { label: 'TP Explorer', path: 'tp-explorer' },
-  { section: 'Actions' },
-  { label: 'Actions', path: 'actions' },
-  { label: 'Action Plans', path: 'action-plans' },
-  { label: 'Action Triggers', path: 'action-triggers' },
-  { label: 'Upcoming Actions', path: 'upcoming-action-plans' },
-  { section: 'Profiles' },
-  { label: 'Chargers', path: 'chargers' },
-  { label: 'Attributes', path: 'attributes' },
-  { label: 'Filters', path: 'filters' },
-  { label: 'Resources', path: 'resources' },
-  { label: 'Stats', path: 'stats' },
-  { label: 'Thresholds', path: 'thresholds' },
-  { section: 'Routes' },
-  { label: 'Route Lookup', path: 'routes' },
-  { label: 'Route Profiles', path: 'route-profiles' },
-  { section: 'Tools' },
-  { label: 'Get Cost', path: 'get-cost' },
-  { label: 'Event Tester', path: 'charge-tester' },
-  { label: 'Analyzer', path: 'analyzer' },
-  { label: 'Event Reader', path: 'event-reader' },
-  { label: 'Event Exporter', path: 'event-exporter' },
-  { label: 'Execute JSON', path: 'execute-json' },
-  { label: 'Config', path: 'config' },
-  { label: 'Cache', path: 'cache' },
-  { label: 'Core', path: 'core' },
-] as const;
+const NAV_ITEMS = ocsNavGroups.flatMap(g => [{ section: g.label }, ...g.items]);
 
 function Layout() {
   const navigate = useNavigate();
