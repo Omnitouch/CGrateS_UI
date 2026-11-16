@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box, Typography, Paper, Button, TextField, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Alert,
@@ -110,7 +111,8 @@ export function Component() {
   const baseUrl = useOcsBaseUrl();
   const { tenants, defaultTenant } = useOcsTenants();
   const [tenant, setTenant] = useState(defaultTenant);
-  const [accountFilter, setAccountFilter] = useState('');
+  const [searchParams] = useSearchParams();
+  const [accountFilter, setAccountFilter] = useState(() => searchParams.get('q') ?? '');
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
@@ -182,6 +184,14 @@ export function Component() {
       setLoading(false);
     }
   }, [baseUrl, tenant, accountFilter]);
+
+  // Linked with ?q=<account> (e.g. from Subscriber Health): show that account straight away.
+  const linkedAccount = useRef(searchParams.get('q'));
+  useEffect(() => {
+    if (!linkedAccount.current) return;
+    linkedAccount.current = null;
+    void fetchAccounts(0);
+  }, [fetchAccounts]);
 
   const loadOptions = useCallback(async (t: string) => {
     if (!baseUrl) return;
