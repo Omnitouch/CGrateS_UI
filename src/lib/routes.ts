@@ -133,6 +133,10 @@ const routes: RouteObject[] = [
     path: 'tp-explorer',
     lazy: () => import('./pages/TariffPlanExplorer'),
   },
+  {
+    path: 'rating-hierarchy',
+    lazy: () => import('./pages/RatingHierarchy'),
+  },
 ];
 
 export default routes;

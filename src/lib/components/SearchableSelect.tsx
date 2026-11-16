@@ -1,4 +1,4 @@
-import { Autocomplete, TextField, type SxProps, type Theme } from '@mui/material';
+import { Autocomplete, TextField, createFilterOptions, type SxProps, type Theme } from '@mui/material';
 
 interface SearchableSelectProps {
   label: string;
@@ -12,6 +12,10 @@ interface SearchableSelectProps {
   disabled?: boolean;
   /** Also accept a typed value that isn't in options. */
   freeSolo?: boolean;
+  /** Typed text, for options searched on the server. */
+  onInputChange?: (text: string) => void;
+  /** Renders at most this many matches so very long lists stay responsive. */
+  maxOptions?: number;
   sx?: SxProps<Theme>;
 }
 
@@ -20,7 +24,7 @@ interface SearchableSelectProps {
  * Empty string means nothing selected.
  */
 export default function SearchableSelect({
-  label, value, options, onChange, placeholder, groupBy, disableClearable, fullWidth, disabled, freeSolo, sx,
+  label, value, options, onChange, placeholder, groupBy, disableClearable, fullWidth, disabled, freeSolo, onInputChange, maxOptions, sx,
 }: SearchableSelectProps) {
   // Keep the current value displayable even before its option list has loaded.
   const opts = value && !options.includes(value) ? [value, ...options] : options;
@@ -36,6 +40,8 @@ export default function SearchableSelect({
       disabled={disabled}
       autoHighlight
       freeSolo={freeSolo}
+      filterOptions={maxOptions ? createFilterOptions({ limit: maxOptions }) : undefined}
+      onInputChange={onInputChange ? (_e, v, reason) => { if (reason === 'input') onInputChange(v); } : undefined}
       autoSelect={freeSolo}
       sx={sx}
       renderInput={params => <TextField {...params} label={label} placeholder={placeholder} />}
