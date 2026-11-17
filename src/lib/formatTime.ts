@@ -1,23 +1,28 @@
-const dateTimeFormat = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const fmt = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-// CGrateS reports unset times as 0001-01-01T00:00:00Z.
+// CGrateS uses 0001-01-01T00:00:00Z for "never set".
 function toDate(d: string | number | Date | null | undefined): Date | null {
-  if (d == null || d === '') return null;
-  const x = d instanceof Date ? d : new Date(d);
-  return isNaN(x.getTime()) || x.getUTCFullYear() <= 1 ? null : x;
+  if (d === null || d === undefined || d === '') return null;
+  const date = d instanceof Date ? d : new Date(d);
+  return isNaN(date.getTime()) || date.getFullYear() <= 1 ? null : date;
 }
 
 export function formatDateTime(d: string | number | Date | null | undefined): string {
-  const x = toDate(d);
-  return x ? dateTimeFormat.format(x) : '—';
+  const date = toDate(d);
+  return date ? fmt.format(date) : '—';
 }
 
+const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['year', 31536000], ['month', 2592000], ['day', 86400], ['hour', 3600], ['minute', 60],
+];
+const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto', style: 'short' });
+
 export function formatRelative(d: string | number | Date | null | undefined): string {
-  const x = toDate(d);
-  if (!x) return 'Never';
-  const diff = Date.now() - x.getTime();
-  const s = Math.round(Math.abs(diff) / 1000);
-  const v = s < 60 ? null : s < 3600 ? `${Math.floor(s / 60)} min` : s < 86400 ? `${Math.floor(s / 3600)} h` : `${Math.floor(s / 86400)} d`;
-  if (!v) return 'just now';
-  return diff >= 0 ? `${v} ago` : `in ${v}`;
+  const date = toDate(d);
+  if (!date) return 'Never';
+  const secs = (date.getTime() - Date.now()) / 1000;
+  for (const [unit, size] of UNITS) {
+    if (Math.abs(secs) >= size) return rtf.format(Math.round(secs / size), unit);
+  }
+  return 'just now';
 }
