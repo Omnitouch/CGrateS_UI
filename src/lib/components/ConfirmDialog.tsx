@@ -8,19 +8,20 @@ interface ConfirmDialogProps {
   confirmLabel: string;
   busy?: boolean;
   danger?: boolean;
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onClose: () => void;
 }
 
 /** Second step for calls that change the live system; children should say exactly what will be sent. */
-export default function ConfirmDialog({ open, title, children, confirmLabel, busy, danger = true, onConfirm, onClose }: ConfirmDialogProps) {
+export default function ConfirmDialog({ open, title, children, confirmLabel, busy, danger = true, confirmDisabled, onConfirm, onClose }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>{children}</DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={busy}>Cancel</Button>
-        <Button variant="contained" color={danger ? 'error' : 'primary'} onClick={onConfirm} disabled={busy}>
+        <Button variant="contained" color={danger ? 'error' : 'primary'} onClick={onConfirm} disabled={busy || confirmDisabled}>
           {busy ? <CircularProgress size={20} /> : confirmLabel}
         </Button>
       </DialogActions>
