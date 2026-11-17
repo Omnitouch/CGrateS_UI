@@ -35,6 +35,7 @@ export const ocsNavGroups: OcsNavGroup[] = [
   {
     label: 'Rating',
     items: [
+      { label: 'Rating map', path: 'rating-map' },
       { label: 'Destinations', path: 'destinations' },
       { label: 'Destination Rates', path: 'destination-rates' },
       { label: 'Rating Plans', path: 'rating-plans' },
@@ -42,7 +43,6 @@ export const ocsNavGroups: OcsNavGroup[] = [
       { label: 'Timings', path: 'timings' },
       { label: 'Tariff Plans', path: 'tariff-plans' },
       { label: 'TP Explorer', path: 'tp-explorer' },
-      { label: 'Rating Hierarchy', path: 'rating-hierarchy' },
     ],
   },
   {

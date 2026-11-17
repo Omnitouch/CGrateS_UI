@@ -7,7 +7,7 @@ import PaidIcon from '@mui/icons-material/Paid';
 import SubdirectoryArrowRightIcon from '@mui/icons-material/SubdirectoryArrowRight';
 import * as api from './api';
 import type { HNode } from './components/HierarchyTree';
-import { formatBalanceValue } from './components/BalanceValue';
+import { formatDateTime } from './formatTime';
 import { PrefixEditor, RateSlotsEditor, type RateSlot } from './components/HierarchyEditors';
 import { readZipEntry } from './tpZip';
 
@@ -18,20 +18,20 @@ const C = {
   destination: '#2e7d32', rate: '#e65100', fallback: '#757575', error: '#d32f2f',
 };
 
-/** How a rating plan's units read; rating plans themselves don't say which ToR they rate. */
-export type UnitHint = 'time' | 'bytes' | 'units';
-
-export function unitHintForCategory(category: string): UnitHint {
-  const c = category.toLowerCase();
-  if (c.includes('data')) return 'bytes';
-  if (c.includes('sms') || c.includes('mms')) return 'units';
-  return 'time';
+/** Rating plans don't know what they rate: RateUnit, RateIncrement and GroupIntervalStart are durations whatever the traffic. */
+function humanTime(ns: number) {
+  const steps: [string, number][] = [['h', 3600e9], ['min', 60e9], ['s', 1e9], ['ms', 1e6], ['µs', 1e3]];
+  const [u, f] = steps.find(([, f]) => ns >= f) ?? ['ns', 1];
+  return `${Number((ns / f).toFixed(2))} ${u}`;
+}
+function humanBytes(b: number) {
+  const steps: [string, number][] = [['TiB', 1024 ** 4], ['GiB', 1024 ** 3], ['MiB', 1024 ** 2], ['KiB', 1024]];
+  const [u, f] = steps.find(([, f]) => b >= f) ?? ['B', 1];
+  return `${Number((b / f).toFixed(2))} ${u}`;
 }
 
-function fmtUnit(n: number, hint: UnitHint): string {
-  if (hint === 'bytes') return formatBalanceValue(n, '*data');
-  if (hint === 'units') return `${n} unit${n === 1 ? '' : 's'}`;
-  return formatBalanceValue(n, '*voice');
+export function rawUnit(n: number): string {
+  return n < 1000 ? String(n) : `${n} (≈${humanTime(n)} if time, ${humanBytes(n)} if bytes)`;
 }
 
 /** A rate or destination referenced but not defined yet opens empty, so saving creates it. */
@@ -70,7 +70,7 @@ function activationStatus(acts: Activation[], now = Date.now()) {
 function activationNode(parentId: string, a: Activation, i: number, status: HNode['status'], plan: HNode, fallbacks: string[]): HNode {
   const id = `${parentId}/act${i}`;
   return {
-    id, label: 'Activation', value: new Date(a.ActivationTime).toLocaleString(), color: C.activation, icon: EventIcon, status,
+    id, label: 'Activation', value: formatDateTime(a.ActivationTime), color: C.activation, icon: EventIcon, status,
     badge: status === 'success' ? 'in force' : status === 'info' ? 'future' : undefined,
     subtext: `${a.RatingPlanId}${fallbacks.length ? ` · ${plural(fallbacks.length, 'fallback')}` : ''}`,
     details: [['Activation time', a.ActivationTime], ['Rating plan', a.RatingPlanId], ['Fallbacks', fallbacks.join(', ') || 'None']],
@@ -104,12 +104,13 @@ function timingText(t: LiveTiming | undefined) {
   return `${t.ID}: years ${list(t.Years)}, months ${list(t.Months)}, days ${list(t.MonthDays)}, weekdays ${list(t.WeekDays)}, from ${t.StartTime}`;
 }
 
-function liveDestinationNode(baseUrl: string, plan: LiveRatingPlan, d: string, parentId: string, hint: UnitHint): HNode {
+function liveDestinationNode(baseUrl: string, plan: LiveRatingPlan, d: string, parentId: string): HNode {
   const id = `${parentId}/dst:${d}`;
   const bindings = plan.DestinationRates[d];
-  const ratesText = bindings.map(b => plan.Ratings[b.Rating]?.Rates.map(s => `${s.Value}/${fmtUnit(s.RateUnit, hint)}`).join(',')).join(' | ');
+  const ratesText = bindings.map(b => plan.Ratings[b.Rating]?.Rates.map(s => `${s.Value}/${s.RateUnit}`).join(',')).join(' | ');
   return {
     id, label: 'Destination', value: d, color: C.destination, icon: PlaceIcon,
+    weight: Math.max(...bindings.map(b => b.Weight)),
     subtext: d === '*any' ? 'Every destination' : ratesText,
     details: [['Prefixes', d === '*any' ? 'Every destination' : 'Loading…']],
     loadDetails: d === '*any' ? undefined : async () => {
@@ -133,17 +134,17 @@ function liveDestinationNode(baseUrl: string, plan: LiveRatingPlan, d: string, p
       const r = plan.Ratings[b.Rating];
       const t = plan.Timings[b.Timing];
       return {
-        id: `${id}/rate${i}`, label: 'Rate', value: r ? r.Rates.map(s => `${s.Value} / ${fmtUnit(s.RateUnit, hint)}`).join(', ') : b.Rating,
-        color: C.rate, icon: PaidIcon, badge: t && t.ID !== '*any' ? t.ID : undefined,
+        id: `${id}/rate${i}`, label: 'Rate', value: r ? r.Rates.map(s => `${s.Value} / ${s.RateUnit}`).join(', ') : b.Rating,
+        color: C.rate, icon: PaidIcon, badge: t && t.ID !== '*any' ? t.ID : undefined, weight: b.Weight,
         subtext: `fee ${r?.ConnectFee ?? '?'} · weight ${b.Weight}`,
         details: r ? [
           ['Connect fee', r.ConnectFee],
-          ['Rate slots', r.Rates.map(s => `from ${fmtUnit(s.GroupIntervalStart, hint)}: ${s.Value} per ${fmtUnit(s.RateUnit, hint)}, in steps of ${fmtUnit(s.RateIncrement, hint)}`).join('; ')],
+          ['Rate slots', r.Rates.map(s => `from ${rawUnit(s.GroupIntervalStart)}: ${s.Value} per ${rawUnit(s.RateUnit)}, in steps of ${rawUnit(s.RateIncrement)}`).join('; ')],
           ['Rounding', `${r.RoundingMethod}, ${r.RoundingDecimals} decimals`],
           ['Max cost', r.MaxCost ? `${r.MaxCost} (${r.MaxCostStrategy || 'no strategy'})` : 'None'],
           ['Timing', timingText(t)],
           ['Weight', b.Weight],
-          ['To change', 'Live rates are compiled from a tariff plan: switch to Tariff plan, edit the rate there, then load the tariff plan into DataDB.'],
+          ['To change', 'Live rates are compiled from a tariff plan: switch to Stored tariff plan, edit the rate there, then load that plan into DataDB.'],
         ] : [['Rating', b.Rating]],
         raw: { binding: b, rating: r, timing: t },
       } as HNode;
@@ -151,40 +152,55 @@ function liveDestinationNode(baseUrl: string, plan: LiveRatingPlan, d: string, p
   };
 }
 
-export function liveRatingPlanNode(baseUrl: string, planId: string, parentId: string, hint: UnitHint): HNode {
+/** One fetch per object for the whole page, however many profiles share it. */
+export function liveLoaders(baseUrl: string) {
+  return {
+    baseUrl,
+    plan: memo(id => api.getRatingPlan(baseUrl, id) as Promise<LiveRatingPlan>),
+  };
+}
+export type LiveLoaders = ReturnType<typeof liveLoaders>;
+
+export function liveRatingPlanNode(L: LiveLoaders, planId: string, parentId: string): HNode {
   const id = `${parentId}/plan:${planId}`;
-  const load = memo(() => api.getRatingPlan(baseUrl, planId) as Promise<LiveRatingPlan>);
   return {
     id, label: 'Rating Plan', value: planId, color: C.plan, icon: ListAltIcon, subtext: 'live',
     loadDetails: async () => {
-      const plan = await load('');
+      const plan = await L.plan(planId);
       const n = Object.keys(plan.DestinationRates || {}).length;
       return {
         subtext: `${plural(n, 'destination')} · live`,
         details: [['Destinations', n], ['Timings', Object.values(plan.Timings || {}).map(t => t.ID).join(', ')], ['Distinct ratings', Object.keys(plan.Ratings || {}).length]],
+        raw: plan,
       };
     },
     loadChildren: async () => {
-      const plan = await load('');
-      return Object.keys(plan.DestinationRates || {}).sort().map(d => liveDestinationNode(baseUrl, plan, d, id, hint));
+      const plan = await L.plan(planId);
+      return Object.keys(plan.DestinationRates || {}).sort().map(d => liveDestinationNode(L.baseUrl, plan, d, id));
     },
   };
 }
 
-export async function liveRatingProfileTree(baseUrl: string, tenant: string, category: string, subject: string): Promise<HNode> {
-  const prof = await api.getRatingProfile(baseUrl, tenant, category, subject) as { Id: string; RatingPlanActivations: Activation[] };
+/** Live rating profile IDs are "category:subject"; the subject may itself contain ":". */
+export function splitCategorySubject(id: string) {
+  const i = id.indexOf(':');
+  return i < 0 ? { category: id, subject: '' } : { category: id.slice(0, i), subject: id.slice(i + 1) };
+}
+
+export async function liveRatingProfileTree(L: LiveLoaders, tenant: string, profileId: string): Promise<HNode> {
+  const { category, subject } = splitCategorySubject(profileId);
+  const prof = await api.getRatingProfile(L.baseUrl, tenant, category, subject) as { Id: string; RatingPlanActivations: Activation[] };
   const acts = prof.RatingPlanActivations || [];
   const status = activationStatus(acts);
-  const hint = unitHintForCategory(category);
   const id = `rp:${prof.Id}`;
   return {
-    id, label: 'Rating Profile', value: `${category}:${subject}`, color: C.profile, icon: AccountTreeIcon,
+    id, label: 'Rating Profile', value: profileId, color: C.profile, icon: AccountTreeIcon,
     status: status.includes('success') ? 'success' : 'warning',
     subtext: `${tenant} · ${plural(acts.length, 'activation')}`,
     details: [['Tenant', tenant], ['Category', category], ['Subject', subject], ['Source', 'Live DataDB']],
     raw: prof,
     children: acts.map((a, i) => activationNode(id, a, i, status[i],
-      liveRatingPlanNode(baseUrl, a.RatingPlanId, `${id}/act${i}`, hint),
+      liveRatingPlanNode(L, a.RatingPlanId, `${id}/act${i}`),
       (a.FallbackKeys || []).map(k => k.split(':').slice(3).join(':') || k))),
   };
 }
@@ -198,7 +214,7 @@ interface TPDestRate { ID: string; DestinationRates: DestRateRow[] }
 interface TPRate { ID: string; RateSlots: { ConnectFee: number; Rate: number; RateUnit: string; RateIncrement: string; GroupIntervalStart: string }[] }
 interface TPTiming { ID: string; Years: string; Months: string; MonthDays: string; WeekDays: string; Time: string }
 
-function tpLoaders(baseUrl: string, tpid: string) {
+export function tpLoaders(baseUrl: string, tpid: string) {
   return {
     baseUrl, tpid,
     plan: memo(id => api.getTPRatingPlan(baseUrl, tpid, id) as Promise<TPRatingPlan>),
@@ -208,7 +224,7 @@ function tpLoaders(baseUrl: string, tpid: string) {
     timing: memo(id => api.getTPTiming(baseUrl, tpid, id) as Promise<TPTiming>),
   };
 }
-type TPLoaders = ReturnType<typeof tpLoaders>;
+export type TPLoaders = ReturnType<typeof tpLoaders>;
 
 function tpRateNode(L: TPLoaders, row: DestRateRow, id: string): HNode {
   return {
@@ -268,7 +284,7 @@ function tpDestinationNode(L: TPLoaders, row: DestRateRow, id: string): HNode {
 
 function tpDestinationRateNode(L: TPLoaders, drId: string, id: string, binding?: { TimingId: string; Weight: number }): HNode {
   return {
-    id, label: 'Destination Rate', value: drId, color: C.destRate, icon: CompareArrowsIcon,
+    id, label: 'Destination Rate', value: drId, color: C.destRate, icon: CompareArrowsIcon, weight: binding?.Weight,
     badge: binding && binding.TimingId !== '*any' ? binding.TimingId : undefined,
     subtext: binding ? `timing ${binding.TimingId} · weight ${binding.Weight}` : undefined,
     details: binding ? [['Timing', binding.TimingId], ['Weight', binding.Weight]] : [],
@@ -293,7 +309,7 @@ function tpDestinationRateNode(L: TPLoaders, drId: string, id: string, binding?:
   };
 }
 
-function tpRatingPlanNode(L: TPLoaders, planId: string, id: string): HNode {
+export function tpRatingPlanNode(L: TPLoaders, planId: string, id: string): HNode {
   return {
     id, label: 'Rating Plan', value: planId, color: C.plan, icon: ListAltIcon, subtext: 'tariff plan',
     loadDetails: async () => {
@@ -311,13 +327,8 @@ function tpRatingPlanNode(L: TPLoaders, planId: string, id: string): HNode {
   };
 }
 
-export type TPRootType = 'ratingprofile' | 'ratingplan' | 'destinationrate';
-
-export async function tpTree(baseUrl: string, tpid: string, type: TPRootType, rootId: string): Promise<HNode> {
-  const L = tpLoaders(baseUrl, tpid);
-  if (type === 'ratingplan') return tpRatingPlanNode(L, rootId, `tp:${rootId}`);
-  if (type === 'destinationrate') return tpDestinationRateNode(L, rootId, `tp:${rootId}`);
-  const prof = await api.getTPRatingProfile(baseUrl, tpid, rootId) as TPRatingProfile;
+export async function tpRatingProfileTree(L: TPLoaders, rootId: string): Promise<HNode> {
+  const prof = await api.getTPRatingProfile(L.baseUrl, L.tpid, rootId) as TPRatingProfile;
   const acts = prof.RatingPlanActivations || [];
   const status = activationStatus(acts);
   const id = `tprp:${rootId}`;
@@ -325,7 +336,7 @@ export async function tpTree(baseUrl: string, tpid: string, type: TPRootType, ro
     id, label: 'Rating Profile', value: `${prof.Category}:${prof.Subject}`, color: C.profile, icon: AccountTreeIcon,
     status: status.includes('success') ? 'success' : 'warning',
     subtext: `${prof.Tenant} · ${plural(acts.length, 'activation')}`,
-    details: [['Tariff plan', tpid], ['LoadId', prof.LoadId], ['Tenant', prof.Tenant], ['Category', prof.Category], ['Subject', prof.Subject]],
+    details: [['Tariff plan', L.tpid], ['LoadId', prof.LoadId], ['Tenant', prof.Tenant], ['Category', prof.Category], ['Subject', prof.Subject]],
     raw: prof,
     children: acts.map((a, i) => activationNode(id, a, i, status[i],
       tpRatingPlanNode(L, a.RatingPlanId, `${id}/act${i}/plan`),
