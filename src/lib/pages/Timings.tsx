@@ -8,6 +8,7 @@ import { useOcsBaseUrl } from '../OcsContext';
 import * as api from '../api';
 import IdMultiSelect, { splitIds, joinIds } from '../components/IdMultiSelect';
 import TpToolbar, { useTpIdList, errMsg } from '../components/TpToolbar';
+import RemoveConfirm, { DangerFooter } from '../components/RemoveConfirm';
 
 interface TimingForm {
   TPid: string;
@@ -41,6 +42,8 @@ export function Component() {
   const [editing, setEditing] = useState(false);
   const [isNew, setIsNew] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const [testNowResult, setTestNowResult] = useState<boolean | null>(null);
   const [testNowOpen, setTestNowOpen] = useState(false);
@@ -90,16 +93,20 @@ export function Component() {
     }
   }, [baseUrl, detail, list]);
 
-  const handleRemove = useCallback(async (id: string) => {
-    if (!baseUrl || !window.confirm(`Remove timing ${id} from tariff plan ${list.tpid}?`)) return;
+  const handleRemove = useCallback(async () => {
+    if (!baseUrl || !removing) return;
+    setBusy(true);
     try {
-      await api.removeTPTiming(baseUrl, list.tpid, id);
+      await api.removeTPTiming(baseUrl, list.tpid, removing);
       setDetailOpen(false);
       list.refresh();
     } catch (e: unknown) {
       setError(errMsg(e, 'Failed to remove'));
+    } finally {
+      setBusy(false);
+      setRemoving(null);
     }
-  }, [baseUrl, list]);
+  }, [baseUrl, list, removing]);
 
   const handleCreate = () => {
     setDetail({ TPid: list.tpid, ID: '', Years: [], Months: [], MonthDays: [], WeekDays: [], StartTime: '00:00:00', EndTime: '' });
@@ -156,22 +163,21 @@ export function Component() {
       {list.loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
       ) : (
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} sx={{ maxWidth: 1100 }}>
           <Table size="small">
-            <TableHead><TableRow><TableCell>#</TableCell><TableCell>Timing ID</TableCell><TableCell>Actions</TableCell></TableRow></TableHead>
+            <TableHead><TableRow><TableCell>Timing ID</TableCell><TableCell align="right" sx={{ width: 360 }}>Actions</TableCell></TableRow></TableHead>
             <TableBody>
-              {list.ids.length > 0 ? list.ids.map((id, idx) => (
+              {list.ids.length > 0 ? list.ids.map(id => (
                 <TableRow key={id} hover>
-                  <TableCell>{idx + 1}</TableCell>
-                  <TableCell sx={{ cursor: 'pointer' }} onClick={() => fetchDetail(id)}>{id}</TableCell>
-                  <TableCell>
+                  <TableCell sx={{ cursor: 'pointer', wordBreak: 'break-word' }} onClick={() => fetchDetail(id)}>{id}</TableCell>
+                  <TableCell align="right">
                     <Button size="small" onClick={() => handleTestNow(id)} sx={{ mr: 1 }}>Test Now (DataDB)</Button>
                     <Button size="small" onClick={() => { setTestTimingId(id); setTestTimeValue(''); setTestTimeResult(null); setTestTimeOpen(true); }} sx={{ mr: 1 }}>Test Time (DataDB)</Button>
-                    <Button size="small" color="error" onClick={() => handleRemove(id)}>Remove</Button>
+                    <Button size="small" color="error" onClick={() => setRemoving(id)}>Remove…</Button>
                   </TableCell>
                 </TableRow>
               )) : (
-                <TableRow><TableCell colSpan={3} align="center">{list.tpid ? 'No timings' : 'Select a tariff plan'}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={2} align="center">{list.tpid ? 'No timings' : 'Select a tariff plan'}</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -207,16 +213,13 @@ export function Component() {
             </Box>
           )}
         </DialogContent>
-        <DialogActions>
-          {!isNew && detail && <Button color="error" onClick={() => handleRemove(detail.ID)}>Remove</Button>}
-          {editing ? (
-            <Button variant="contained" onClick={handleSave}>Save</Button>
-          ) : (
-            <Button onClick={() => setEditing(true)}>Edit</Button>
-          )}
+        <DangerFooter onRemove={!isNew && detail ? () => setRemoving(detail.ID) : undefined}>
           <Button onClick={() => setDetailOpen(false)}>Close</Button>
-        </DialogActions>
+          {editing ? <Button variant="contained" onClick={handleSave}>Save</Button> : <Button variant="contained" onClick={() => setEditing(true)}>Edit</Button>}
+        </DangerFooter>
       </Dialog>
+
+      <RemoveConfirm id={removing} what="timing" where={`tariff plan ${list.tpid}`} busy={busy} onConfirm={handleRemove} onClose={() => setRemoving(null)} />
 
       <Dialog open={testNowOpen} onClose={() => setTestNowOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Timing Test Result (DataDB)</DialogTitle>

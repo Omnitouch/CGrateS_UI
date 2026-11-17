@@ -2,8 +2,8 @@ import { useState, useCallback, useEffect } from 'react';
 import {
   Box, Typography, Paper, Button, CircularProgress, Alert,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton,
-  Tabs, Tab, Checkbox, FormControlLabel, Chip, Tooltip, ToggleButton, ToggleButtonGroup,
+  Dialog, DialogTitle, DialogContent, TextField, IconButton,
+  Tabs, Tab, Checkbox, FormControlLabel, Chip, Tooltip,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -13,8 +13,8 @@ import * as api from '../api';
 import SearchableSelect from '../components/SearchableSelect';
 import IdMultiSelect, { splitIds, joinIds } from '../components/IdMultiSelect';
 import CachingSelect, { cachingOpts } from '../components/CachingSelect';
-
-type Source = 'live' | 'tp';
+import RatingSourceToggle, { useRatingSource, SOURCE_LABEL } from '../components/RatingSource';
+import RemoveConfirm, { DangerFooter } from '../components/RemoveConfirm';
 
 interface RatingPlanActivation {
   ActivationTime: string;
@@ -98,7 +98,7 @@ function FallbackChips({ keys }: { keys: string[] }) {
 export function Component() {
   const baseUrl = useOcsBaseUrl();
   const { tenants, defaultTenant } = useOcsTenants();
-  const [source, setSource] = useState<Source>('live');
+  const [source, setSource] = useRatingSource();
   const [tenant, setTenant] = useState(defaultTenant);
   const [tpids, setTpids] = useState<string[]>([]);
   const [tpid, setTpid] = useState('');
@@ -110,6 +110,7 @@ export function Component() {
 
   const [detail, setDetail] = useState<LiveProfile | TPProfile | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [openId, setOpenId] = useState('');
   const [editing, setEditing] = useState(false);
   const [isNew, setIsNew] = useState(false);
   const [form, setForm] = useState<ProfileForm>({ LoadId: '', Tenant: '', Category: '', Subject: '', RatingPlanActivations: [emptyActivation()] });
@@ -120,6 +121,7 @@ export function Component() {
 
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
   const [removeCaching, setRemoveCaching] = useState('');
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!baseUrl) return;
@@ -179,6 +181,7 @@ export function Component() {
         setDetail(result);
         setForm(tpToForm(result));
       }
+      setOpenId(id);
       setEditing(false);
       setIsNew(false);
       setOverwrite(true);
@@ -217,6 +220,7 @@ export function Component() {
 
   const handleRemove = useCallback(async () => {
     if (!baseUrl || !removeTarget) return;
+    setBusy(true);
     try {
       if (source === 'live') {
         const { category, subject } = splitLiveId(removeTarget);
@@ -225,9 +229,13 @@ export function Component() {
         await api.removeTPRatingProfile(baseUrl, tpid, removeTarget);
       }
       setRemoveTarget(null);
+      setDetailOpen(false);
       fetchProfiles();
     } catch (e: unknown) {
+      setRemoveTarget(null);
       setError(errMsg(e, 'Failed to delete'));
+    } finally {
+      setBusy(false);
     }
   }, [baseUrl, source, tenant, tpid, removeTarget, removeCaching, fetchProfiles]);
 
@@ -265,7 +273,7 @@ export function Component() {
     const acts = detail.RatingPlanActivations || [];
     return (
       <Box sx={{ mt: 1 }}>
-        <Typography variant="caption" color="text.secondary">{isLive ? 'Live DataDB profile' : 'StorDB tariff plan profile'}</Typography>
+        <Typography variant="caption" color="text.secondary">{isLive ? SOURCE_LABEL.live : SOURCE_LABEL.tp}</Typography>
         <Table size="small">
           <TableBody>
             {fields.map(([k, v]) => <TableRow key={k}><TableCell sx={{ fontWeight: 'bold' }}>{k}</TableCell><TableCell>{v}</TableCell></TableRow>)}
@@ -362,7 +370,7 @@ export function Component() {
           )}
         </>
       ) : (
-        <Paper sx={{ p: 1, maxHeight: 400, overflow: 'auto', bgcolor: 'grey.50' }}>
+        <Paper sx={{ p: 1, maxHeight: 400, overflow: 'auto', bgcolor: 'action.hover' }}>
           <pre style={{ fontSize: 12, margin: 0 }}>{JSON.stringify(form, null, 2)}</pre>
         </Paper>
       )}
@@ -374,10 +382,7 @@ export function Component() {
       <Typography variant="h5" gutterBottom>Rating Profiles</Typography>
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-          <ToggleButtonGroup size="small" exclusive value={source} onChange={(_, v) => v && setSource(v)}>
-            <ToggleButton value="live">Live (DataDB)</ToggleButton>
-            <ToggleButton value="tp">Tariff plan (StorDB)</ToggleButton>
-          </ToggleButtonGroup>
+          <RatingSourceToggle value={source} onChange={setSource} />
           {source === 'live'
             ? <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
             : <SearchableSelect label="TPID" value={tpid} options={tpids} onChange={setTpid} disableClearable sx={{ minWidth: 200 }} />}
@@ -389,19 +394,19 @@ export function Component() {
       </Paper>
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
       {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box> : (
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} sx={{ maxWidth: 1000 }}>
           <Table size="small">
-            <TableHead><TableRow><TableCell>#</TableCell><TableCell>{source === 'live' ? 'Profile ID (category:subject)' : 'Profile ID (loadid:tenant:category:subject)'}</TableCell><TableCell align="right">Actions</TableCell></TableRow></TableHead>
+            <TableHead><TableRow><TableCell>{source === 'live' ? 'Profile ID (category:subject)' : 'Profile ID (loadid:tenant:category:subject)'}</TableCell><TableCell align="right" sx={{ width: 100 }}>Actions</TableCell></TableRow></TableHead>
             <TableBody>
-              {profiles.length > 0 ? profiles.map((p, i) => (
+              {profiles.length > 0 ? profiles.map(p => (
                 <TableRow key={p} hover sx={{ cursor: 'pointer' }} onClick={() => fetchDetail(p)}>
-                  <TableCell>{i + 1}</TableCell><TableCell>{p}</TableCell>
+                  <TableCell sx={{ wordBreak: 'break-word' }}>{p}</TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" onClick={e => { e.stopPropagation(); fetchDetail(p); }}><EditIcon fontSize="small" /></IconButton>
-                    <IconButton size="small" color="error" onClick={e => { e.stopPropagation(); setRemoveCaching(''); setRemoveTarget(p); }}><DeleteIcon fontSize="small" /></IconButton>
+                    <IconButton size="small" aria-label="Open" onClick={e => { e.stopPropagation(); fetchDetail(p); }}><EditIcon fontSize="small" /></IconButton>
+                    <IconButton size="small" color="error" aria-label="Remove" onClick={e => { e.stopPropagation(); setRemoveCaching(''); setRemoveTarget(p); }}><DeleteIcon fontSize="small" /></IconButton>
                   </TableCell>
                 </TableRow>
-              )) : <TableRow><TableCell colSpan={3} align="center">{listInfo || 'No profiles loaded'}</TableCell></TableRow>}
+              )) : <TableRow><TableCell colSpan={2} align="center">{listInfo || 'No profiles loaded'}</TableCell></TableRow>}
             </TableBody>
           </Table>
         </TableContainer>
@@ -411,24 +416,15 @@ export function Component() {
         <DialogContent>
           {editing ? renderEditForm() : renderStructuredView()}
         </DialogContent>
-        <DialogActions>
-          {editing ? <Button variant="contained" onClick={handleSave}>Save</Button> : <Button onClick={() => setEditing(true)}>Edit</Button>}
+        <DangerFooter onRemove={!isNew && detail ? () => { setRemoveCaching(''); setRemoveTarget(openId); } : undefined}>
           <Button onClick={() => setDetailOpen(false)}>Close</Button>
-        </DialogActions>
+          {editing ? <Button variant="contained" onClick={handleSave}>Save</Button> : <Button variant="contained" onClick={() => setEditing(true)}>Edit</Button>}
+        </DangerFooter>
       </Dialog>
-      <Dialog open={!!removeTarget} onClose={() => setRemoveTarget(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Delete rating profile</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ mb: 2 }}>
-            Delete <b>{removeTarget}</b> from {source === 'live' ? `DataDB (tenant ${tenant})` : `tariff plan ${tpid}`}?
-          </Typography>
-          {source === 'live' && <CachingSelect value={removeCaching} onChange={setRemoveCaching} />}
-        </DialogContent>
-        <DialogActions>
-          <Button color="error" variant="contained" onClick={handleRemove}>Delete</Button>
-          <Button onClick={() => setRemoveTarget(null)}>Cancel</Button>
-        </DialogActions>
-      </Dialog>
+      <RemoveConfirm id={removeTarget} what="rating profile" busy={busy} onConfirm={handleRemove} onClose={() => setRemoveTarget(null)}
+        where={source === 'live' ? `DataDB (tenant ${tenant}; affects rating immediately)` : `tariff plan ${tpid}`}>
+        {source === 'live' && <CachingSelect value={removeCaching} onChange={setRemoveCaching} />}
+      </RemoveConfirm>
     </Box>
   );
 }

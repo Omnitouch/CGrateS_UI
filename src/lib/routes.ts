@@ -10,6 +10,10 @@ const routes: RouteObject[] = [
     lazy: () => import('./pages/Accounts'),
   },
   {
+    path: 'subscriber',
+    lazy: () => import('./pages/Subscriber'),
+  },
+  {
     path: 'cdrs',
     lazy: () => import('./pages/CDRs'),
   },
