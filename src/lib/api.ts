@@ -52,6 +52,10 @@ export function getAccounts(baseUrl: string, tenant: string, offset = 0, limit =
   }]);
 }
 
+export function getAccountsCount(baseUrl: string, tenant: string) {
+  return jsonRpc(baseUrl, 'APIerSv1.GetAccountsCount', [{ Tenant: tenant }]);
+}
+
 export function setAccount(baseUrl: string, params: Record<string, unknown>) {
   return jsonRpc(baseUrl, 'APIerSv2.SetAccount', [params]);
 }
@@ -470,9 +474,6 @@ export function removeResourceProfile(baseUrl: string, tenant: string, id: strin
   return jsonRpc(baseUrl, 'APIerSv1.RemoveResourceProfile', [{ ID: id, Tenant: tenant, APIOpts: apiOpts }]);
 }
 
-export function getResourceWithConfig(baseUrl: string, tenant: string, id: string) {
-  return jsonRpc(baseUrl, 'ResourceSv1.GetResourceWithConfig', [{ Tenant: tenant, ID: id, APIOpts: {} }]);
-}
 
 export function resourceSEvent(
   baseUrl: string,
