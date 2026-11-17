@@ -1,14 +1,19 @@
 import { useState, useCallback, type ReactNode } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Box, Typography, Paper, Button, TextField, CircularProgress, Alert, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions, Checkbox, FormControlLabel, Autocomplete,
+  Collapse, Link, Chip,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
-import type { FilterProfile, RouteEntry, RouteResult } from '../types';
-import SearchableSelect from '../components/SearchableSelect';
-import CachingSelect, { cachingOpts } from '../components/CachingSelect';
-
+import type { FilterProfile, RouteEntry, RouteResult, RouteProfile } from '../types';
+import { CachingAdvanced, cachingOpts } from '../components/CachingSelect';
+import TenantPicker from '../components/TenantPicker';
+import KeyValueEditor, { rowsToObject, type KeyValueRow } from '../components/KeyValueEditor';
+import { FilterIdsText } from '../components/FilterText';
 function sortingKeys(routes: RouteEntry[] | undefined): string[] {
   const keys = new Set<string>();
   (routes || []).forEach(r => Object.keys(r.SortingData || {}).forEach(k => keys.add(k)));
@@ -46,43 +51,50 @@ function SortedRoutesTable({ routes, renderAction }: { routes: RouteEntry[]; ren
   );
 }
 
+type Outcome =
+  | { kind: 'routes'; results: RouteResult[] }
+  | { kind: 'noRoutes'; matched: number }
+  | { kind: 'noMatch'; configured: number | null };
+
+function Hint({ children }: { children: ReactNode }) {
+  return <Typography variant="caption" color="text.secondary" component="span">{children}</Typography>;
+}
+
 export function Component() {
   const baseUrl = useOcsBaseUrl();
-  const { tenants, defaultTenant } = useOcsTenants();
+  const { defaultTenant } = useOcsTenants();
   const [tenant, setTenant] = useState(defaultTenant);
   const [account, setAccount] = useState('');
   const [destination, setDestination] = useState('');
-  const [eventId, setEventId] = useState('OmniWeb');
-  const [usage, setUsage] = useState('1m');
+  const [eventId, setEventId] = useState('');
+  const [usage, setUsage] = useState('');
   const [ignoreErrors, setIgnoreErrors] = useState(true);
   const [maxCost, setMaxCost] = useState('');
   const [limit, setLimit] = useState('');
   const [offset, setOffset] = useState('');
   const [profileCount, setProfileCount] = useState('');
   const [context, setContext] = useState('');
-  const [searchedDestination, setSearchedDestination] = useState('');
-  const [results, setResults] = useState<RouteResult[]>([]);
+  const [extraFields, setExtraFields] = useState<KeyValueRow[]>([]);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [searched, setSearched] = useState<{ destination: string; tenant: string } | null>(null);
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [matchedProfiles, setMatchedProfiles] = useState<RouteProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [responseTime, setResponseTime] = useState<string | null>(null);
   const [apiQuery, setApiQuery] = useState('');
+  const [showQuery, setShowQuery] = useState(false);
   const [caching, setCaching] = useState('');
 
-  // Detail modal
   const [detail, setDetail] = useState<RouteResult | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
   const fetchRoutes = useCallback(async () => {
     if (!baseUrl) return;
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setOutcome(null); setMatchedProfiles([]);
     const startTime = Date.now();
-    const event: Record<string, unknown> = {
-      Account: account,
-      Tenant: tenant,
-      Subject: account,
-      SetupTime: new Date().toISOString().slice(0, 19),
-      Destination: destination,
-    };
+    const event: Record<string, unknown> = { ...rowsToObject(extraFields), SetupTime: new Date().toISOString().slice(0, 19), Destination: destination.trim() };
+    if (account.trim()) { event.Account = account.trim(); event.Subject = account.trim(); }
     if (usage.trim()) event.Usage = usage.trim();
     const opts: Record<string, unknown> = { '*rouIgnoreErrors': ignoreErrors };
     const mc = maxCost.trim();
@@ -91,17 +103,27 @@ export function Component() {
     if (offset.trim()) opts['*rouOffset'] = Number(offset);
     if (profileCount.trim()) opts['*rouProfileCount'] = Number(profileCount);
     if (context.trim()) opts['*context'] = context.trim();
-    const params = { Tenant: tenant, ID: eventId, Event: event, APIOpts: opts };
+    const params = { Tenant: tenant, ID: eventId.trim() || `cgrates-ui-${Date.now()}`, Event: event, APIOpts: opts };
     setApiQuery(JSON.stringify({ method: 'RouteSv1.GetRoutes', params: [params], id: 1 }, null, 2));
+    const orEmpty = <T,>(p: Promise<T>) => p.catch(e => { if (api.isNotFound(e)) return null; throw e; });
     try {
-      const r = await api.getRoutes(baseUrl, params) as RouteResult[];
-      const endTime = Date.now();
-      setResponseTime(((endTime - startTime) / 1000).toFixed(2));
-      setResults(r || []);
-      setSearchedDestination(destination);
-    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed'); setResults([]); }
+      // GetRouteProfilesForEvent runs alongside so a NOT_FOUND can say whether any profile matched.
+      const [routes, profiles] = await Promise.all([
+        orEmpty(api.getRoutes(baseUrl, params) as Promise<RouteResult[]>),
+        orEmpty(api.getRouteProfilesForEvent(baseUrl, { ...params, APIOpts: {} }) as Promise<RouteProfile[]>),
+      ]);
+      setMatchedProfiles(profiles || []);
+      if (routes?.length) setOutcome({ kind: 'routes', results: routes });
+      else if (profiles?.length) setOutcome({ kind: 'noRoutes', matched: profiles.length });
+      else {
+        const ids = await orEmpty(api.getRouteProfileIDs(baseUrl, tenant)).catch(() => undefined);
+        setOutcome({ kind: 'noMatch', configured: ids === undefined ? null : (ids || []).length });
+      }
+      setResponseTime(((Date.now() - startTime) / 1000).toFixed(2));
+      setSearched({ destination: destination.trim(), tenant });
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed'); }
     finally { setLoading(false); }
-  }, [baseUrl, tenant, account, destination, eventId, usage, ignoreErrors, maxCost, limit, offset, profileCount, context]);
+  }, [baseUrl, tenant, account, destination, eventId, usage, ignoreErrors, maxCost, limit, offset, profileCount, context, extraFields]);
 
   const blockRoute = useCallback(async (routeDestination: string, ratingPlanID: string) => {
     if (!baseUrl) return;
@@ -130,84 +152,153 @@ export function Component() {
     }
   }, [baseUrl, tenant, caching]);
 
-  const numberField = (label: string, value: string, set: (v: string) => void, helperText?: string) => (
-    <TextField size="small" type="number" label={label} value={value} onChange={e => set(e.target.value)} helperText={helperText} sx={{ width: 150 }} />
+  const numberField = (label: string, key: string, value: string, set: (v: string) => void, help: string) => (
+    <TextField size="small" type="number" label={label} value={value} onChange={e => set(e.target.value)} sx={{ width: 220 }}
+      helperText={<>{help} <code>{key}</code></>} />
   );
+
+  const searchedDestination = searched?.destination || '';
+  const results = outcome?.kind === 'routes' ? outcome.results : [];
+  const advancedCount = [eventId, maxCost, limit, offset, profileCount, context].filter(v => v.trim()).length
+    + extraFields.filter(r => r.key.trim()).length + (ignoreErrors ? 0 : 1);
 
   return (
     <Box>
-      <Typography variant="h5" gutterBottom>Route Lookup</Typography>
+      <Typography variant="h5">Route Lookup</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Test routing: which route profiles match an event, and the routes RouteS returns for it, in order. Nothing is stored.
+      </Typography>
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
-          <TextField size="small" label="Account" value={account} onChange={e => setAccount(e.target.value)} />
-          <TextField size="small" label="Destination" value={destination} onChange={e => setDestination(e.target.value)} />
-          <TextField size="small" label="Usage" value={usage} onChange={e => setUsage(e.target.value)} helperText="Empty: RouteS uses 1m" />
-          <TextField size="small" label="Event ID" value={eventId} onChange={e => setEventId(e.target.value)} />
-          <Button variant="contained" onClick={fetchRoutes}>Search</Button>
+        <Box component="form" onSubmit={e => { e.preventDefault(); fetchRoutes(); }}
+          sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <TenantPicker value={tenant} onChange={setTenant} />
+          <TextField size="small" label="Destination" value={destination} onChange={e => setDestination(e.target.value)} autoFocus
+            helperText="Number being called" />
+          <TextField size="small" label="Account" value={account} onChange={e => setAccount(e.target.value)} helperText="Optional; also sent as Subject" />
+          <TextField size="small" label="Usage" value={usage} onChange={e => setUsage(e.target.value)} helperText="Optional; RouteS assumes 1m" sx={{ width: 160 }} />
+          <Button type="submit" variant="contained" disabled={loading || !destination.trim()} sx={{ mt: 0.25 }}>Find routes</Button>
         </Box>
-        <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>Options (APIOpts)</Typography>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          <FormControlLabel label="Ignore errors (*rouIgnoreErrors)"
-            control={<Checkbox checked={ignoreErrors} onChange={e => setIgnoreErrors(e.target.checked)} />} />
-          <Autocomplete<string, false, false, true>
-            freeSolo size="small" options={['*event_cost']} value={maxCost} onInputChange={(_e, v) => setMaxCost(v)} sx={{ width: 200 }}
-            renderInput={p => <TextField {...p} label="Max cost (*rouMaxCost)" helperText="Number or *event_cost" />}
-          />
-          {numberField('*rouLimit', limit, setLimit, 'Max routes')}
-          {numberField('*rouOffset', offset, setOffset, 'Skip routes')}
-          {numberField('*rouProfileCount', profileCount, setProfileCount, 'Max profiles')}
-          <Autocomplete<string, false, false, true>
-            freeSolo size="small" options={['*routes']} value={context} onInputChange={(_e, v) => setContext(v)} sx={{ width: 180 }}
-            renderInput={p => <TextField {...p} label="Context (*context)" helperText="For AttributeS" />}
-          />
-        </Box>
+        <Button size="small" sx={{ mt: 1 }} onClick={() => setAdvancedOpen(o => !o)} endIcon={advancedOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}>
+          Advanced{advancedCount ? ` (${advancedCount} set)` : ''}
+        </Button>
+        <Collapse in={advancedOpen}>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-start', mt: 1.5 }}>
+            <TextField size="small" label="Event ID" value={eventId} onChange={e => setEventId(e.target.value)}
+              helperText="Optional; generated automatically" sx={{ width: 220 }} />
+            <Autocomplete<string, false, false, true>
+              freeSolo size="small" options={['*event_cost']} value={maxCost} onInputChange={(_e, v) => setMaxCost(v)} sx={{ width: 220 }}
+              renderInput={p => <TextField {...p} label="Maximum cost"
+                helperText={<>Drop dearer routes; a number, or *event_cost for this event's own cost <code>*rouMaxCost</code></>} />}
+            />
+            {numberField('Maximum routes', '*rouLimit', limit, setLimit, 'Across all profiles')}
+            {numberField('Skip first N routes', '*rouOffset', offset, setOffset, 'For paging')}
+            {numberField('Maximum profiles', '*rouProfileCount', profileCount, setProfileCount, 'Highest weight first')}
+            <Autocomplete<string, false, false, true>
+              freeSolo size="small" options={['*routes']} value={context} onInputChange={(_e, v) => setContext(v)} sx={{ width: 220 }}
+              renderInput={p => <TextField {...p} label="AttributeS context"
+                helperText={<>Used if RouteS calls AttributeS first; default *routes <code>*context</code></>} />}
+            />
+            <FormControlLabel sx={{ width: 320, alignItems: 'flex-start', m: 0 }}
+              control={<Checkbox size="small" checked={ignoreErrors} onChange={e => setIgnoreErrors(e.target.checked)} sx={{ pt: 0 }} />}
+              label={<Box><Typography variant="body2">Skip routes that fail</Typography>
+                <Hint>Ignore a route whose cost, stats or resource lookup errors instead of failing the request <code>*rouIgnoreErrors</code></Hint></Box>} />
+          </Box>
+          <Box sx={{ mt: 2, maxWidth: 700 }}>
+            <KeyValueEditor label="Extra event fields" rows={extraFields} onChange={setExtraFields} keyPlaceholder="Field, e.g. Category" />
+          </Box>
+        </Collapse>
       </Paper>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      {responseTime && !loading && (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          Response from CGrateS in {responseTime} seconds
-        </Typography>
-      )}
+      {loading && <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>}
 
-      {apiQuery && (
-        <Paper sx={{ p: 1, mb: 2, bgcolor: 'grey.50', maxHeight: 200, overflow: 'auto' }}>
-          <pre style={{ fontSize: 11, margin: 0 }}>{apiQuery}</pre>
-        </Paper>
-      )}
+      {!loading && outcome && searched && (
+        <>
+          {outcome.kind === 'noMatch' && (outcome.configured === 0 ? (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Routing isn't configured on this OCS: tenant {searched.tenant} has no route profiles.{' '}
+              <Link component={RouterLink} to="../route-profiles" relative="path">Go to Route Profiles</Link>
+            </Alert>
+          ) : (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              No route profiles match {searched.destination || '(empty destination)'} for tenant {searched.tenant}
+              {outcome.configured !== null && ` (${outcome.configured} route ${outcome.configured === 1 ? 'profile' : 'profiles'} configured)`}.{' '}
+              <Link component={RouterLink} to="../route-profiles" relative="path">View route profiles</Link>
+            </Alert>
+          ))}
+          {outcome.kind === 'noRoutes' && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              {outcome.matched} route {outcome.matched === 1 ? 'profile matches' : 'profiles match'} {searched.destination}, but none returned a route:
+              each route's own filters, the maximum cost or the limits excluded them.
+            </Alert>
+          )}
 
-      {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box> : (
-        <TableContainer component={Paper}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>#</TableCell>
-                <TableCell>Profile ID</TableCell>
-                <TableCell>Sorting</TableCell>
-                <TableCell>Routes</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {results.length > 0 ? results.map((r, i) => (
-                <TableRow key={i} hover sx={{ cursor: 'pointer' }} onClick={() => { setDetail(r); setDetailOpen(true); }}>
-                  <TableCell>{i + 1}</TableCell>
-                  <TableCell>{r.ProfileID}</TableCell>
-                  <TableCell>{r.Sorting}</TableCell>
-                  <TableCell>
-                    {r.Routes?.map((rt, ri) => (
-                      <Box key={ri} sx={{ mb: 0.5 }}>
-                        <strong>{rt.RouteID}</strong>
-                        {Object.entries(rt.SortingData || {}).map(([k, v]) => ` | ${k}: ${formatSortingValue(v)}`).join('')}
-                      </Box>
-                    ))}
-                  </TableCell>
-                </TableRow>
-              )) : <TableRow><TableCell colSpan={4} align="center">No results</TableCell></TableRow>}
-            </TableBody>
-          </Table>
-        </TableContainer>
+          {matchedProfiles.length > 0 && (
+            <Paper sx={{ p: 2, mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>Matching route profiles ({matchedProfiles.length})</Typography>
+              <Table size="small">
+                <TableHead>
+                  <TableRow><TableCell>Profile</TableCell><TableCell>Sorting</TableCell><TableCell>Applies when</TableCell><TableCell align="right">Weight</TableCell><TableCell align="right">Routes</TableCell></TableRow>
+                </TableHead>
+                <TableBody>
+                  {matchedProfiles.map(p => (
+                    <TableRow key={p.ID}>
+                      <TableCell>{p.ID}</TableCell>
+                      <TableCell>{p.Sorting}</TableCell>
+                      <TableCell><FilterIdsText ids={p.FilterIDs} /></TableCell>
+                      <TableCell align="right">{p.Weight}</TableCell>
+                      <TableCell align="right">{p.Routes?.length ?? 0}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Paper>
+          )}
+
+          {results.length > 0 && (
+            <TableContainer component={Paper} sx={{ mb: 2 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>#</TableCell>
+                    <TableCell>Profile ID</TableCell>
+                    <TableCell>Sorting</TableCell>
+                    <TableCell>Routes, best first</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {results.map((r, i) => (
+                    <TableRow key={i} hover sx={{ cursor: 'pointer' }} onClick={() => { setDetail(r); setDetailOpen(true); }}>
+                      <TableCell>{i + 1}</TableCell>
+                      <TableCell>{r.ProfileID}</TableCell>
+                      <TableCell>{r.Sorting}</TableCell>
+                      <TableCell>
+                        {r.Routes?.map((rt, ri) => (
+                          <Box key={ri} sx={{ mb: 0.5 }}>
+                            <strong>{rt.RouteID}</strong>
+                            {Object.entries(rt.SortingData || {}).map(([k, v]) => ` | ${k}: ${formatSortingValue(v)}`).join('')}
+                          </Box>
+                        ))}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {responseTime && <Typography variant="body2" color="text.secondary">Answered in {responseTime} s</Typography>}
+            <Button size="small" onClick={() => setShowQuery(v => !v)}>{showQuery ? 'Hide' : 'Show'} API request</Button>
+            {outcome.kind !== 'routes' && <Chip size="small" variant="outlined" label="RouteSv1.GetRoutes: NOT_FOUND" />}
+          </Box>
+          <Collapse in={showQuery}>
+            <Paper sx={{ p: 1, mt: 1, bgcolor: 'action.hover', maxHeight: 300, overflow: 'auto' }}>
+              <pre style={{ fontSize: 11, margin: 0 }}>{apiQuery}</pre>
+            </Paper>
+          </Collapse>
+        </>
       )}
 
       <Dialog open={detailOpen} onClose={() => setDetailOpen(false)} maxWidth="lg" fullWidth>
@@ -217,7 +308,7 @@ export function Component() {
             "Block" adds a *notprefix rule for destination {searchedDestination || '(empty)'} to the filter
             Filter_Operator_Route_Blacklist_&lt;operator&gt;, creating it if needed. Routes only honour it if they reference that filter.
           </Typography>
-          <CachingSelect value={caching} onChange={setCaching} sx={{ mb: 2 }} />
+          <Box sx={{ mb: 2 }}><CachingAdvanced value={caching} onChange={setCaching} action="blocking" /></Box>
           {detail && (
             <Box sx={{ mt: 1 }}>
               <Typography><strong>Profile ID:</strong> {detail.ProfileID}</Typography>

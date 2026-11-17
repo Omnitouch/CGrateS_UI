@@ -1,19 +1,25 @@
 import { useState, useCallback, useEffect } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Box, Typography, Paper, Button, MenuItem, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, IconButton,
-  TextField, List, ListItem, ListItemText, Divider, Chip, Autocomplete, Accordion, AccordionSummary, AccordionDetails,
+  TextField, List, ListItem, ListItemText, Divider, Chip, Autocomplete, TablePagination, InputAdornment, Menu, Link,
+  ListItemIcon,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
+import SearchIcon from '@mui/icons-material/Search';
+import TuneIcon from '@mui/icons-material/Tune';
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import type { FilterProfile, FilterRule } from '../types';
-import SearchableSelect from '../components/SearchableSelect';
 import IdMultiSelect from '../components/IdMultiSelect';
-import CachingSelect, { cachingOpts } from '../components/CachingSelect';
+import CachingSelect, { CachingAdvanced, cachingOpts } from '../components/CachingSelect';
+import TenantPicker from '../components/TenantPicker';
+import TypedDeleteDialog from '../components/TypedDeleteDialog';
+import { FilterRuleText } from '../components/FilterText';
+import { useSearchedIds } from '../components/useSearchedIds';
 import ActivationIntervalInput, { formatActivationInterval } from '../components/ActivationIntervalInput';
 import { useIdOptions, type IdSource } from '../components/useIdOptions';
 import { ALL_FILTER_TYPES, VALUELESS_FILTER_TYPES, negateFilterType } from '../cgrConsts';
@@ -69,12 +75,39 @@ function emptyFilter(tenant: string): FilterProfile {
   };
 }
 
+const PAGE_SIZES = [25, 50, 100];
+
+/** Rules in plain words, ANDed; Account values link to the Accounts page. */
+function RulesText({ rules }: { rules: FilterRule[] | undefined }) {
+  if (!rules?.length) return <Typography variant="body2" color="text.secondary" component="span">No rules</Typography>;
+  return (
+    <>
+      {rules.map((r, i) => (
+        <Box key={i}>
+          {i > 0 && <Typography component="span" variant="caption" color="text.secondary">and </Typography>}
+          <FilterRuleText rule={r} renderValue={(field, v) => field === 'Account' ? (
+            <Link component={RouterLink} to={`../accounts?q=${encodeURIComponent(v)}`} relative="path"
+              onClick={e => e.stopPropagation()} title={`Open account ${v}`}>{v}</Link>
+          ) : v} />
+        </Box>
+      ))}
+    </>
+  );
+}
+
 export function Component() {
   const baseUrl = useOcsBaseUrl();
-  const { tenants, defaultTenant } = useOcsTenants();
+  const { defaultTenant } = useOcsTenants();
   const [tenant, setTenant] = useState(defaultTenant);
-  const [ids, setIds] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [total, setTotal] = useState<number | null>(null);
+  const [bodies, setBodies] = useState<Record<string, FilterProfile | 'error'>>({});
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [advancedAnchor, setAdvancedAnchor] = useState<HTMLElement | null>(null);
+  const [indexesOpen, setIndexesOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<FilterProfile | null>(null);
@@ -83,29 +116,46 @@ export function Component() {
   const [editData, setEditData] = useState<FilterProfile>(emptyFilter(defaultTenant));
   const [caching, setCaching] = useState('');
 
-  const fetchIds = useCallback(async () => {
-    if (!baseUrl || !tenant) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await api.getFilterIDs(baseUrl, tenant) as string[];
-      setIds(result || []);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to fetch');
-      setIds([]);
-    } finally {
-      setLoading(false);
-    }
+  const load = useCallback(async (q: string) => {
+    const r = ((await api.getFilterIDs(baseUrl!, tenant, q)) || []).sort((a, b) => a.localeCompare(b));
+    if (!q) setTotal(r.length);
+    return r;
   }, [baseUrl, tenant]);
+  const { ids, loading, error: listError, reload: fetchIds } = useSearchedIds(baseUrl && tenant ? load : null, search, tenant);
+
+  useEffect(() => { setPage(0); }, [search, tenant]);
+  useEffect(() => { setTotal(null); setBodies({}); }, [tenant]);
+
+  useEffect(() => {
+    if (!baseUrl || !tenant || !search.trim() || total !== null) return;
+    api.getFilterIDs(baseUrl, tenant).then(r => setTotal((r || []).length)).catch(e => { if (api.isNotFound(e)) setTotal(0); });
+  }, [baseUrl, tenant, search, total]);
+
+  const shown = ids ? ids.slice(page * pageSize, (page + 1) * pageSize) : [];
+  const shownKey = shown.join('|');
+
+  // Rule bodies only for the visible page; there is no batch GetFilters.
+  useEffect(() => {
+    if (!baseUrl) return;
+    const missing = shown.filter(id => !(id in bodies));
+    if (!missing.length) return;
+    let live = true;
+    Promise.all(missing.map(id => (api.getFilter(baseUrl, tenant, id) as Promise<FilterProfile>)
+      .then(f => [id, f] as const).catch(() => [id, 'error'] as const)))
+      .then(rs => { if (live) setBodies(prev => ({ ...prev, ...Object.fromEntries(rs) })); });
+    return () => { live = false; };
+  }, [baseUrl, tenant, shownKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchDetail = useCallback(async (id: string) => {
     if (!baseUrl) return;
     try {
       const result = await api.getFilter(baseUrl, tenant, id) as FilterProfile;
       setDetail(result);
+      setBodies(prev => ({ ...prev, [id]: result }));
       setEditData(JSON.parse(JSON.stringify(result)));
       setSelectedId(id);
       setEditing(false);
+      setCaching('');
       setDetailOpen(true);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to fetch details');
@@ -124,6 +174,7 @@ export function Component() {
         APIOpts: cachingOpts(caching),
       });
       setDetailOpen(false);
+      setBodies(prev => { const n = { ...prev }; delete n[editData.ID]; return n; });
       fetchIds();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to save');
@@ -131,13 +182,19 @@ export function Component() {
   }, [baseUrl, editData, caching, fetchIds]);
 
   const handleDelete = useCallback(async (id: string) => {
-    if (!baseUrl || !window.confirm(`Delete ${id}?`)) return;
+    if (!baseUrl) return;
+    setDeleting(true);
     try {
       await api.removeFilter(baseUrl, tenant, id, cachingOpts(caching));
-      fetchIds();
+      setDeleteId(null);
       setDetailOpen(false);
+      setTotal(null);
+      fetchIds();
     } catch (e: unknown) {
+      setDeleteId(null);
       setError(e instanceof Error ? e.message : 'Failed to delete');
+    } finally {
+      setDeleting(false);
     }
   }, [baseUrl, tenant, caching, fetchIds]);
 
@@ -146,6 +203,7 @@ export function Component() {
     setSelectedId(null);
     setEditData(emptyFilter(tenant));
     setEditing(true);
+    setCaching('');
     setDetailOpen(true);
   }, [tenant]);
 
@@ -198,51 +256,86 @@ export function Component() {
     });
   };
 
+  const shownError = error || listError;
+  const countText = total === null ? null
+    : search.trim() && ids ? `${ids.length} of ${total} filters match` : `${total} ${total === 1 ? 'filter' : 'filters'}`;
+
   return (
     <Box>
-      <Typography variant="h5" gutterBottom>Filter Profiles</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2, mb: 1 }}>
+        <Typography variant="h5">Filter Profiles</Typography>
+        {countText && <Typography variant="body1" color="text.secondary">{countText}</Typography>}
+        <Box sx={{ flex: 1 }} />
+        <Button size="small" startIcon={<TuneIcon />} onClick={e => setAdvancedAnchor(e.currentTarget)} aria-haspopup="menu">Advanced</Button>
+        <Menu anchorEl={advancedAnchor} open={!!advancedAnchor} onClose={() => setAdvancedAnchor(null)}>
+          <MenuItem onClick={() => { setAdvancedAnchor(null); setIndexesOpen(true); }}>
+            <ListItemIcon><AccountTreeIcon fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Filter indexes…" secondary="Inspect, rebuild or remove the indexes profiles are matched by" />
+          </MenuItem>
+        </Menu>
+      </Box>
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
-          <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
-          <Button variant="contained" onClick={fetchIds}>Fetch</Button>
-          <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>
-          <CachingSelect value={caching} onChange={setCaching} />
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <TenantPicker value={tenant} onChange={setTenant} />
+          <TextField size="small" value={search} onChange={e => setSearch(e.target.value)} sx={{ flex: '1 1 260px', maxWidth: 420 }}
+            placeholder="Part of the filter ID" label="Search ID"
+            slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
+            helperText="Matched on the server against IDs only; rule values are not searchable through the API" />
+          <Box sx={{ flex: 1 }} />
+          <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>
         </Box>
       </Paper>
 
-      <FilterIndexTools tenant={tenant} />
+      {shownError && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{shownError}</Alert>}
 
-      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
-
-      {loading ? (
+      {ids === null || (loading && ids.length === 0) ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+      ) : ids.length === 0 ? (
+        <Paper sx={{ p: 3, textAlign: 'center' }}>
+          <Typography color="text.secondary" sx={{ mb: search.trim() ? 0 : 2 }}>
+            {search.trim() ? `No filter IDs contain "${search.trim()}".` : `No filters for ${tenant}.`}
+          </Typography>
+          {!search.trim() && <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>}
+        </Paper>
       ) : (
-        <TableContainer component={Paper}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>#</TableCell>
-                <TableCell>ID</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {ids.length > 0 ? ids.map((id, idx) => (
-                <TableRow key={id} hover sx={{ cursor: 'pointer' }} onClick={() => fetchDetail(id)}>
-                  <TableCell>{idx + 1}</TableCell>
-                  <TableCell>{id}</TableCell>
-                  <TableCell align="right">
-                    <IconButton size="small" onClick={e => { e.stopPropagation(); fetchDetail(id); }}><EditIcon fontSize="small" /></IconButton>
-                    <IconButton size="small" color="error" onClick={e => { e.stopPropagation(); handleDelete(id); }}><DeleteIcon fontSize="small" /></IconButton>
-                  </TableCell>
+        <Paper sx={{ maxWidth: 1200, opacity: loading ? 0.6 : 1 }}>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ width: '38%' }}>ID</TableCell>
+                  <TableCell>Matches</TableCell>
                 </TableRow>
-              )) : (
-                <TableRow><TableCell colSpan={3} align="center">No items found</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {shown.map(id => {
+                  const body = bodies[id];
+                  return (
+                    <TableRow key={id} hover sx={{ cursor: 'pointer', verticalAlign: 'top' }} onClick={() => fetchDetail(id)}>
+                      <TableCell sx={{ wordBreak: 'break-word' }}>{id}</TableCell>
+                      <TableCell>
+                        {body === undefined ? <Typography variant="body2" color="text.disabled">Loading…</Typography>
+                          : body === 'error' ? <Typography variant="body2" color="error">Could not load</Typography>
+                          : <RulesText rules={body.Rules} />}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <TablePagination component="div" count={ids.length} page={page} onPageChange={(_e, p) => setPage(p)}
+            rowsPerPage={pageSize} rowsPerPageOptions={PAGE_SIZES} onRowsPerPageChange={e => { setPageSize(Number(e.target.value)); setPage(0); }} />
+        </Paper>
       )}
+
+      <Dialog open={indexesOpen} onClose={() => setIndexesOpen(false)} maxWidth="lg" fullWidth>
+        <DialogTitle>Filter indexes</DialogTitle>
+        <DialogContent dividers>
+          <FilterIndexTools tenant={tenant} />
+        </DialogContent>
+        <DialogActions><Button onClick={() => setIndexesOpen(false)}>Close</Button></DialogActions>
+      </Dialog>
 
       <Dialog open={detailOpen} onClose={() => setDetailOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>{selectedId ? `${selectedId}` : 'Create New Filter'}</DialogTitle>
@@ -323,6 +416,7 @@ export function Component() {
               ))}
 
               <Button variant="outlined" startIcon={<AddIcon />} onClick={addRule}>Add Rule</Button>
+              <CachingAdvanced value={caching} onChange={setCaching} />
             </Box>
           ) : (
             /* --- View mode --- */
@@ -344,6 +438,8 @@ export function Component() {
                 </ListItem>
                 <Divider />
                 <ListItem sx={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>Matches</Typography>
+                  <Box sx={{ mb: 1.5 }}><RulesText rules={(detail as FilterProfile).Rules} /></Box>
                   <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>Rules ({(detail as FilterProfile).Rules?.length || 0})</Typography>
                   {(detail as FilterProfile).Rules?.map((rule, idx) => (
                     <Paper key={idx} variant="outlined" sx={{ p: 1.5, mb: 1, width: '100%' }}>
@@ -365,15 +461,18 @@ export function Component() {
           )}
         </DialogContent>
         <DialogActions>
+          {selectedId && <Button color="error" onClick={() => { setCaching(''); setDeleteId(selectedId); }} sx={{ mr: 'auto' }}>Delete…</Button>}
+          <Button onClick={() => setDetailOpen(false)}>{editing ? 'Cancel' : 'Close'}</Button>
           {editing ? (
             <Button variant="contained" onClick={handleSave}>Save</Button>
           ) : (
-            <Button onClick={() => setEditing(true)}>Edit</Button>
+            <Button variant="contained" onClick={() => setEditing(true)}>Edit</Button>
           )}
-          {selectedId && <Button color="error" onClick={() => handleDelete(selectedId)}>Delete</Button>}
-          <Button onClick={() => setDetailOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      <TypedDeleteDialog id={deleteId} kind="filter" busy={deleting} caching={caching} onCaching={setCaching}
+        onConfirm={handleDelete} onClose={() => setDeleteId(null)} />
     </Box>
   );
 }
@@ -414,9 +513,8 @@ function FilterIndexTools({ tenant }: { tenant: string }) {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<IndexAction | null>(null);
-  const [expanded, setExpanded] = useState(false);
   const it = INDEX_ITEM_TYPES.find(t => t.value === itemType)!;
-  const idOptions = useIdOptions(it.source ? [it.source] : [], tenant, expanded);
+  const idOptions = useIdOptions(it.source ? [it.source] : [], tenant, true);
   const ctx = it.needsContext ? { Context: context.trim() } : {};
   const contextMissing = it.needsContext && !context.trim();
 
@@ -468,11 +566,7 @@ function FilterIndexTools({ tenant }: { tenant: string }) {
   };
 
   return (
-    <Accordion sx={{ mb: 2 }} expanded={expanded} onChange={(_e, v) => setExpanded(v)}>
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Typography variant="subtitle1">Filter indexes</Typography>
-      </AccordionSummary>
-      <AccordionDetails>
+    <>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             <TextField select size="small" label="Subsystem" value={itemType} onChange={e => setItemType(e.target.value)} sx={{ minWidth: 180 }}>
@@ -513,7 +607,6 @@ function FilterIndexTools({ tenant }: { tenant: string }) {
           {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
           {message && <Alert severity="success" onClose={() => setMessage(null)}>{message}</Alert>}
         </Box>
-      </AccordionDetails>
 
       <Dialog open={confirm !== null} onClose={() => setConfirm(null)} maxWidth="sm" fullWidth>
         <DialogTitle>{confirm === 'remove' ? 'Remove filter indexes?' : 'Compute filter indexes?'}</DialogTitle>
@@ -527,6 +620,6 @@ function FilterIndexTools({ tenant }: { tenant: string }) {
           </Button>
         </DialogActions>
       </Dialog>
-    </Accordion>
+    </>
   );
 }
