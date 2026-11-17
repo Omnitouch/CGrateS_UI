@@ -12,7 +12,7 @@ import * as api from '../api';
 import type { ResourceProfile, ResourceUsage } from '../types';
 import SearchableSelect from '../components/SearchableSelect';
 import IdMultiSelect from '../components/IdMultiSelect';
-import CachingSelect, { cachingOpts } from '../components/CachingSelect';
+import { CachingAdvanced, cachingOpts } from '../components/CachingSelect';
 import ActivationIntervalInput, { formatActivationInterval } from '../components/ActivationIntervalInput';
 import EventTester from '../components/EventTester';
 import { useIdOptions } from '../components/useIdOptions';
@@ -323,7 +323,6 @@ export function Component() {
           <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
           <Button variant="contained" onClick={fetchIds}>Fetch</Button>
           <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>
-          <CachingSelect value={caching} onChange={setCaching} />
         </Box>
       </Paper>
 
@@ -409,6 +408,7 @@ export function Component() {
         <DialogTitle>{selectedId ? `${selectedId}` : 'Create New'}</DialogTitle>
         <DialogContent>
           {editing ? renderEditForm() : detail && renderView(detail)}
+          {editing && <Box sx={{ mt: 2 }}><CachingAdvanced value={caching} onChange={setCaching} /></Box>}
         </DialogContent>
         <DialogActions>
           {editing ? (

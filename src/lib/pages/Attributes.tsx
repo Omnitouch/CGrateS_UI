@@ -1,21 +1,25 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Box, Typography, Paper, Button,
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, IconButton,
   TextField, Accordion, AccordionSummary, AccordionDetails, Chip, Divider, Autocomplete,
-  Checkbox, FormControlLabel,
+  Checkbox, FormControlLabel, TablePagination, MenuItem, InputAdornment,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
+import SearchIcon from '@mui/icons-material/Search';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import type { AttributeProfile, AttributeEntry } from '../types';
-import SearchableSelect from '../components/SearchableSelect';
 import IdMultiSelect from '../components/IdMultiSelect';
-import CachingSelect, { cachingOpts } from '../components/CachingSelect';
+import { CachingAdvanced, cachingOpts } from '../components/CachingSelect';
+import TenantPicker from '../components/TenantPicker';
+import TypedDeleteDialog from '../components/TypedDeleteDialog';
+import { FilterIdsText, FilterRuleText } from '../components/FilterText';
+import { useSearchedIds } from '../components/useSearchedIds';
+import { describeFilterId } from '../filterText';
 import ActivationIntervalInput, { formatActivationInterval } from '../components/ActivationIntervalInput';
 import EventTester from '../components/EventTester';
 import { useIdOptions } from '../components/useIdOptions';
@@ -74,41 +78,71 @@ function emptyProfile(tenant: string): AttributeProfile {
   };
 }
 
+interface Hit {
+  id: string;
+  /** Filter-index entries that matched, as type/field/value. */
+  via: { Type: string; Element: string; Values: string[] }[];
+}
+
+// Index entries are type:field:value:profileID (engine/filterindexer.go); values may contain ':'.
+function hitsFromIndexes(entries: string[]): Hit[] {
+  const byId = new Map<string, Hit>();
+  for (const e of entries) {
+    const parts = e.split(':');
+    if (parts.length < 4) continue;
+    const id = parts[parts.length - 1];
+    const hit = byId.get(id) || { id, via: [] };
+    hit.via.push({ Type: parts[0], Element: parts[1], Values: [parts.slice(2, -1).join(':')] });
+    byId.set(id, hit);
+  }
+  return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+const PAGE_SIZES = [25, 50, 100];
+
 export function Component() {
   const baseUrl = useOcsBaseUrl();
-  const { tenants, defaultTenant } = useOcsTenants();
+  const { defaultTenant } = useOcsTenants();
   const [tenant, setTenant] = useState(defaultTenant);
-  const [ids, setIds] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [searchMode, setSearchMode] = useState<'id' | 'value'>('id');
+  const [indexContext, setIndexContext] = useState('*any');
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [total, setTotal] = useState<number | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AttributeProfile | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<AttributeProfile>(emptyProfile(defaultTenant));
   const [caching, setCaching] = useState('');
-  const [count, setCount] = useState<number | null>(null);
   const idOptions = useIdOptions(['filters'], tenant, detailOpen && editing);
   const testerOptions = useIdOptions(['attributes'], tenant, true);
 
-  const fetchIds = useCallback(async () => {
-    if (!baseUrl || !tenant) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const [result, total] = await Promise.all([
-        api.getAttributeProfileIDs(baseUrl, tenant),
-        api.getAttributeProfileCount(baseUrl, tenant),
-      ]);
-      setIds(result || []);
-      setCount(total);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to fetch');
-      setIds([]);
-    } finally {
-      setLoading(false);
+  const load = useCallback(async (q: string): Promise<Hit[]> => {
+    if (!baseUrl || !tenant) return [];
+    if (searchMode === 'value') {
+      if (!q) return [];
+      const entries = await api.getFilterIndexes(baseUrl, { Tenant: tenant, ItemType: '*attributes', Context: indexContext.trim(), FilterValue: q });
+      return hitsFromIndexes(entries || []);
     }
-  }, [baseUrl, tenant]);
+    return ((await api.getAttributeProfileIDs(baseUrl, tenant, q)) || []).sort((a, b) => a.localeCompare(b)).map(id => ({ id, via: [] }));
+  }, [baseUrl, tenant, searchMode, indexContext]);
+  const { ids, loading, error: listError, reload } = useSearchedIds(baseUrl ? load : null, search, tenant);
+  const error = actionError || listError;
+  const setError = setActionError;
+  const fetchIds = reload;
+
+  useEffect(() => {
+    if (!baseUrl || !tenant) return;
+    setTotal(null);
+    api.getAttributeProfileCount(baseUrl, tenant).then(setTotal).catch(e => setTotal(api.isNotFound(e) ? 0 : null));
+  }, [baseUrl, tenant, ids === null]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { setPage(0); }, [search, searchMode, tenant]);
 
   const fetchDetail = useCallback(async (id: string) => {
     if (!baseUrl) return;
@@ -118,6 +152,7 @@ export function Component() {
       setEditData(JSON.parse(JSON.stringify(result)));
       setSelectedId(id);
       setEditing(false);
+      setCaching('');
       setDetailOpen(true);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to fetch details');
@@ -138,24 +173,30 @@ export function Component() {
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to save');
     }
-  }, [baseUrl, editData, caching, fetchIds]);
+  }, [baseUrl, editData, caching, fetchIds, setError]);
 
   const handleDelete = useCallback(async (id: string) => {
-    if (!baseUrl || !window.confirm(`Delete ${id}?`)) return;
+    if (!baseUrl) return;
+    setDeleting(true);
     try {
       await api.removeAttributeProfile(baseUrl, tenant, id, cachingOpts(caching));
-      fetchIds();
+      setDeleteId(null);
       setDetailOpen(false);
+      fetchIds();
     } catch (e: unknown) {
+      setDeleteId(null);
       setError(e instanceof Error ? e.message : 'Failed to delete');
+    } finally {
+      setDeleting(false);
     }
-  }, [baseUrl, tenant, caching, fetchIds]);
+  }, [baseUrl, tenant, caching, fetchIds, setError]);
 
   const handleCreate = useCallback(() => {
     setDetail(null);
     setSelectedId(null);
     setEditData(emptyProfile(tenant));
     setEditing(true);
+    setCaching('');
     setDetailOpen(true);
   }, [tenant]);
 
@@ -212,63 +253,91 @@ export function Component() {
     });
   };
 
+  const shown = ids ? ids.slice(page * pageSize, (page + 1) * pageSize) : [];
+  const countText = total === null ? null
+    : search.trim() && ids ? `${ids.length} of ${total} profiles match` : `${total} ${total === 1 ? 'profile' : 'profiles'}`;
+
   return (
     <Box>
-      <Typography variant="h5" gutterBottom>Attribute Profiles</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2, mb: 1 }}>
+        <Typography variant="h5">Attribute Profiles</Typography>
+        {countText && <Typography variant="body1" color="text.secondary">{countText}</Typography>}
+      </Box>
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
-          <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
-          <Button variant="contained" onClick={fetchIds}>Fetch</Button>
-          <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>
-          <CachingSelect value={caching} onChange={setCaching} />
-          {count !== null && <Typography variant="body2" color="text.secondary">{count} profiles</Typography>}
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <TenantPicker value={tenant} onChange={setTenant} />
+          <TextField select size="small" label="Search" value={searchMode} onChange={e => setSearchMode(e.target.value as 'id' | 'value')} sx={{ width: 200 }}>
+            <MenuItem value="id">ID contains</MenuItem>
+            <MenuItem value="value">Filter value contains</MenuItem>
+          </TextField>
+          <TextField size="small" value={search} onChange={e => setSearch(e.target.value)} sx={{ flex: '1 1 260px', maxWidth: 420 }}
+            placeholder={searchMode === 'id' ? 'Part of the profile ID' : 'e.g. an account, IMSI or number'}
+            slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }, htmlInput: { 'aria-label': 'Search text' } }}
+            helperText={searchMode === 'id' ? 'Matched on the server' : 'Searches the values of indexed filters (APIerSv1.GetFilterIndexes), not attribute values'} />
+          {searchMode === 'value' && (
+            <Autocomplete<string, false, false, true>
+              freeSolo size="small" options={CONTEXTS} value={indexContext} onInputChange={(_e, v) => setIndexContext(v)} sx={{ width: 180 }}
+              renderInput={p => <TextField {...p} label="Context" helperText="Indexes are kept per context" />}
+            />
+          )}
+          <Box sx={{ flex: 1 }} />
+          <EventTester
+            tenant={tenant}
+            methods={['AttributeSv1.ProcessEvent', 'AttributeSv1.GetAttributeForEvent']}
+            opts={[
+              { key: '*context', label: 'Context', kind: 'text', options: CONTEXTS },
+              { key: '*attrProfileIDs', label: 'Profile IDs', kind: 'ids', options: testerOptions.get('attributes') },
+              { key: '*attrProcessRuns', label: 'Process runs', kind: 'number' },
+              { key: '*attrProfileRuns', label: 'Profile runs', kind: 'number' },
+              { key: '*attrProfileIgnoreFilters', label: 'Ignore profile filters', kind: 'bool' },
+            ]}
+            initialFields={[['Account', ''], ['Destination', '']]}
+            run={(method, args) => api.attributeSEvent(baseUrl!, method, args)}
+            layout="drawer"
+            title="Test an event…"
+            readOnlyNote="Shows which profile matches and how it would change the event. Nothing is stored; attributes or filters of type *http# still call their URL."
+          />
+          <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>
         </Box>
       </Paper>
 
-      <EventTester
-        tenant={tenant}
-        methods={['AttributeSv1.ProcessEvent', 'AttributeSv1.GetAttributeForEvent']}
-        opts={[
-          { key: '*context', label: 'Context', kind: 'text', options: CONTEXTS },
-          { key: '*attrProfileIDs', label: 'Profile IDs', kind: 'ids', options: testerOptions.get('attributes') },
-          { key: '*attrProcessRuns', label: 'Process runs', kind: 'number' },
-          { key: '*attrProfileRuns', label: 'Profile runs', kind: 'number' },
-          { key: '*attrProfileIgnoreFilters', label: 'Ignore profile filters', kind: 'bool' },
-        ]}
-        initialFields={[['Account', ''], ['Destination', '']]}
-        run={(method, args) => api.attributeSEvent(baseUrl!, method, args)}
-      />
-
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
-      {loading ? (
+      {ids === null || (loading && ids.length === 0) ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+      ) : ids.length === 0 ? (
+        <Paper sx={{ p: 3, textAlign: 'center' }}>
+          <Typography color="text.secondary" sx={{ mb: search.trim() ? 0 : 2 }}>
+            {search.trim() ? `No attribute profiles match "${search.trim()}".`
+              : searchMode === 'value' ? 'Type a value to search the filter indexes.' : `No attribute profiles for ${tenant}.`}
+          </Typography>
+          {!search.trim() && searchMode === 'id' && <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>}
+        </Paper>
       ) : (
-        <TableContainer component={Paper}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>#</TableCell>
-                <TableCell>ID</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {ids.length > 0 ? ids.map((id, idx) => (
-                <TableRow key={id} hover sx={{ cursor: 'pointer' }} onClick={() => fetchDetail(id)}>
-                  <TableCell>{idx + 1}</TableCell>
-                  <TableCell>{id}</TableCell>
-                  <TableCell align="right">
-                    <IconButton size="small" onClick={e => { e.stopPropagation(); fetchDetail(id); }}><EditIcon fontSize="small" /></IconButton>
-                    <IconButton size="small" color="error" onClick={e => { e.stopPropagation(); handleDelete(id); }}><DeleteIcon fontSize="small" /></IconButton>
-                  </TableCell>
+        <Paper sx={{ maxWidth: 1100, opacity: loading ? 0.6 : 1 }}>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>ID</TableCell>
+                  {searchMode === 'value' && <TableCell>Matched filter</TableCell>}
                 </TableRow>
-              )) : (
-                <TableRow><TableCell colSpan={3} align="center">No items found</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {shown.map(h => (
+                  <TableRow key={h.id} hover sx={{ cursor: 'pointer' }} onClick={() => fetchDetail(h.id)}>
+                    <TableCell>{h.id}</TableCell>
+                    {searchMode === 'value' && (
+                      <TableCell>{h.via.map((r, i) => <Box key={i}><FilterRuleText rule={r} /></Box>)}</TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <TablePagination component="div" count={ids.length} page={page} onPageChange={(_e, p) => setPage(p)}
+            rowsPerPage={pageSize} rowsPerPageOptions={PAGE_SIZES} onRowsPerPageChange={e => { setPageSize(Number(e.target.value)); setPage(0); }} />
+        </Paper>
       )}
 
       <Dialog open={detailOpen} onClose={() => setDetailOpen(false)} maxWidth="md" fullWidth>
@@ -372,6 +441,7 @@ export function Component() {
               ))}
 
               <Button variant="outlined" startIcon={<AddIcon />} onClick={addAttr}>Add Attribute</Button>
+              <CachingAdvanced value={caching} onChange={setCaching} />
             </Box>
           ) : (
             /* --- View mode --- */
@@ -389,10 +459,12 @@ export function Component() {
                   </Typography>
                   {detail.FilterIDs && detail.FilterIDs.length > 0 && (
                     <Box sx={{ mt: 0.5 }}>
-                      <Typography variant="body2" fontWeight={500}>Profile FilterIDs:</Typography>
-                      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
-                        {detail.FilterIDs.map((fid, i) => <Chip key={i} label={fid} size="small" variant="outlined" />)}
-                      </Box>
+                      <Typography variant="body2" fontWeight={500} component="div">Applies when: <FilterIdsText ids={detail.FilterIDs} /></Typography>
+                      {detail.FilterIDs.some(describeFilterId) && (
+                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                          {detail.FilterIDs.map((fid, i) => <Chip key={i} label={fid} size="small" variant="outlined" />)}
+                        </Box>
+                      )}
                     </Box>
                   )}
                 </Paper>
@@ -438,15 +510,18 @@ export function Component() {
           )}
         </DialogContent>
         <DialogActions>
+          {selectedId && <Button color="error" onClick={() => { setCaching(''); setDeleteId(selectedId); }} sx={{ mr: 'auto' }}>Delete…</Button>}
+          <Button onClick={() => setDetailOpen(false)}>{editing ? 'Cancel' : 'Close'}</Button>
           {editing ? (
             <Button variant="contained" onClick={handleSave}>Save</Button>
           ) : (
-            <Button onClick={() => setEditing(true)}>Edit</Button>
+            <Button variant="contained" onClick={() => setEditing(true)}>Edit</Button>
           )}
-          {selectedId && <Button color="error" onClick={() => handleDelete(selectedId)}>Delete</Button>}
-          <Button onClick={() => setDetailOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      <TypedDeleteDialog id={deleteId} kind="attribute profile" busy={deleting} caching={caching} onCaching={setCaching}
+        onConfirm={handleDelete} onClose={() => setDeleteId(null)} />
     </Box>
   );
 }

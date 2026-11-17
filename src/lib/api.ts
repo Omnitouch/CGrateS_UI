@@ -391,8 +391,9 @@ export function chargerSEvent(baseUrl: string, method: 'ChargerSv1.GetChargersFo
 
 // --- Attributes ---
 
-export function getAttributeProfileIDs(baseUrl: string, tenant: string) {
-  return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetAttributeProfileIDs', [{ Tenant: tenant }]);
+/** search is a server-side "ID contains" match. */
+export function getAttributeProfileIDs(baseUrl: string, tenant: string, search?: string) {
+  return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetAttributeProfileIDs', [{ Tenant: tenant, ...(search ? { Search: search } : {}) }]);
 }
 
 export function getAttributeProfile(baseUrl: string, tenant: string, id: string) {
@@ -417,8 +418,9 @@ export function attributeSEvent(baseUrl: string, method: 'AttributeSv1.ProcessEv
 
 // --- Filters ---
 
-export function getFilterIDs(baseUrl: string, tenant: string) {
-  return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetFilterIDs', [{ Tenant: tenant }]);
+/** search is a server-side "ID contains" match. */
+export function getFilterIDs(baseUrl: string, tenant: string, search?: string) {
+  return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetFilterIDs', [{ Tenant: tenant, ...(search ? { Search: search } : {}) }]);
 }
 
 export function getFilter(baseUrl: string, tenant: string, id: string) {

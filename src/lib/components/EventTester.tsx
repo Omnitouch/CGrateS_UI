@@ -1,8 +1,10 @@
 import { useState, type ReactNode } from 'react';
 import {
-  Accordion, AccordionDetails, AccordionSummary, Alert, Autocomplete, Box, Button, Checkbox,
-  CircularProgress, FormControlLabel, IconButton, MenuItem, Paper, TextField, Typography,
+  Accordion, AccordionDetails, AccordionSummary, Alert, Autocomplete, Box, Button, Checkbox, Chip,
+  CircularProgress, Drawer, FormControlLabel, IconButton, MenuItem, Paper, TextField, Typography,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import ScienceIcon from '@mui/icons-material/Science';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -27,6 +29,10 @@ interface EventTesterProps<M extends string> {
   renderResult?: (method: M, result: unknown) => ReactNode;
   title?: string;
   warning?: string;
+  /** 'drawer' renders a secondary button that opens the tester in a side panel. */
+  layout?: 'accordion' | 'drawer';
+  /** Shown as a note in the drawer, e.g. that the calls store nothing. */
+  readOnlyNote?: string;
 }
 
 type OptValue = string | string[] | boolean;
@@ -45,8 +51,9 @@ function buildOpts(specs: OptSpec[], values: Record<string, OptValue>): Record<s
 
 /** Builds a CGREvent from editable fields and APIOpts and sends it to one of the given methods. */
 export default function EventTester<M extends string>({
-  tenant, methods, opts, initialFields, run, renderResult, title = 'Test an event', warning,
+  tenant, methods, opts, initialFields, run, renderResult, title = 'Test an event', warning, layout = 'accordion', readOnlyNote,
 }: EventTesterProps<M>) {
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [method, setMethod] = useState<M>(methods[0]);
   const [eventId, setEventId] = useState('cgrates-ui-test');
   const [fields, setFields] = useState<[string, string][]>(initialFields);
@@ -78,19 +85,15 @@ export default function EventTester<M extends string>({
   const setField = (i: number, pos: 0 | 1, v: string) =>
     setFields(prev => prev.map((f, j) => (j === i ? (pos === 0 ? [v, f[1]] : [f[0], v]) : f)));
 
-  return (
-    <Accordion sx={{ mb: 2 }}>
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Typography variant="subtitle1">{title}</Typography>
-      </AccordionSummary>
-      <AccordionDetails>
+  const body = (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {warning && <Alert severity="warning">{warning}</Alert>}
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             <TextField select size="small" label="Method" value={method} onChange={e => setMethod(e.target.value as M)} sx={{ minWidth: 300 }}>
               {methods.map(m => <MenuItem key={m} value={m}>{m}</MenuItem>)}
             </TextField>
-            <TextField size="small" label="Event ID" value={eventId} onChange={e => setEventId(e.target.value)} />
+            <TextField size="small" label="Event ID" value={eventId} onChange={e => setEventId(e.target.value)}
+              helperText="Any text; CGrateS echoes it back" />
           </Box>
 
           <Typography variant="subtitle2">Event fields</Typography>
@@ -105,7 +108,7 @@ export default function EventTester<M extends string>({
           ))}
           <Box><Button size="small" startIcon={<AddIcon />} onClick={() => setFields(prev => [...prev, ['', '']])}>Add field</Button></Box>
 
-          <Typography variant="subtitle2">Options (APIOpts)</Typography>
+          {opts.length > 0 && <Typography variant="subtitle2">Options</Typography>}
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-start' }}>
             {opts.map(o => {
               const v = optValues[o.key];
@@ -113,29 +116,29 @@ export default function EventTester<M extends string>({
               switch (o.kind) {
                 case 'ids':
                   return (
-                    <IdMultiSelect key={o.key} label={`${o.label} (${o.key})`} value={(v as string[]) || []}
-                      options={o.options || []} onChange={set} helperText={o.helperText} sx={{ flex: '1 1 100%' }} />
+                    <IdMultiSelect key={o.key} label={o.label} value={(v as string[]) || []}
+                      options={o.options || []} onChange={set} helperText={optHelp(o)} sx={{ flex: '1 1 100%' }} />
                   );
                 case 'bool':
                   return (
-                    <FormControlLabel key={o.key} label={`${o.label} (${o.key})`}
+                    <FormControlLabel key={o.key} label={<>{o.label} <Typography component="span" variant="caption" color="text.secondary">{o.key}</Typography></>}
                       control={<Checkbox checked={v === true} onChange={e => set(e.target.checked)} />} />
                   );
                 default:
                   return o.options ? (
                     <Autocomplete<string, false, false, true> key={o.key} freeSolo size="small" options={o.options}
                       value={(v as string) || ''} onInputChange={(_e, nv) => set(nv)} sx={{ minWidth: 220 }}
-                      renderInput={p => <TextField {...p} label={`${o.label} (${o.key})`} helperText={o.helperText} />} />
+                      renderInput={p => <TextField {...p} label={o.label} helperText={optHelp(o)} />} />
                   ) : (
-                    <TextField key={o.key} size="small" label={`${o.label} (${o.key})`} value={(v as string) || ''}
+                    <TextField key={o.key} size="small" label={o.label} value={(v as string) || ''}
                       type={o.kind === 'number' ? 'number' : 'text'} inputProps={{ step: 'any' }}
-                      onChange={e => set(e.target.value)} helperText={o.helperText} sx={{ minWidth: 220 }} />
+                      onChange={e => set(e.target.value)} helperText={optHelp(o)} sx={{ minWidth: 220 }} />
                   );
               }
             })}
           </Box>
 
-          <Paper variant="outlined" sx={{ p: 1, bgcolor: 'grey.50', maxHeight: 200, overflow: 'auto' }}>
+          <Paper variant="outlined" sx={{ p: 1, bgcolor: 'action.hover', maxHeight: 200, overflow: 'auto' }}>
             <pre style={{ fontSize: 11, margin: 0 }}>{JSON.stringify({ method, params: [args] }, null, 2)}</pre>
           </Paper>
           <Box>
@@ -151,7 +154,36 @@ export default function EventTester<M extends string>({
             </Paper>
           ))}
         </Box>
-      </AccordionDetails>
+  );
+
+  if (layout === 'drawer') {
+    return (
+      <>
+        <Button variant="outlined" startIcon={<ScienceIcon />} onClick={() => setDrawerOpen(true)}>{title}</Button>
+        <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)} sx={{ zIndex: t => t.zIndex.modal }}
+          PaperProps={{ sx: { width: { xs: '100%', sm: 560 }, p: 2 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <Typography variant="h6" sx={{ flex: 1 }}>{title}</Typography>
+            <Chip label="Read-only" size="small" color="info" variant="outlined" />
+            <IconButton aria-label="Close" onClick={() => setDrawerOpen(false)}><CloseIcon /></IconButton>
+          </Box>
+          {readOnlyNote && <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{readOnlyNote}</Typography>}
+          {body}
+        </Drawer>
+      </>
+    );
+  }
+
+  return (
+    <Accordion sx={{ mb: 2 }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+        <Typography variant="subtitle1">{title}</Typography>
+      </AccordionSummary>
+      <AccordionDetails>{body}</AccordionDetails>
     </Accordion>
   );
+}
+
+function optHelp(o: OptSpec) {
+  return o.helperText ? `${o.helperText} (${o.key})` : o.key;
 }
