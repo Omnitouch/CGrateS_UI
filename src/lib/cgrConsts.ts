@@ -46,6 +46,29 @@ export const ACTION_TYPES = [
   '*dynamic_resource', '*dynamic_action_trigger',
 ];
 
+/** Human labels for the action types in engine/action.go; unknown types show their raw ID. */
+export const ACTION_TYPE_LABELS: Record<string, string> = {
+  '*topup': 'Top up balance', '*topup_reset': 'Reset and top up balance', '*debit': 'Debit balance',
+  '*debit_reset': 'Reset and debit balance', '*set_balance': 'Set balance', '*remove_balance': 'Remove balance',
+  '*transfer_balance': 'Transfer balance', '*transfer_monetary_default': 'Transfer monetary to default balance',
+  '*topup_zero_negative': 'Top up negative balance to zero', '*set_expiry': 'Set balance expiry',
+  '*remove_expired': 'Remove expired balances', '*reset_account': 'Reset account', '*reset_counters': 'Reset counters',
+  '*reset_triggers': 'Reset action triggers', '*set_recurrent': 'Set triggers recurrent', '*unset_recurrent': 'Unset triggers recurrent',
+  '*allow_negative': 'Allow negative balance', '*deny_negative': 'Deny negative balance', '*enable_account': 'Enable account',
+  '*disable_account': 'Disable account', '*remove_account': 'Remove account', '*publish_account': 'Publish account',
+  '*reset_account_cdr': 'Reset account from last CDR', '*cdrlog': 'Write CDR log', '*log': 'Log to engine log',
+  '*http_post': 'HTTP POST', '*http_post_async': 'HTTP POST (async)', '*post_event': 'Post event', '*mail_async': 'Send email (async)',
+  '*cgr_rpc': 'CGrateS RPC call', '*export': 'Export event', '*set_ddestinations': 'Set dynamic destinations',
+  '*remove_session_costs': 'Remove session costs', '*alter_sessions': 'Alter sessions', '*force_disconnect_sessions': 'Force disconnect sessions',
+  '*reset_threshold': 'Reset threshold', '*reset_stat_queue': 'Reset stat queue', '*remote_set_account': 'Set account remotely',
+  '*sy_publish': 'Sy publish', '*dynamic_threshold': 'Create threshold', '*dynamic_stats': 'Create stat queue',
+  '*dynamic_attribute': 'Create attribute profile', '*dynamic_action_plan': 'Create action plan',
+  '*dynamic_action_plan_accounts': 'Create action plan with accounts', '*dynamic_action': 'Create action',
+  '*dynamic_destination': 'Create destination', '*dynamic_filter': 'Create filter', '*dynamic_route': 'Create route profile',
+  '*dynamic_ranking': 'Create ranking', '*dynamic_rating_profile': 'Create rating profile', '*dynamic_trend': 'Create trend',
+  '*dynamic_resource': 'Create resource profile', '*dynamic_action_trigger': 'Create action trigger',
+};
+
 /** What each action type reads from ExtraParameters (engine/action.go). */
 export const EXTRA_PARAMETERS_HINTS: Record<string, string> = {
   '*cdrlog': 'Optional JSON object of CDR field templates, e.g. {"Category":"^activation"}',

@@ -1,4 +1,4 @@
-import type { ActionPlan, ActionTriggerEntry, CGREventArgs, JsonRpcResponse } from './types';
+import type { ActionPlan, ActionTriggerEntry, CGREventArgs, JsonRpcResponse, ScheduledAction } from './types';
 
 let rpcId = 0;
 
@@ -356,6 +356,11 @@ export function removeActionTrigger(baseUrl: string, groupId: string, uniqueId =
 
 export function getScheduledActions(baseUrl: string, offset = 0, limit = 50) {
   return jsonRpc(baseUrl, 'ApierV1.GetScheduledActions', [{ Offset: offset, Limit: limit }]);
+}
+
+/** The whole scheduler queue, optionally only next runs in [start, end). */
+export function getAllScheduledActions(baseUrl: string, start?: Date, end?: Date) {
+  return jsonRpc<ScheduledAction[]>(baseUrl, 'APIerSv1.GetScheduledActions', [{ TimeStart: start?.toISOString(), TimeEnd: end?.toISOString() }]);
 }
 
 // --- Chargers ---
