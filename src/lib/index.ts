@@ -83,7 +83,7 @@ export const ocsNavGroups: OcsNavGroup[] = [
       { label: 'Execute JSON', path: 'execute-json' },
       { label: 'Config', path: 'config' },
       { label: 'Cache', path: 'cache' },
-      { label: 'Core', path: 'core' },
+      { label: 'System status', path: 'core' },
     ],
   },
 ];

@@ -3,7 +3,7 @@ import { createTheme, ThemeProvider, CssBaseline } from '@mui/material';
 import {
   Box, AppBar, Toolbar, Typography, Drawer, List, ListItemButton,
   ListItemText, IconButton, Divider, TextField, Dialog, DialogTitle,
-  DialogContent, DialogActions, Button,
+  DialogContent, DialogActions, Button, Tooltip,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -11,7 +11,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createHashRouter, RouterProvider, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { OcsProvider } from './lib/OcsContext';
 import ocsRouteDefs from './lib/routes';
-import { ocsNavGroups } from './lib';
+import { ocsNavGroups, ocsNavSubsystems, useOcsSubsystems, OCS_SUBSYSTEM_LABELS } from './lib';
 
 const DRAWER_WIDTH = 240;
 
@@ -38,6 +38,7 @@ function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(true);
+  const { enabled } = useOcsSubsystems();
 
   const currentPath = location.pathname.replace(/^\//, '');
 
@@ -75,15 +76,21 @@ function Layout() {
                   </Box>
                 );
               }
-              return (
+              const sub = ocsNavSubsystems[item.path];
+              const off = sub !== undefined && enabled[sub] === false;
+              const button = (
                 <ListItemButton
                   key={i}
                   selected={currentPath === item.path || (item.path === '' && currentPath === '')}
                   onClick={() => navigate(`/${item.path}`)}
+                  sx={off ? { opacity: 0.5 } : undefined}
                 >
                   <ListItemText primary={item.label} />
                 </ListItemButton>
               );
+              return off
+                ? <Tooltip key={i} placement="right" title={`${OCS_SUBSYSTEM_LABELS[sub]} is not enabled on this OCS`}>{button}</Tooltip>
+                : button;
             })}
           </List>
         </Box>

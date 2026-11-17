@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   Box, Typography, Paper, Button, TextField, MenuItem, CircularProgress, Alert,
-  Autocomplete, Checkbox, FormControlLabel, Collapse, Divider, IconButton, Tooltip,
+  Autocomplete, Checkbox, FormControlLabel, Collapse, Divider, IconButton, Tooltip, Switch,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
@@ -13,6 +13,7 @@ import IdMultiSelect from '../components/IdMultiSelect';
 import KeyValueEditor, { rowsToObject, type KeyValueRow } from '../components/KeyValueEditor';
 import { BalanceValueInput } from '../components/BalanceValue';
 import { TORS, REQUEST_TYPES } from '../cgrConsts';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 // Argument structs from sessions/sessions.go (V1AuthorizeArgs, V1InitSessionArgs, ...).
 interface MethodSpec {
@@ -153,6 +154,58 @@ function buildFlags(states: Record<string, FlagState>, specs: FlagSpec[]): strin
   return out;
 }
 
+interface Effect {
+  text: string;
+  charges: boolean;
+}
+
+/** What a request changes on the live system, per sessions/sessions.go; empty means read-only. */
+function liveEffects(method: string, flags: Record<string, FlagState>, bools: Record<string, boolean>, account: string): Effect[] {
+  const acct = account ? `account ${account}` : 'the account';
+  const out: Effect[] = [];
+  const add = (text: string, charges = false) => out.push({ text, charges });
+  const on = (b: string) => !!bools[b] && METHODS[method].bools.includes(b);
+  switch (method) {
+    case 'ProcessEvent': {
+      const st = (f: string) => (flags[f]?.on ? flags[f] : undefined);
+      const rals = st('*rals')?.values.action;
+      if (rals === '*initiate') add(`Opens a session and starts debiting ${acct}`, true);
+      if (rals === '*update') add(`Debits ${acct} for the session (opening it if missing)`, true);
+      if (rals === '*terminate') add(`Ends the session and settles the final debit on ${acct}`, true);
+      if (st('*cdrs')) add(`Stores a CDR; CDRs may rate it and debit ${acct}, depending on its flags`, true);
+      if (st('*thresholds')) add('Updates threshold hit counters, which can run their actions');
+      if (st('*stats')) add('Adds the event to stat queues');
+      for (const f of ['*resources', '*ips']) {
+        const a = st(f)?.values.action;
+        if (a === '*allocate' || a === '*release') add(`${a === '*allocate' ? 'Allocates' : 'Releases'} ${f.slice(1)}`);
+      }
+      break;
+    }
+    case 'ProcessCDR':
+      add(`Rates the event, debits ${acct} (for *prepaid/*postpaid) and stores a CDR`, true);
+      break;
+    case 'InitiateSession':
+      if (on('InitSession')) add(`Opens a session and starts debiting ${acct}`, true);
+      break;
+    case 'UpdateSession':
+      if (on('UpdateSession')) add(`Debits ${acct} for the session (opening it if missing)`, true);
+      break;
+    case 'TerminateSession':
+      if (on('TerminateSession')) add(`Ends the session and settles the final debit on ${acct}`, true);
+      break;
+    case 'ProcessMessage':
+      if (on('Debit')) add(`Debits ${acct} for the message`, true);
+      break;
+  }
+  if (on('AllocateIP')) add('Allocates an IP');
+  if (on('ReleaseIP')) add('Releases an IP');
+  if (on('AllocateResources')) add('Allocates resources');
+  if (on('ReleaseResources')) add('Releases resources');
+  if (on('ProcessThresholds')) add('Updates threshold hit counters, which can run their actions');
+  if (on('ProcessStats')) add('Adds the event to stat queues');
+  return out;
+}
+
 const newOriginID = () => `cgrui-${crypto.randomUUID()}`;
 
 export function Component() {
@@ -189,6 +242,8 @@ export function Component() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showRequest, setShowRequest] = useState(false);
+  const [live, setLive] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const { data: attributeIds } = useAttributeProfileIDs(tenant);
   const { data: thresholdIds } = useThresholdProfileIDs(tenant);
@@ -241,6 +296,7 @@ export function Component() {
 
   const handleSubmit = useCallback(async () => {
     if (!baseUrl) return;
+    setConfirmOpen(false);
     const oid = newIdPerSend ? newOriginID() : originID;
     if (oid !== originID) setOriginID(oid);
     setLoading(true); setError(null); setResult(undefined);
@@ -256,14 +312,24 @@ export function Component() {
   const updateFlag = (flag: string, fn: (s: FlagState) => FlagState) =>
     setFlagStates(prev => ({ ...prev, [flag]: fn(prev[flag] || emptyFlag()) }));
 
-  const writes = method === 'ProcessCDR' || (method === 'ProcessEvent' && flagStates['*cdrs']?.on);
+  const effects = liveEffects(method, flagStates, bools, account);
+  const isLive = effects.length > 0;
+  const charges = effects.some(e => e.charges);
+  const who = account || '(no account)';
+  const sendLabel = isLive ? `Send live event for ${who}` : `Send read-only event for ${who}`;
+  const blockedByDryRun = isLive && !live;
 
   return (
     <Box>
       <Typography variant="h5" gutterBottom>Event Tester</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Sends an event to SessionS. These calls act on the live system: charging flags debit accounts, session flags open or close sessions.
-      </Typography>
+      <Alert severity="error" variant="filled" sx={{ mb: 2 }}
+        action={(
+          <FormControlLabel sx={{ mr: 1 }} label="Charge for real"
+            control={<Switch color="default" checked={live} onChange={e => setLive(e.target.checked)} />} />
+        )}>
+        <strong>Live system:</strong> this can charge real accounts and open or close sessions.{' '}
+        {live ? 'Live changes are allowed; each one asks for confirmation.' : 'Dry run: only read-only requests can be sent.'}
+      </Alert>
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-start', mb: 1 }}>
@@ -273,7 +339,12 @@ export function Component() {
           </TextField>
         </Box>
         <Typography variant="caption" color="text.secondary">{spec.help}</Typography>
-        {writes && <Alert severity="warning" sx={{ mt: 1 }}>This writes a CDR and may debit the account.</Alert>}
+        {isLive && (
+          <Alert severity={charges ? 'error' : 'warning'} sx={{ mt: 1 }}>
+            This request changes the live system:
+            <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>{effects.map(e => <li key={e.text}>{e.text}</li>)}</ul>
+          </Alert>
+        )}
       </Paper>
 
       <Paper sx={{ p: 2, mb: 2 }}>
@@ -410,10 +481,16 @@ export function Component() {
       </Paper>
 
       <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
-        <Button variant="contained" onClick={handleSubmit} disabled={loading || !!missingChoice}>
-          {loading ? <CircularProgress size={20} /> : `Send ${method}`}
-        </Button>
+        <Tooltip title={`SessionSv1.${method}`}>
+          <span>
+            <Button variant="contained" color={charges ? 'error' : isLive ? 'warning' : 'primary'}
+              onClick={() => (isLive ? setConfirmOpen(true) : handleSubmit())} disabled={loading || !!missingChoice || blockedByDryRun}>
+              {loading ? <CircularProgress size={20} /> : sendLabel}
+            </Button>
+          </span>
+        </Tooltip>
         {missingChoice && <Typography variant="caption" color="error">{missingChoice.flag} needs an action</Typography>}
+        {blockedByDryRun && <Typography variant="caption" color="error">Dry run is on: turn on "Charge for real" at the top to send this.</Typography>}
         <Button variant="text" onClick={() => setShowRequest(!showRequest)}>
           {showRequest ? 'Hide Request JSON' : 'Show Request JSON'}
         </Button>
@@ -423,6 +500,15 @@ export function Component() {
           <pre style={{ fontSize: 12, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(preview, null, 2)}</pre>
         </Paper>
       </Collapse>
+
+      <ConfirmDialog open={confirmOpen} title={`Send live event for ${who}?`} confirmLabel={charges ? 'Charge for real' : 'Send for real'}
+        danger busy={loading} onConfirm={handleSubmit} onClose={() => setConfirmOpen(false)}>
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          SessionSv1.{method} on tenant <strong>{tenant}</strong>, account <strong>{who}</strong>, OriginID <code>{newIdPerSend ? '(new on send)' : originID}</code>:
+        </Typography>
+        <ul style={{ marginTop: 0 }}>{effects.map(e => <li key={e.text}><Typography variant="body2">{e.text}</Typography></li>)}</ul>
+        {spec.flags && <Typography variant="caption" color="text.secondary">Flags: <code>{JSON.stringify(flags)}</code></Typography>}
+      </ConfirmDialog>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {result !== undefined && (
