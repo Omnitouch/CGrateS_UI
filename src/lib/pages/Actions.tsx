@@ -148,7 +148,7 @@ function PartFields({ part }: { part: ActionPart }) {
     { label: 'Balance Disabled', set: !!b?.Disabled, value: yesNo(b?.Disabled) },
     { label: 'Balance UUID', set: !!b?.Uuid, value: b?.Uuid && <Box component="span" sx={mono}>{b.Uuid}</Box> },
     {
-      label: 'Balance Expiration Date', set: formatDateTime(b?.ExpirationDate, '') !== '',
+      label: 'Balance Expiration Date', set: formatDateTime(b?.ExpirationDate) !== '—',
       value: b?.ExpirationDate && <span title={b.ExpirationDate}>{formatDateTime(b.ExpirationDate)}</span>,
     },
     { label: 'Balance Timings', set: b?.Timings != null, value: b?.Timings != null && json(b.Timings) },
