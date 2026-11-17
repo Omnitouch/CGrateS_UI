@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Box, Typography, Paper, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, TableSortLabel, TextField, Checkbox, FormControlLabel, ToggleButton, ToggleButtonGroup, Chip, IconButton, Tooltip, Menu, MenuItem, Tabs, Tab, ListItemText, Divider } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
@@ -181,7 +182,11 @@ export function Component() {
   const [colAnchor, setColAnchor] = useState<HTMLElement | null>(null);
   const [rowMenu, setRowMenu] = useState<{ anchor: HTMLElement; s: Session } | null>(null);
   const [bulkAll, setBulkAll] = useState<{ count: number | null; error: string | null; typed: string; busy: boolean } | null>(null);
-  const [filters, setFilters] = useState<string[]>([]);
+  const [searchParams] = useSearchParams();
+  const [filters, setFilters] = useState<string[]>(() => {
+    const a = searchParams.get('account');
+    return a ? [`*string:~*req.Account:${a}`] : [];
+  });
   const [limit, setLimit] = useState('');
   const [termOpts, setTermOpts] = useState<Record<TerminateBool, boolean>>({
     TerminateSession: true, ForceDuration: false, ReleaseIP: false, ReleaseResources: false, ProcessThresholds: false, ProcessStats: false,
@@ -218,6 +223,13 @@ export function Component() {
   }, [baseUrl, tenant, filters, limit, passive]);
 
   useEffect(() => { setSessions([]); setSelected(new Set()); }, [passive]);
+
+  const linkedAccount = useRef(searchParams.get('account'));
+  useEffect(() => {
+    if (!linkedAccount.current) return;
+    linkedAccount.current = null;
+    void fetchSessions();
+  }, [fetchSessions]);
 
   const confirmForceDisconnect = (s: Session) => ask({
     title: `Disconnect ${s.Account}`,

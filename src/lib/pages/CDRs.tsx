@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box, Typography, Paper, Button, TextField, Select, MenuItem, FormControl,
   InputLabel, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
@@ -189,19 +190,26 @@ function ListFilterInput({ k, filter, options, onChange }: {
 export function Component() {
   const baseUrl = useOcsBaseUrl();
   const { tenants, defaultTenant } = useOcsTenants();
+  const [searchParams] = useSearchParams();
 
   const [lists, setLists] = useState<Record<ListKey, ListFilter>>(() => {
     const init = {} as Record<ListKey, ListFilter>;
     for (const k of [...MAIN_LISTS, ...MORE_LISTS]) init[k] = { values: [], exclude: false };
     if (defaultTenant) init.Tenants = { values: [defaultTenant], exclude: false };
+    const a = searchParams.get('account');
+    if (a) init.Accounts = { values: [a], exclude: false };
     return init;
   });
   const [times, setTimes] = useState<Record<TimeField, { start: string; end: string }>>(() => {
     const init = {} as Record<TimeField, { start: string; end: string }>;
     for (const t of TIME_FIELDS) init[t] = { start: '', end: '' };
+    if (searchParams.get('account')) {
+      const now = new Date();
+      init.SetupTime = { start: toLocalInput(new Date(now.getTime() - 1440 * 60000).toISOString()), end: toLocalInput(now.toISOString()) };
+    }
     return init;
   });
-  const [past, setPast] = useState('');
+  const [past, setPast] = useState(() => (searchParams.get('account') ? '1440' : ''));
   const [extraFields, setExtraFields] = useState<ExtraFieldRow[]>([]);
   const [minUsage, setMinUsage] = useState('');
   const [maxUsage, setMaxUsage] = useState('');
@@ -331,6 +339,14 @@ export function Component() {
     setLastFilter(filter);
     runQuery(filter, 0, true, { by: orderBy, dir: orderDir });
   };
+
+  // Linked with ?account=<id>: search that account's last day straight away.
+  const linkedAccount = useRef(searchParams.get('account'));
+  useEffect(() => {
+    if (!linkedAccount.current || !baseUrl) return;
+    linkedAccount.current = null;
+    search();
+  });
 
   const sortBy = (by: string) => {
     const dir = appliedOrder?.by === by && appliedOrder.dir === 'desc' ? 'asc' : 'desc';
