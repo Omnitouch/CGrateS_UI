@@ -1,6 +1,6 @@
 import { Fragment, useState, useCallback, useEffect } from 'react';
 import {
-  Box, Typography, Paper, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
+  Box, Typography, Paper, Button, CircularProgress, Dialog, DialogTitle, DialogContent,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert,
   Collapse, IconButton, Tabs, Tab, TextField, MenuItem,
 } from '@mui/material';
@@ -12,6 +12,8 @@ import { useOcsBaseUrl } from '../OcsContext';
 import * as api from '../api';
 import SearchableSelect from '../components/SearchableSelect';
 import TpToolbar, { useTpIdList, errMsg } from '../components/TpToolbar';
+import RemoveConfirm, { DangerFooter } from '../components/RemoveConfirm';
+import { RoundingCell, CapCell, ROUNDING_OPTIONS, MAX_COST_OPTIONS } from '../components/RatingTerms';
 
 interface DestRateEntry {
   DestinationId: string;
@@ -32,10 +34,6 @@ interface RateSlot {
 
 interface DRForm { TPid: string; ID: string; DestinationRates: DestRateEntry[] }
 interface RateForm { TPid: string; ID: string; RateSlots: RateSlot[] }
-
-// utils.ROUNDING_* and MetaMaxCostFree / MetaMaxCostDisconnect.
-const ROUNDING_METHODS = ['*up', '*middle', '*down'];
-const MAX_COST_STRATEGIES = ['', '*free', '*disconnect'];
 
 const emptyDR = (): DestRateEntry => ({ DestinationId: '', RateId: '', RoundingMethod: '*up', RoundingDecimals: 4, MaxCost: 0, MaxCostStrategy: '' });
 const emptySlot = (): RateSlot => ({ ConnectFee: 0, Rate: 0, RateUnit: '60s', RateIncrement: '60s', GroupIntervalStart: '0s' });
@@ -63,6 +61,8 @@ export function Component() {
   const [isNew, setIsNew] = useState(false);
   const [destIds, setDestIds] = useState<string[]>([]);
   const [rateIds, setRateIds] = useState<string[]>([]);
+  const [removing, setRemoving] = useState<{ kind: Tab; id: string } | null>(null);
+  const [busy, setBusy] = useState(false);
 
   // Keep both tabs on the same tariff plan.
   const setTpid = (v: string) => { drList.setTpid(v); rateList.setTpid(v); };
@@ -179,15 +179,20 @@ export function Component() {
     }
   }, [baseUrl, rateForm]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const remove = useCallback(async (kind: Tab, id: string) => {
-    if (!baseUrl || !window.confirm(`Remove ${kind === 'dr' ? 'destination rate' : 'rate'} ${id} from tariff plan ${tpid}?`)) return;
+  const remove = useCallback(async () => {
+    if (!baseUrl || !removing) return;
+    const { kind, id } = removing;
+    setBusy(true);
     try {
       if (kind === 'dr') { await api.removeTPDestinationRate(baseUrl, tpid, id); drList.refresh(); setDetailOpen(false); setDrForm(null); }
       else { await api.removeTPRate(baseUrl, tpid, id); rateList.refresh(); loadRefs(tpid); setRateForm(null); }
     } catch (e: unknown) {
       setError(errMsg(e, 'Failed to remove'));
+    } finally {
+      setBusy(false);
+      setRemoving(null);
     }
-  }, [baseUrl, tpid, drList, rateList, loadRefs]);
+  }, [baseUrl, tpid, drList, rateList, loadRefs, removing]);
 
   const create = () => {
     setIsNew(true);
@@ -213,12 +218,10 @@ export function Component() {
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>DestinationId</TableCell>
-                <TableCell>RateId</TableCell>
-                <TableCell>RoundingMethod</TableCell>
-                <TableCell>RoundingDecimals</TableCell>
-                <TableCell>MaxCost</TableCell>
-                <TableCell>MaxCostStrategy</TableCell>
+                <TableCell>Destination</TableCell>
+                <TableCell>Rate</TableCell>
+                <TableCell>Rounding (of the cost)</TableCell>
+                <TableCell>Spending cap</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -239,24 +242,22 @@ export function Component() {
                         {r.RateId}
                       </Button>
                     </TableCell>
-                    <TableCell>{r.RoundingMethod}</TableCell>
-                    <TableCell>{r.RoundingDecimals}</TableCell>
-                    <TableCell>{r.MaxCost}</TableCell>
-                    <TableCell>{r.MaxCostStrategy || '-'}</TableCell>
+                    <TableCell><RoundingCell method={r.RoundingMethod} decimals={r.RoundingDecimals} /></TableCell>
+                    <TableCell><CapCell max={r.MaxCost} strategy={r.MaxCostStrategy} /></TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell colSpan={6} sx={{ py: 0, borderBottom: expandedRow === i ? undefined : 'none' }}>
+                    <TableCell colSpan={4} sx={{ py: 0, borderBottom: expandedRow === i ? undefined : 'none' }}>
                       <Collapse in={expandedRow === i} timeout="auto" unmountOnExit>
                         <Box sx={{ py: 1, px: 2 }}>
                           {subLoading ? (
                             <CircularProgress size={20} />
                           ) : expandedType === 'dest' && expandedDest ? (
-                            <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'grey.50' }}>
+                            <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }}>
                               <Typography variant="subtitle2" gutterBottom>Destination: {r.DestinationId}</Typography>
                               <pre style={{ fontSize: 12, margin: 0 }}>{JSON.stringify(expandedDest, null, 2)}</pre>
                             </Paper>
                           ) : expandedType === 'rate' && expandedRate ? (
-                            <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'grey.50' }}>
+                            <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }}>
                               <Typography variant="subtitle2" gutterBottom>Rate: {r.RateId}</Typography>
                               <pre style={{ fontSize: 12, margin: 0 }}>{JSON.stringify(expandedRate, null, 2)}</pre>
                             </Paper>
@@ -267,7 +268,7 @@ export function Component() {
                   </TableRow>
                 </Fragment>
               )) : (
-                <TableRow><TableCell colSpan={6} align="center">No destination rates</TableCell></TableRow>
+                <TableRow><TableCell colSpan={4} align="center">No destination rates</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -297,16 +298,16 @@ export function Component() {
       {list.loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
       ) : (
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} sx={{ maxWidth: 900 }}>
           <Table size="small">
-            <TableHead><TableRow><TableCell>#</TableCell><TableCell>ID</TableCell></TableRow></TableHead>
+            <TableHead><TableRow><TableCell>ID</TableCell></TableRow></TableHead>
             <TableBody>
-              {list.ids.length > 0 ? list.ids.map((id, idx) => (
+              {list.ids.length > 0 ? list.ids.map(id => (
                 <TableRow key={id} hover sx={{ cursor: 'pointer' }} onClick={() => (tab === 'dr' ? fetchDetail(id) : openRate(id))}>
-                  <TableCell>{idx + 1}</TableCell><TableCell>{id}</TableCell>
+                  <TableCell sx={{ wordBreak: 'break-word' }}>{id}</TableCell>
                 </TableRow>
               )) : (
-                <TableRow><TableCell colSpan={2} align="center">{tpid ? 'No results' : 'Select a tariff plan'}</TableCell></TableRow>
+                <TableRow><TableCell align="center">{tpid ? 'No results' : 'Select a tariff plan'}</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -316,11 +317,10 @@ export function Component() {
       <Dialog open={detailOpen} onClose={() => setDetailOpen(false)} maxWidth="lg" fullWidth>
         <DialogTitle>Destination Rate Details</DialogTitle>
         <DialogContent>{renderDetailTable()}</DialogContent>
-        <DialogActions>
-          {detail && <Button color="error" onClick={() => remove('dr', detail.ID)}>Remove</Button>}
-          {detail && <Button onClick={() => { setIsNew(false); setDrForm({ TPid: detail.TPid, ID: detail.ID, DestinationRates: (detail.DestinationRates || []).map(r => ({ ...emptyDR(), ...r })) }); setDetailOpen(false); }}>Edit</Button>}
+        <DangerFooter onRemove={detail ? () => setRemoving({ kind: 'dr', id: detail.ID }) : undefined}>
           <Button onClick={() => setDetailOpen(false)}>Close</Button>
-        </DialogActions>
+          {detail && <Button variant="contained" onClick={() => { setIsNew(false); setDrForm({ TPid: detail.TPid, ID: detail.ID, DestinationRates: (detail.DestinationRates || []).map(r => ({ ...emptyDR(), ...r })) }); setDetailOpen(false); }}>Edit</Button>}
+        </DangerFooter>
       </Dialog>
 
       <Dialog open={!!drForm} onClose={() => setDrForm(null)} maxWidth="lg" fullWidth>
@@ -336,14 +336,16 @@ export function Component() {
                 <Box key={i} sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                   <SearchableSelect label="Destination" value={r.DestinationId} options={destIds} onChange={v => setDRRow(i, { DestinationId: v })} sx={{ minWidth: 220 }} />
                   <SearchableSelect label="Rate" value={r.RateId} options={rateIds} onChange={v => setDRRow(i, { RateId: v })} sx={{ minWidth: 220 }} />
-                  <TextField select size="small" label="Rounding" value={r.RoundingMethod} onChange={e => setDRRow(i, { RoundingMethod: e.target.value })} sx={{ width: 120 }}>
-                    {ROUNDING_METHODS.map(m => <MenuItem key={m} value={m}>{m}</MenuItem>)}
+                  <TextField select size="small" label="Cost rounding" value={r.RoundingMethod} onChange={e => setDRRow(i, { RoundingMethod: e.target.value })} sx={{ width: 230 }}>
+                    {ROUNDING_OPTIONS.map(([v, l]) => <MenuItem key={v} value={v}>{l} <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1, fontFamily: 'monospace' }}>{v}</Typography></MenuItem>)}
                   </TextField>
                   <TextField size="small" type="number" label="Decimals" value={r.RoundingDecimals} onChange={e => setDRRow(i, { RoundingDecimals: parseInt(e.target.value) || 0 })} sx={{ width: 100 }} />
-                  <TextField size="small" type="number" label="Max cost" value={r.MaxCost} onChange={e => setDRRow(i, { MaxCost: parseFloat(e.target.value) || 0 })} sx={{ width: 110 }} />
-                  <TextField select size="small" label="Max cost strategy" value={r.MaxCostStrategy} onChange={e => setDRRow(i, { MaxCostStrategy: e.target.value })} sx={{ width: 160 }}>
-                    {MAX_COST_STRATEGIES.map(m => <MenuItem key={m} value={m}>{m || <em>none</em>}</MenuItem>)}
+                  <TextField select size="small" label="Spending cap" value={r.MaxCostStrategy} onChange={e => setDRRow(i, { MaxCostStrategy: e.target.value })} sx={{ width: 250 }}
+                    slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}>
+                    {MAX_COST_OPTIONS.map(([v, l]) => <MenuItem key={v} value={v}>{l} <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1, fontFamily: 'monospace' }}>{v || '""'}</Typography></MenuItem>)}
                   </TextField>
+                  <TextField size="small" type="number" label="Cap amount (MaxCost)" value={r.MaxCost} onChange={e => setDRRow(i, { MaxCost: parseFloat(e.target.value) || 0 })} sx={{ width: 170 }}
+                    helperText={r.MaxCostStrategy ? undefined : 'Ignored without a cap'} />
                   <IconButton size="small" color="error" disabled={drForm.DestinationRates.length <= 1}
                     onClick={() => setDrForm({ ...drForm, DestinationRates: drForm.DestinationRates.filter((_, j) => j !== i) })}><DeleteIcon fontSize="small" /></IconButton>
                 </Box>
@@ -352,10 +354,10 @@ export function Component() {
             </Box>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button variant="contained" onClick={saveDR}>Save</Button>
+        <DangerFooter>
           <Button onClick={() => setDrForm(null)}>Cancel</Button>
-        </DialogActions>
+          <Button variant="contained" onClick={saveDR}>Save</Button>
+        </DangerFooter>
       </Dialog>
 
       <Dialog open={!!rateForm} onClose={() => setRateForm(null)} maxWidth="md" fullWidth>
@@ -367,7 +369,7 @@ export function Component() {
                 <TextField size="small" label="TPid" value={rateForm.TPid} onChange={e => setRateForm({ ...rateForm, TPid: e.target.value })} disabled={!isNew} />
                 <TextField size="small" label="ID" value={rateForm.ID} onChange={e => setRateForm({ ...rateForm, ID: e.target.value })} disabled={!isNew} sx={{ flex: 1 }} />
               </Box>
-              <Typography variant="caption" color="text.secondary">Durations take units (60s, 1m, 1h); for *data a bare number of bytes works too.</Typography>
+              <Typography variant="caption" color="text.secondary">Rate unit, increment and group start are stored as durations whatever the traffic type: a bare integer (e.g. 1048576) is taken as-is, units like 60s or 1m are also accepted.</Typography>
               {rateForm.RateSlots.map((s, i) => (
                 <Box key={i} sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                   <TextField size="small" type="number" label="Connect fee" value={s.ConnectFee} onChange={e => setSlot(i, { ConnectFee: parseFloat(e.target.value) || 0 })} sx={{ width: 110 }} />
@@ -383,12 +385,14 @@ export function Component() {
             </Box>
           )}
         </DialogContent>
-        <DialogActions>
-          {!isNew && rateForm && <Button color="error" onClick={() => remove('rate', rateForm.ID)}>Remove</Button>}
-          <Button variant="contained" onClick={saveRate}>Save</Button>
+        <DangerFooter onRemove={!isNew && rateForm ? () => setRemoving({ kind: 'rate', id: rateForm.ID }) : undefined}>
           <Button onClick={() => setRateForm(null)}>Cancel</Button>
-        </DialogActions>
+          <Button variant="contained" onClick={saveRate}>Save</Button>
+        </DangerFooter>
       </Dialog>
+
+      <RemoveConfirm id={removing?.id ?? null} what={removing?.kind === 'rate' ? 'rate' : 'destination rate'} where={`tariff plan ${tpid}`}
+        busy={busy} onConfirm={remove} onClose={() => setRemoving(null)} />
     </Box>
   );
 }

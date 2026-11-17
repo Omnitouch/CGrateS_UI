@@ -1,35 +1,67 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
-  Box, Typography, Paper, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
+  Box, Typography, Paper, Button, CircularProgress, Dialog, DialogTitle, DialogContent,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, TextField,
-  ToggleButton, ToggleButtonGroup, FormControlLabel, Checkbox, Chip,
+  FormControlLabel, Checkbox, Chip, InputAdornment,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import SearchIcon from '@mui/icons-material/Search';
 import { useOcsBaseUrl } from '../OcsContext';
 import * as api from '../api';
 import IdMultiSelect from '../components/IdMultiSelect';
 import TpToolbar, { useTpIdList, errMsg, isNotFound } from '../components/TpToolbar';
-
-type Source = 'tp' | 'live';
+import RatingSourceToggle, { useRatingSource, SOURCE_LABEL } from '../components/RatingSource';
+import RemoveConfirm, { DangerFooter } from '../components/RemoveConfirm';
 
 interface DestForm { TPid: string; ID: string; Prefixes: string[] }
 
+const CHIP_LIMIT = 8;
+
+function PrefixChips({ prefixes, highlight }: { prefixes: string[]; highlight?: Set<string> }) {
+  const [open, setOpen] = useState(false);
+  const hit = (p: string) => !!highlight?.has(p);
+  // Matched prefixes stay visible while collapsed.
+  const shown = open ? prefixes : [...prefixes.filter(hit), ...prefixes.filter(p => !hit(p))].slice(0, Math.max(CHIP_LIMIT, prefixes.filter(hit).length));
+  const more = prefixes.length - shown.length;
+  return (
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }} onClick={e => e.stopPropagation()}>
+      {shown.map(p => (
+        <Chip key={p} size="small" label={p} color={hit(p) ? 'primary' : 'default'} variant={hit(p) ? 'filled' : 'outlined'} sx={{ fontFamily: 'monospace' }} />
+      ))}
+      {more > 0 && <Chip size="small" label={`+${more} more`} onClick={() => setOpen(true)} sx={{ fontWeight: 600 }} />}
+      {open && prefixes.length > CHIP_LIMIT && <Chip size="small" label="Show fewer" onClick={() => setOpen(false)} variant="outlined" />}
+    </Box>
+  );
+}
+
+/** The query as typed, plus number forms without separators and without a leading +, since prefixes are matched literally. */
+function queryForms(q: string) {
+  const forms = new Set([q]);
+  if (/^[+\d\s\-().]+$/.test(q)) {
+    const n = q.replace(/[\s\-().]/g, '');
+    forms.add(n);
+    forms.add(n.replace(/^\+/, ''));
+  }
+  forms.delete('');
+  return [...forms];
+}
+
 export function Component() {
   const baseUrl = useOcsBaseUrl();
-  const [source, setSource] = useState<Source>('tp');
+  const [source, setSource] = useRatingSource();
   const list = useTpIdList(baseUrl, api.getTPDestinationIDs);
   const [error, setError] = useState<string | null>(null);
 
   const [live, setLive] = useState<api.LiveDestination[] | null>(null);
   const [liveLoading, setLiveLoading] = useState(false);
-  const [liveFilter, setLiveFilter] = useState('');
-  const [reversePrefix, setReversePrefix] = useState('');
-  const [reverseResult, setReverseResult] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
   const [form, setForm] = useState<DestForm | null>(null);
   const [editing, setEditing] = useState(false);
   const [isNew, setIsNew] = useState(false);
   const [overwrite, setOverwrite] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const fetchLive = useCallback(async () => {
     if (!baseUrl) return;
@@ -45,26 +77,29 @@ export function Component() {
     }
   }, [baseUrl]);
 
-  const changeSource = (s: Source) => {
-    setSource(s);
-    if (s === 'live' && live === null) fetchLive();
-  };
+  useEffect(() => { if (source === 'live' && live === null) fetchLive(); }, [source, live, fetchLive]);
 
-  const shownLive = useMemo(() => {
-    const q = liveFilter.trim().toLowerCase();
+  // GetReverseDestination only answers exact prefixes, so numbers are matched here the way the engine walks them: longest prefix first.
+  const search = useMemo(() => {
+    const q = query.trim();
     const all = [...(live || [])].sort((a, b) => a.Id.localeCompare(b.Id));
-    return q ? all.filter(d => d.Id.toLowerCase().includes(q) || d.Prefixes.some(p => p.includes(q))) : all;
-  }, [live, liveFilter]);
-
-  const lookupReverse = useCallback(async () => {
-    if (!baseUrl || !reversePrefix) return;
-    try {
-      const ids = await api.getReverseDestination(baseUrl, reversePrefix.trim());
-      setReverseResult(ids.length ? ids.join(', ') : 'No destination has this exact prefix');
-    } catch (e: unknown) {
-      setReverseResult(isNotFound(e) ? 'No destination has this exact prefix' : errMsg(e, 'Lookup failed'));
+    if (!q) return { rows: all, hits: new Map<string, Set<string>>(), best: [] as string[], bestPrefix: '' };
+    const forms = queryForms(q);
+    const lower = q.toLowerCase();
+    const covers = (p: string) => forms.some(f => f.startsWith(p));
+    const hits = new Map<string, Set<string>>();
+    let bestPrefix = '';
+    for (const d of all) {
+      const m = (d.Prefixes || []).filter(p => covers(p) || forms.some(f => p.startsWith(f)));
+      if (m.length) hits.set(d.Id, new Set(m));
+      for (const p of d.Prefixes || []) if (covers(p) && p.length > bestPrefix.length) bestPrefix = p;
     }
-  }, [baseUrl, reversePrefix]);
+    const best = bestPrefix ? all.filter(d => d.Prefixes?.includes(bestPrefix)).map(d => d.Id) : [];
+    const longestCovering = (d: api.LiveDestination) => Math.max(0, ...(d.Prefixes || []).filter(covers).map(p => p.length));
+    const rows = all.filter(d => hits.has(d.Id) || d.Id.toLowerCase().includes(lower))
+      .sort((a, b) => longestCovering(b) - longestCovering(a));
+    return { rows, hits, best, bestPrefix };
+  }, [live, query]);
 
   const openTP = useCallback(async (id: string) => {
     if (!baseUrl) return;
@@ -112,50 +147,52 @@ export function Component() {
     }
   }, [baseUrl, form, source, overwrite, list, fetchLive]);
 
-  const remove = useCallback(async (id: string) => {
-    if (!baseUrl) return;
-    const where = source === 'tp' ? `tariff plan ${list.tpid}` : 'the live DataDB (affects rating immediately)';
-    if (!window.confirm(`Remove destination ${id} from ${where}?`)) return;
+  const remove = useCallback(async () => {
+    if (!baseUrl || !removing) return;
+    setBusy(true);
     try {
-      if (source === 'tp') { await api.removeTPDestination(baseUrl, list.tpid, id); list.refresh(); }
-      else { await api.removeDestination(baseUrl, id); fetchLive(); }
+      if (source === 'tp') { await api.removeTPDestination(baseUrl, list.tpid, removing); list.refresh(); }
+      else { await api.removeDestination(baseUrl, removing); fetchLive(); }
+      setRemoving(null);
       setForm(null);
     } catch (e: unknown) {
+      setRemoving(null);
       setError(errMsg(e, 'Failed to remove'));
+    } finally {
+      setBusy(false);
     }
-  }, [baseUrl, source, list, fetchLive]);
+  }, [baseUrl, source, list, fetchLive, removing]);
 
   const shownError = error || list.error;
   const loading = source === 'tp' ? list.loading : liveLoading;
+  const q = query.trim();
 
   return (
     <Box>
       <Typography variant="h5" gutterBottom>Destinations</Typography>
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-          <ToggleButtonGroup size="small" exclusive value={source} onChange={(_, v) => v && changeSource(v)}>
-            <ToggleButton value="tp">Tariff plan (StorDB)</ToggleButton>
-            <ToggleButton value="live">Live (DataDB)</ToggleButton>
-          </ToggleButtonGroup>
+          <RatingSourceToggle value={source} onChange={setSource} />
           {source === 'tp' ? (
             <TpToolbar tpids={list.tpids} tpid={list.tpid} onTpid={list.setTpid} search={list.search} onSearch={list.setSearch} onRefresh={list.refresh}>
               <Button variant="outlined" startIcon={<AddIcon />} onClick={create}>Create New</Button>
             </TpToolbar>
           ) : (
             <>
-              <TextField size="small" label="Filter ID or prefix" value={liveFilter} onChange={e => setLiveFilter(e.target.value)} />
-              <Button variant="contained" onClick={fetchLive}>Reload</Button>
+              <TextField size="small" placeholder="Name, prefix or phone number" value={query} onChange={e => setQuery(e.target.value)}
+                sx={{ minWidth: { xs: '100%', sm: 320 } }} aria-label="Search destinations"
+                slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }} />
+              <Button variant="outlined" onClick={fetchLive}>Reload</Button>
               <Button variant="outlined" startIcon={<AddIcon />} onClick={create}>Create New</Button>
             </>
           )}
         </Box>
-        {source === 'live' && (
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', mt: 2 }}>
-            <TextField size="small" label="Reverse lookup prefix" value={reversePrefix} onChange={e => { setReversePrefix(e.target.value); setReverseResult(null); }}
-              onKeyDown={e => { if (e.key === 'Enter') lookupReverse(); }} />
-            <Button size="small" onClick={lookupReverse} disabled={!reversePrefix}>Which destinations?</Button>
-            {reverseResult && <Typography variant="body2">{reverseResult}</Typography>}
-          </Box>
+        {source === 'live' && q && live && (
+          <Typography variant="body2" sx={{ mt: 1.5 }} color="text.secondary">
+            {search.bestPrefix
+              ? <>Longest prefix for <b>{q}</b> is <b style={{ fontFamily: 'monospace' }}>{search.bestPrefix}</b>, in {search.best.join(', ')}.{search.rows.length > search.best.length && ' Rating uses the longest prefix the rating plan has a rate for, so the other matches below can still apply.'}</>
+              : `${search.rows.length} of ${live.length} destinations match`}
+          </Typography>
         )}
       </Paper>
 
@@ -164,32 +201,42 @@ export function Component() {
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
       ) : source === 'tp' ? (
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} sx={{ maxWidth: 900 }}>
           <Table size="small">
-            <TableHead><TableRow><TableCell>#</TableCell><TableCell>ID</TableCell></TableRow></TableHead>
+            <TableHead><TableRow><TableCell>ID</TableCell></TableRow></TableHead>
             <TableBody>
-              {list.ids.length > 0 ? list.ids.map((id, idx) => (
+              {list.ids.length > 0 ? list.ids.map(id => (
                 <TableRow key={id} hover sx={{ cursor: 'pointer' }} onClick={() => openTP(id)}>
-                  <TableCell>{idx + 1}</TableCell><TableCell>{id}</TableCell>
+                  <TableCell sx={{ wordBreak: 'break-word' }}>{id}</TableCell>
                 </TableRow>
               )) : (
-                <TableRow><TableCell colSpan={2} align="center">{list.tpid ? 'No destinations' : 'Select a tariff plan'}</TableCell></TableRow>
+                <TableRow><TableCell align="center">{list.tpid ? 'No destinations' : 'Select a tariff plan'}</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
         </TableContainer>
       ) : (
-        <TableContainer component={Paper}>
-          <Table size="small">
-            <TableHead><TableRow><TableCell>#</TableCell><TableCell>ID</TableCell><TableCell>Prefixes</TableCell></TableRow></TableHead>
+        <TableContainer component={Paper} sx={{ maxWidth: 1400 }}>
+          <Table size="small" sx={{ tableLayout: 'fixed' }}>
+            <TableHead><TableRow>
+              <TableCell sx={{ width: { xs: 140, sm: 260 } }}>ID</TableCell><TableCell>Prefixes</TableCell>
+            </TableRow></TableHead>
             <TableBody>
-              {shownLive.length > 0 ? shownLive.map((d, idx) => (
-                <TableRow key={d.Id} hover sx={{ cursor: 'pointer' }} onClick={() => openLive(d)}>
-                  <TableCell>{idx + 1}</TableCell><TableCell>{d.Id}</TableCell>
-                  <TableCell>{(d.Prefixes || []).slice(0, 8).join(', ')}{(d.Prefixes || []).length > 8 ? ` … (${d.Prefixes.length})` : ''}</TableCell>
-                </TableRow>
-              )) : (
-                <TableRow><TableCell colSpan={3} align="center">No destinations in DataDB</TableCell></TableRow>
+              {search.rows.length > 0 ? search.rows.map(d => {
+                const isBest = search.best.includes(d.Id);
+                return (
+                  <TableRow key={d.Id} hover selected={isBest} sx={{ cursor: 'pointer', verticalAlign: 'top' }} onClick={() => openLive(d)}>
+                    <TableCell sx={{ wordBreak: 'break-word', fontWeight: isBest ? 600 : undefined }}>
+                      {d.Id}
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        {(d.Prefixes || []).length} prefix{(d.Prefixes || []).length === 1 ? '' : 'es'}{isBest ? ' · best match' : ''}
+                      </Typography>
+                    </TableCell>
+                    <TableCell><PrefixChips key={q} prefixes={d.Prefixes || []} highlight={search.hits.get(d.Id)} /></TableCell>
+                  </TableRow>
+                );
+              }) : (
+                <TableRow><TableCell colSpan={2} align="center">{q ? `Nothing matches “${q}”` : 'No destinations in DataDB'}</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -200,7 +247,7 @@ export function Component() {
         <DialogTitle>
           {isNew ? 'New destination' : `Destination ${form?.ID}`}
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-            {source === 'tp' ? `Tariff plan (StorDB)${form?.TPid ? `: ${form.TPid}` : ''}` : 'Live DataDB'}
+            {SOURCE_LABEL[source]}{source === 'tp' && form?.TPid ? `: ${form.TPid}` : ''}
           </Typography>
         </DialogTitle>
         <DialogContent>
@@ -225,12 +272,14 @@ export function Component() {
             </Box>
           )}
         </DialogContent>
-        <DialogActions>
-          {!isNew && form && <Button color="error" onClick={() => remove(form.ID)}>Remove</Button>}
-          {editing ? <Button variant="contained" onClick={save}>Save</Button> : <Button onClick={() => setEditing(true)}>Edit</Button>}
+        <DangerFooter onRemove={!isNew && form ? () => setRemoving(form.ID) : undefined}>
           <Button onClick={() => setForm(null)}>Close</Button>
-        </DialogActions>
+          {editing ? <Button variant="contained" onClick={save}>Save</Button> : <Button variant="contained" onClick={() => setEditing(true)}>Edit</Button>}
+        </DangerFooter>
       </Dialog>
+
+      <RemoveConfirm id={removing} what="destination" busy={busy} onConfirm={remove} onClose={() => setRemoving(null)}
+        where={source === 'tp' ? `tariff plan ${list.tpid}` : 'the live DataDB (affects rating immediately)'} />
     </Box>
   );
 }
