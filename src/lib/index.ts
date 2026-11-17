@@ -44,7 +44,7 @@ export const ocsNavGroups: OcsNavGroup[] = [
     key: 'products',
     label: 'Products & Rates',
     items: [
-      { label: 'Rating map', path: 'rating-hierarchy' },
+      { label: 'Rating map', path: 'rating-map' },
       { label: 'Destinations', path: 'destinations' },
       { label: 'Destination Rates', path: 'destination-rates' },
       { label: 'Rating Plans', path: 'rating-plans' },

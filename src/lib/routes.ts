@@ -138,8 +138,12 @@ const routes: RouteObject[] = [
     lazy: () => import('./pages/TariffPlanExplorer'),
   },
   {
-    path: 'rating-hierarchy',
+    path: 'rating-map',
     lazy: () => import('./pages/RatingHierarchy'),
+  },
+  {
+    path: 'rating-hierarchy',
+    lazy: async () => ({ Component: (await import('./pages/RatingHierarchy')).LegacyRedirect }),
   },
 ];
 
