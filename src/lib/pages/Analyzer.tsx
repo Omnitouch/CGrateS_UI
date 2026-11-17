@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Box, Typography, Paper, Button, TextField, CircularProgress, Alert,
   Dialog, DialogTitle, DialogContent, DialogActions,
@@ -11,6 +11,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { useOcsBaseUrl } from '../OcsContext';
+import { useConfig } from '../hooks';
 import * as api from '../api';
 import type { AnalyzerResult } from '../types';
 import SearchableSelect from '../components/SearchableSelect';
@@ -20,14 +21,9 @@ import { parseGoDuration } from '../expiryTime';
 // --- Constants ---
 
 const pastOptions = [
-  { label: 'Past 15 minutes', value: 15 },
-  { label: 'Past 30 minutes', value: 30 },
-  { label: 'Past 1 hour', value: 60 },
-  { label: 'Past 2 hours', value: 120 },
-  { label: 'Past 6 hours', value: 360 },
-  { label: 'Past 1 day', value: 1440 },
-  { label: 'Past 2 days', value: 2880 },
-  { label: 'Past 1 week', value: 10080 },
+  { label: 'Last 15 minutes', chip: '15m', value: 15 },
+  { label: 'Last 1 hour', chip: '1h', value: 60 },
+  { label: 'Last 24 hours', chip: '24h', value: 1440 },
 ];
 
 const commonMethods = [
@@ -105,6 +101,24 @@ interface SearchParams {
 function durationToNs(s: string): number | null {
   const ms = parseGoDuration(s.trim());
   return ms === null ? null : Math.round(ms * 1e6);
+}
+
+/** Number plus ms/s unit, kept as a Go duration string such as "500ms". */
+function DurationField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const m = /^(\d*\.?\d*)(ms|s)$/.exec(value);
+  const [unit, setUnit] = useState(m?.[2] || 'ms');
+  const n = m ? m[1] : value;
+  return (
+    <Box sx={{ display: 'flex', gap: 0.5 }}>
+      <TextField size="small" fullWidth type="number" label={label} placeholder="e.g. 500" value={n}
+        slotProps={{ htmlInput: { min: 0, step: 'any' } }}
+        onChange={e => onChange(e.target.value ? `${e.target.value}${unit}` : '')} />
+      <Select size="small" value={unit} onChange={e => { setUnit(e.target.value); if (n) onChange(`${n}${e.target.value}`); }}>
+        <MenuItem value="ms">ms</MenuItem>
+        <MenuItem value="s">s</MenuItem>
+      </Select>
+    </Box>
+  );
 }
 
 function contentFilterRule(f: ContentFilter): string {
@@ -336,20 +350,19 @@ function CollapsibleJSON({ data, initialExpanded = true }: { data: unknown; init
 
 export function Component() {
   const baseUrl = useOcsBaseUrl();
+  const { data: config } = useConfig();
+  const analyzersCfg = config?.analyzers as { enabled?: boolean; ttl?: string } | undefined;
+  const analyzerOff = !!config && !analyzersCfg?.enabled;
 
   // Search params
   const [searchParams, setSearchParams] = useState<SearchParams>({
-    timeStart: '', timeEnd: '', past: '', method: '', encoding: '',
+    timeStart: '', timeEnd: '', past: '15', method: '', encoding: '',
     source: '', destination: '', requestId: '', minDuration: '', maxDuration: '', errorsOnly: false, limit: 50,
   });
 
   // Pagination
   const [offset, setOffset] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-
-  // Custom methods
-  const [customMethods, setCustomMethods] = useState<string[]>([]);
-  const [newMethodInput, setNewMethodInput] = useState('');
 
   // Content filters
   const [contentFilters, setContentFilters] = useState<ContentFilter[]>([]);
@@ -391,14 +404,6 @@ export function Component() {
     }));
   };
 
-  const handleAddMethod = () => {
-    const trimmed = newMethodInput.trim();
-    if (trimmed && !commonMethods.includes(trimmed) && !customMethods.includes(trimmed)) {
-      setCustomMethods(prev => [...prev, trimmed]);
-      setSearchParams(prev => ({ ...prev, method: trimmed }));
-      setNewMethodInput('');
-    }
-  };
 
   // Content filter management
   const addContentFilter = () => {
@@ -421,11 +426,15 @@ export function Component() {
     if (showAdvanced && rawHeaderFilters.trim()) return rawHeaderFilters.trim();
 
     const filters: string[] = [];
-    if (searchParams.timeStart) {
-      filters.push(`+RequestStartTime:>="${new Date(searchParams.timeStart).toISOString()}"`);
+    // A quick range is relative to each search, not to when it was picked.
+    const pastMin = parseInt(searchParams.past, 10);
+    const end = pastMin ? new Date().toISOString() : searchParams.timeEnd;
+    const start = pastMin ? new Date(Date.now() - pastMin * 60000).toISOString() : searchParams.timeStart;
+    if (start) {
+      filters.push(`+RequestStartTime:>="${new Date(start).toISOString()}"`);
     }
-    if (searchParams.timeEnd) {
-      filters.push(`+RequestStartTime:<="${new Date(searchParams.timeEnd).toISOString()}"`);
+    if (end) {
+      filters.push(`+RequestStartTime:<="${new Date(end).toISOString()}"`);
     }
     if (searchParams.method) {
       filters.push(`+RequestMethod:"${searchParams.method}"`);
@@ -493,6 +502,13 @@ export function Component() {
     }
   }, [baseUrl, buildHeaderFilters, buildContentFilters, searchParams.limit]);
 
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (autoRan.current || !config || analyzerOff) return;
+    autoRan.current = true;
+    fetchResults(0);
+  }, [config, analyzerOff, fetchResults]);
+
   const handleSearch = () => {
     setOffset(0);
     setCurrentPage(1);
@@ -520,7 +536,14 @@ export function Component() {
       <Typography variant="h5" gutterBottom>Analyzer</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Search captured API calls. Click any row for full details.
+        {analyzersCfg?.ttl && !analyzerOff && ` Calls are kept for ${analyzersCfg.ttl}.`}
       </Typography>
+      {analyzerOff && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          API capture is off on this OCS, so there is nothing to search.
+          <Typography variant="caption" component="div" color="text.secondary">AnalyzerS: analyzers.enabled is false in the running config.</Typography>
+        </Alert>
+      )}
 
       {/* Time Range */}
       <Paper sx={{ p: 2, mb: 2 }}>
@@ -532,7 +555,7 @@ export function Component() {
               value={toDatetimeLocalValue(searchParams.timeStart)}
               onChange={e => {
                 const v = e.target.value;
-                handleParamChange('timeStart', v ? new Date(v).toISOString() : '');
+                setSearchParams(prev => ({ ...prev, past: '', timeStart: v ? new Date(v).toISOString() : '' }));
               }}
               slotProps={{ inputLabel: { shrink: true } }}
             />
@@ -543,23 +566,18 @@ export function Component() {
               value={toDatetimeLocalValue(searchParams.timeEnd)}
               onChange={e => {
                 const v = e.target.value;
-                handleParamChange('timeEnd', v ? new Date(v).toISOString() : '');
+                setSearchParams(prev => ({ ...prev, past: '', timeEnd: v ? new Date(v).toISOString() : '' }));
               }}
               slotProps={{ inputLabel: { shrink: true } }}
             />
           </Grid>
-          <Grid item xs={12} md={3}>
-            <FormControl size="small" fullWidth>
-              <InputLabel>Quick Select</InputLabel>
-              <Select
-                label="Quick Select"
-                value={searchParams.past}
-                onChange={e => handlePastChange(e.target.value as string)}
-              >
-                <MenuItem value="">None</MenuItem>
-                {pastOptions.map(o => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
-              </Select>
-            </FormControl>
+          <Grid item xs={12} md={3} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            {pastOptions.map(o => (
+              <Chip key={o.value} label={o.chip} title={o.label} clickable
+                color={searchParams.past === String(o.value) ? 'primary' : 'default'}
+                variant={searchParams.past === String(o.value) ? 'filled' : 'outlined'}
+                onClick={() => handlePastChange(String(o.value))} />
+            ))}
           </Grid>
           <Grid item xs={12} md={3}>
             <TextField
@@ -582,22 +600,13 @@ export function Component() {
           <Grid item xs={12} md={4}>
             <SearchableSelect
               label="Method"
-              placeholder="Any Method"
+              placeholder="Any method, or type one"
               value={searchParams.method}
-              options={[...customMethods, ...commonMethods.filter(m => !customMethods.includes(m))]}
-              groupBy={m => (customMethods.includes(m) ? 'Custom Methods' : 'Common Methods')}
+              options={commonMethods}
               onChange={v => handleParamChange('method', v)}
+              freeSolo
               fullWidth
             />
-            <Box sx={{ display: 'flex', gap: 0.5, mt: 1 }}>
-              <TextField
-                size="small" fullWidth placeholder="Add custom method..."
-                value={newMethodInput}
-                onChange={e => setNewMethodInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddMethod(); } }}
-              />
-              <Button size="small" variant="outlined" onClick={handleAddMethod}>+</Button>
-            </Box>
           </Grid>
           <Grid item xs={12} md={2}>
             <FormControl size="small" fullWidth>
@@ -635,28 +644,19 @@ export function Component() {
             />
           </Grid>
           <Grid item xs={12} md={2}>
-            <TextField
-              size="small" fullWidth label="Min duration" placeholder="e.g. 100ms"
-              value={searchParams.minDuration}
-              error={!!searchParams.minDuration && durationToNs(searchParams.minDuration) === null}
-              helperText="Go duration"
-              onChange={e => handleParamChange('minDuration', e.target.value)}
-            />
+            <DurationField label="Min duration" value={searchParams.minDuration} onChange={v => handleParamChange('minDuration', v)} />
           </Grid>
           <Grid item xs={12} md={2}>
-            <TextField
-              size="small" fullWidth label="Max duration" placeholder="e.g. 2s"
-              value={searchParams.maxDuration}
-              error={!!searchParams.maxDuration && durationToNs(searchParams.maxDuration) === null}
-              helperText="Go duration"
-              onChange={e => handleParamChange('maxDuration', e.target.value)}
-            />
+            <DurationField label="Max duration" value={searchParams.maxDuration} onChange={v => handleParamChange('maxDuration', v)} />
           </Grid>
           <Grid item xs={12} md={3}>
             <FormControlLabel
               control={<Checkbox checked={searchParams.errorsOnly} onChange={e => handleParamChange('errorsOnly', e.target.checked)} />}
               label="Errors only (ReplyError set)"
             />
+          </Grid>
+          <Grid item xs={12} md={1} sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: { md: 'flex-end' } }}>
+            <Button variant="contained" onClick={handleSearch} disabled={loading}>Search</Button>
           </Grid>
         </Grid>
       </Paper>
@@ -780,18 +780,12 @@ export function Component() {
         </Paper>
       )}
 
-      {/* Search button */}
-      <Button variant="contained" fullWidth sx={{ mb: 2 }} onClick={handleSearch}>Search</Button>
-
       {/* Error */}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       {/* Response info */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-        <Typography variant="body2">
-          Response from <strong>{baseUrl}</strong>
-          {responseTime && !loading && ` in ${responseTime}s`}
-        </Typography>
+        {responseTime && !loading && <Typography variant="body2" color="text.secondary">Returned in {responseTime}s</Typography>}
         {results.length > 0 && (
           <Chip
             size="small"
@@ -859,7 +853,9 @@ export function Component() {
                 </TableRow>
               )) : (
                 <TableRow>
-                  <TableCell colSpan={7} align="center">No results available</TableCell>
+                  <TableCell colSpan={7} align="center">
+                    {analyzerOff ? 'API capture is off on this OCS' : responseTime ? 'No captured calls match' : 'Not searched yet'}
+                  </TableCell>
                 </TableRow>
               )}
             </TableBody>

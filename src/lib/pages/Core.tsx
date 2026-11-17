@@ -69,7 +69,7 @@ export function Component() {
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-        <Typography variant="h5" sx={{ flexGrow: 1 }}>Core</Typography>
+        <Typography variant="h5" sx={{ flexGrow: 1 }}>System status</Typography>
         <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
       </Box>
       {outcomeAlert}

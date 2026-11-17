@@ -358,3 +358,28 @@ export function useRemoveTP() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['ocs', 'tpids'] }); },
   });
 }
+
+// --- Subsystems ---
+
+export type OcsSubsystem = 'analyzers' | 'ers' | 'ees';
+
+export const OCS_SUBSYSTEM_LABELS: Record<OcsSubsystem, string> = {
+  analyzers: 'AnalyzerS',
+  ers: 'EventReaderS',
+  ees: 'EventExporterS',
+};
+
+/** Nav paths whose page needs a subsystem enabled in the running config. */
+export const ocsNavSubsystems: Record<string, OcsSubsystem> = {
+  analyzer: 'analyzers',
+  'event-reader': 'ers',
+  'event-exporter': 'ees',
+};
+
+/** `<section>.enabled` from the running config; undefined until the config has loaded. */
+export function useOcsSubsystems(): { enabled: Partial<Record<OcsSubsystem, boolean>>; isLoading: boolean } {
+  const { data, isLoading } = useConfig();
+  const enabled: Partial<Record<OcsSubsystem, boolean>> = {};
+  if (data) (Object.keys(OCS_SUBSYSTEM_LABELS) as OcsSubsystem[]).forEach(s => { enabled[s] = !!data[s]?.enabled; });
+  return { enabled, isLoading };
+}

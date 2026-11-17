@@ -1,10 +1,8 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
 import {
   Box, Typography, Paper, Button, TextField, CircularProgress, Alert, Chip,
-  Select, MenuItem, FormControl, InputLabel, IconButton, Tooltip, List, ListItemButton, ListItemIcon, ListItemText,
-  Menu, ListSubheader,
+  IconButton, Tooltip, List, ListItemButton, ListItemIcon, ListItemText, ListSubheader,
 } from '@mui/material';
-import PostAddIcon from '@mui/icons-material/PostAdd';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
@@ -14,12 +12,29 @@ import DownloadIcon from '@mui/icons-material/Download';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import { diagnose, explainResponseError, type Problem, type ResponseHint } from '../jsonDoctor';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { formatDateTime, formatRelative } from '../formatTime';
 
+// Payloads are deliberately not stored: they can carry account data or credentials.
 interface HistoryEntry {
   id: number;
   method: string;
-  request: string;
   timestamp: number;
+  ok: boolean;
+  error?: string;
+}
+
+/** Name-based guess: only Get*, *Count, *Status, *Ping and *Info count as read; anything else may write. */
+function isReadMethod(method: string): boolean {
+  const name = method.split('.').pop() || '';
+  return /^Get/.test(name) || /(Count|Status|Ping|Info)$/.test(name);
+}
+
+function requestMethods(text: string): string[] {
+  try {
+    const p = JSON.parse(text);
+    return (Array.isArray(p) ? p : [p]).map(r => (r && typeof r.method === 'string' ? r.method : 'unknown'));
+  } catch { return []; }
 }
 
 interface Template {
@@ -63,24 +78,31 @@ const TEMPLATES: Template[] = [
   { group: 'Profiles', method: 'ThresholdSv1.GetThresholdsForEvent', params: t => [sampleEvent(t)] },
 ];
 
-const HISTORY_KEY = 'cgrates_jsonrpc_history';
+const HISTORY_KEY = 'cgrates_jsonrpc_log';
+const LEGACY_HISTORY_KEY = 'cgrates_jsonrpc_history';
 const MAX_HISTORY = 50;
 
 function loadHistory(): HistoryEntry[] {
   try {
+    localStorage.removeItem(LEGACY_HISTORY_KEY);
     const raw = localStorage.getItem(HISTORY_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
   } catch { return []; }
 }
 
 function saveHistory(entries: HistoryEntry[]) {
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(entries.slice(0, MAX_HISTORY)));
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(entries.slice(0, MAX_HISTORY))); } catch { /* storage unavailable */ }
 }
+
+const TEMPLATE_GROUPS = [
+  { label: 'Read', items: TEMPLATES.filter(t => isReadMethod(t.method)) },
+  { label: 'Write', items: TEMPLATES.filter(t => !isReadMethod(t.method)) },
+];
 
 export function Component() {
   const baseUrl = useOcsBaseUrl();
   const { defaultTenant } = useOcsTenants();
-  const [templatesAnchor, setTemplatesAnchor] = useState<HTMLElement | null>(null);
   const [requestText, setRequestText] = useState('{\n  "jsonrpc": "2.0",\n  "id": 1,\n  "method": "CoreSv1.Ping",\n  "params": [{}]\n}');
   const [responseText, setResponseText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -88,7 +110,7 @@ export function Component() {
   const [execTime, setExecTime] = useState<string | null>(null);
   const [statusCode, setStatusCode] = useState<number | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
-  const [selectedHistory, setSelectedHistory] = useState<number | ''>('');
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
   const [responseHint, setResponseHint] = useState<ResponseHint | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -100,19 +122,22 @@ export function Component() {
     setRequestText(JSON.stringify(JSON.parse(requestText), null, 2));
   }, [requestText]);
 
-  const addToHistory = useCallback((request: string) => {
-    try {
-      const parsed = JSON.parse(request);
-      const method = parsed.method || 'unknown';
-      const entry: HistoryEntry = { id: Date.now(), method, request, timestamp: Date.now() };
-      const updated = [entry, ...history.filter(h => h.request !== request)].slice(0, MAX_HISTORY);
-      setHistory(updated);
+  const methods = useMemo(() => requestMethods(requestText), [requestText]);
+  const writeMethods = methods.filter(m => !isReadMethod(m));
+
+  const addToHistory = useCallback((ok: boolean, err?: string) => {
+    const now = Date.now();
+    const entries = methods.map((method, i) => ({ id: now + i, method, timestamp: now, ok, ...(err && { error: err.slice(0, 200) }) }));
+    setHistory(prev => {
+      const updated = [...entries, ...prev].slice(0, MAX_HISTORY);
       saveHistory(updated);
-    } catch { /* ignore */ }
-  }, [history]);
+      return updated;
+    });
+  }, [methods]);
 
   const handleSend = useCallback(async () => {
     if (!baseUrl) return;
+    setConfirmOpen(false);
     setLoading(true);
     setError(null);
     setResponseHint(null);
@@ -134,13 +159,14 @@ export function Component() {
       setStatusCode(res.status);
       const data = await res.json();
       setResponseText(JSON.stringify(data, null, 2));
-      if (typeof data?.error === 'string' && data.error) {
-        setResponseHint(explainResponseError(data.error, requestText));
-      }
+      const rpcError = typeof data?.error === 'string' && data.error ? data.error : undefined;
+      if (rpcError) setResponseHint(explainResponseError(rpcError, requestText));
       setExecTime(((Date.now() - start) / 1000).toFixed(3));
-      addToHistory(requestText);
+      addToHistory(res.ok && !rpcError, rpcError || (res.ok ? undefined : `HTTP ${res.status}`));
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Request failed');
+      const msg = e instanceof Error ? e.message : 'Request failed';
+      setError(msg);
+      addToHistory(false, msg);
       setExecTime(((Date.now() - start) / 1000).toFixed(3));
     } finally {
       setLoading(false);
@@ -170,27 +196,23 @@ export function Component() {
 
   const loadTemplate = useCallback((t: Template) => {
     setRequestText(JSON.stringify({ jsonrpc: '2.0', id: 1, method: t.method, params: t.params(defaultTenant) }, null, 2));
-    setTemplatesAnchor(null);
   }, [defaultTenant]);
 
-  const handleHistorySelect = useCallback((id: number | '') => {
-    setSelectedHistory(id);
-    if (id === '') return;
-    const entry = history.find(h => h.id === id);
-    if (entry) setRequestText(entry.request);
-  }, [history]);
+  const loadMethod = useCallback((method: string) => {
+    const t = TEMPLATES.find(x => x.method === method);
+    if (t) loadTemplate(t);
+    else setRequestText(JSON.stringify({ jsonrpc: '2.0', id: 1, method, params: [{}] }, null, 2));
+  }, [loadTemplate]);
 
   const deleteHistoryEntry = useCallback((id: number) => {
     const updated = history.filter(h => h.id !== id);
     setHistory(updated);
     saveHistory(updated);
-    if (selectedHistory === id) setSelectedHistory('');
-  }, [history, selectedHistory]);
+  }, [history]);
 
   const clearHistory = useCallback(() => {
     setHistory([]);
     saveHistory([]);
-    setSelectedHistory('');
   }, []);
 
   const copyResponse = useCallback(() => {
@@ -212,63 +234,65 @@ export function Component() {
   return (
     <Box>
       <Typography variant="h5" gutterBottom>Execute JSON-RPC</Typography>
+      <Alert severity="error" variant="filled" sx={{ mb: 2 }}>
+        <strong>Live system:</strong> requests go straight to {baseUrl}/jsonrpc. Anything other than Get/Count/Status/Ping/Info
+        is treated as a write and asks for confirmation first.
+      </Alert>
       <Typography component="div" variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Endpoint: {baseUrl}/jsonrpc
-        {execTime && <Chip label={`${execTime}s`} size="small" sx={{ ml: 1 }} />}
-        {statusCode !== null && <Chip label={`HTTP ${statusCode}`} size="small" color={statusColor} sx={{ ml: 1 }} />}
+        {execTime && <Chip label={`${execTime}s`} size="small" sx={{ mr: 1 }} />}
+        {statusCode !== null && <Chip label={`HTTP ${statusCode}`} size="small" color={statusColor} />}
       </Typography>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>
       )}
 
-      {history.length > 0 && (
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-            <FormControl size="small" sx={{ flex: 1 }}>
-              <InputLabel>Request History ({history.length})</InputLabel>
-              <Select
-                value={selectedHistory}
-                label={`Request History (${history.length})`}
-                onChange={e => handleHistorySelect(e.target.value as number | '')}
-              >
-                <MenuItem value="">-- Select --</MenuItem>
-                {history.map(h => (
-                  <MenuItem key={h.id} value={h.id} sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Box sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {h.method} - {new Date(h.timestamp).toLocaleString()}
-                    </Box>
-                    <IconButton
-                      size="small"
-                      onClick={e => { e.stopPropagation(); deleteHistoryEntry(h.id); }}
-                      sx={{ ml: 1 }}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Tooltip title="Clear all history">
-              <IconButton size="small" color="error" onClick={clearHistory}><DeleteSweepIcon /></IconButton>
-            </Tooltip>
-          </Box>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '260px 1fr' }, gap: 2, alignItems: 'start' }}>
+      <Box>
+        <Paper variant="outlined" sx={{ mb: 2 }}>
+          <List dense disablePadding sx={{ maxHeight: 520, overflow: 'auto' }}>
+            {TEMPLATE_GROUPS.map(g => [
+              <ListSubheader key={`h-${g.label}`} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                Templates: {g.label}
+                <Chip size="small" label={g.label === 'Read' ? 'read' : 'write'} color={g.label === 'Read' ? 'success' : 'warning'} variant="outlined" />
+              </ListSubheader>,
+              ...g.items.map(t => (
+                <ListItemButton key={t.method} onClick={() => loadTemplate(t)}>
+                  <ListItemText primary={t.method} primaryTypographyProps={{ variant: 'caption', sx: { fontFamily: 'monospace' } }} secondary={t.group} />
+                </ListItemButton>
+              )),
+            ])}
+          </List>
         </Paper>
-      )}
-
+        {history.length > 0 && (
+          <Paper variant="outlined">
+            <List dense disablePadding sx={{ maxHeight: 320, overflow: 'auto' }}>
+              <ListSubheader sx={{ display: 'flex', alignItems: 'center' }}>
+                <Box sx={{ flex: 1 }}>Recent (this browser)</Box>
+                <Tooltip title="Clear history"><IconButton size="small" onClick={clearHistory}><DeleteSweepIcon fontSize="small" /></IconButton></Tooltip>
+              </ListSubheader>
+              {history.map(h => (
+                <ListItemButton key={h.id} onClick={() => loadMethod(h.method)} title={h.error}>
+                  <ListItemText
+                    primary={h.method} primaryTypographyProps={{ variant: 'caption', sx: { fontFamily: 'monospace' } }}
+                    secondary={<span title={formatDateTime(h.timestamp)}>{formatRelative(h.timestamp)}</span>} />
+                  <Chip size="small" label={h.ok ? 'ok' : 'error'} color={h.ok ? 'success' : 'error'} variant="outlined" sx={{ mr: 0.5 }} />
+                  <IconButton size="small" onClick={e => { e.stopPropagation(); deleteHistoryEntry(h.id); }}><DeleteIcon fontSize="small" /></IconButton>
+                </ListItemButton>
+              ))}
+            </List>
+          </Paper>
+        )}
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Typography variant="subtitle2">Request</Typography>
-            <Button size="small" startIcon={<PostAddIcon />} onClick={e => setTemplatesAnchor(e.currentTarget)}>Templates</Button>
-            <Menu anchorEl={templatesAnchor} open={!!templatesAnchor} onClose={() => setTemplatesAnchor(null)}>
-              {[...new Set(TEMPLATES.map(t => t.group))].flatMap(g => [
-                <ListSubheader key={`h-${g}`}>{g}</ListSubheader>,
-                ...TEMPLATES.filter(t => t.group === g).map(t => (
-                  <MenuItem key={t.method} dense onClick={() => loadTemplate(t)}>{t.method}</MenuItem>
-                )),
-              ])}
-            </Menu>
+            {methods.map((m, i) => (
+              <Chip key={i} size="small" label={`${m}: ${isReadMethod(m) ? 'read' : 'write'}`}
+                color={isReadMethod(m) ? 'success' : 'warning'} variant="outlined" />
+            ))}
           </Box>
           <Typography variant="caption" color="text.secondary">
             Ln {cursorPos.line}, Col {cursorPos.col}
@@ -312,8 +336,9 @@ export function Component() {
             </Button>
           )}
           <Button variant="outlined" onClick={handleFormat} disabled={!diagnosis.valid}>Format</Button>
-          <Button variant="contained" onClick={handleSend} disabled={loading}>
-            {loading ? <CircularProgress size={20} /> : 'Send'}
+          <Button variant="contained" color={writeMethods.length ? 'error' : 'primary'}
+            onClick={() => (writeMethods.length && errorCount === 0 ? setConfirmOpen(true) : handleSend())} disabled={loading}>
+            {loading ? <CircularProgress size={20} /> : writeMethods.length ? 'Send write…' : 'Send'}
           </Button>
         </Box>
       </Paper>
@@ -348,6 +373,19 @@ export function Component() {
           <pre style={{ fontSize: 12, margin: 0, maxHeight: 500, overflow: 'auto' }}>{responseText}</pre>
         </Paper>
       )}
+      </Box>
+      </Box>
+
+      <ConfirmDialog open={confirmOpen} title="Send a write request?" confirmLabel="Send for real" busy={loading}
+        onConfirm={handleSend} onClose={() => setConfirmOpen(false)}>
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          Target: <code>{baseUrl}/jsonrpc</code>
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          {writeMethods.length === 1 ? 'This method is' : 'These methods are'} not a Get/Count/Status/Ping/Info call, so may change the live system:
+        </Typography>
+        <ul style={{ marginTop: 0 }}>{writeMethods.map((m, i) => <li key={i}><code>{m}</code></li>)}</ul>
+      </ConfirmDialog>
     </Box>
   );
 }

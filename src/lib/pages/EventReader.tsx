@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Box, Typography, Paper, Button, CircularProgress, Alert, Chip, Dialog, DialogTitle, DialogContent, DialogActions, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
+import { Box, Typography, Paper, Button, CircularProgress, Alert, Chip, Collapse, Dialog, DialogTitle, DialogContent, DialogActions, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import { useConfig } from '../hooks';
 import * as api from '../api';
@@ -40,17 +40,31 @@ export function Component() {
   }, [baseUrl, detail, tenant, apiOpts]);
 
   const blocker = detail ? runBlocker(detail) : null;
+  const [showCfg, setShowCfg] = useState(false);
+  const isPlaceholder = (r: EventReaderConfig) => r.type === '*none';
 
   return (
     <Box>
       <Typography variant="h5" gutterBottom>Event Reader</Typography>
-      {config && !ersEnabled && <Alert severity="info" sx={{ mb: 2 }}>ERs is disabled in the running config (ers.enabled is false).</Alert>}
+      {config && !ersEnabled && (
+        <Alert severity="info" sx={{ mb: 2 }}
+          action={<Button color="inherit" size="small" onClick={() => setShowCfg(v => !v)}>{showCfg ? 'Hide detail' : 'Details'}</Button>}>
+          File/CDR import (EventReaderS) is not enabled on this OCS.
+          <Collapse in={showCfg}>
+            <Typography variant="caption" component="div" sx={{ mt: 0.5 }}>
+              ers.enabled is false in the running config. Readers listed below are configured but not running, and ErSv1.RunReader is unavailable.
+            </Typography>
+          </Collapse>
+        </Alert>
+      )}
       <TableContainer component={Paper}><Table size="small"><TableHead><TableRow><TableCell>#</TableCell><TableCell>ID</TableCell><TableCell>Type</TableCell><TableCell>Run Delay</TableCell><TableCell>Manual run</TableCell></TableRow></TableHead><TableBody>
         {readers.length > 0 ? readers.map((r, i) => {
           const b = runBlocker(r);
           return (
-            <TableRow key={i} hover sx={{ cursor: 'pointer' }} onClick={() => { setDetail(r); setRunResult(null); setDetailOpen(true); }}>
-              <TableCell>{i + 1}</TableCell><TableCell>{r.id}</TableCell><TableCell>{r.type || 'N/A'}</TableCell>
+            <TableRow key={i} hover sx={{ cursor: 'pointer', ...(isPlaceholder(r) && { opacity: 0.55 }) }} onClick={() => { setDetail(r); setRunResult(null); setDetailOpen(true); }}>
+              <TableCell>{i + 1}</TableCell>
+              <TableCell>{r.id}{isPlaceholder(r) && <Chip size="small" variant="outlined" label="placeholder, type *none" sx={{ ml: 1 }} />}</TableCell>
+              <TableCell>{r.type || 'N/A'}</TableCell>
               <TableCell>{String(r.run_delay ?? '')}</TableCell>
               <TableCell>{b ? <Chip size="small" label="Not supported" title={b} /> : <Chip size="small" color="success" label="Supported" />}</TableCell>
             </TableRow>

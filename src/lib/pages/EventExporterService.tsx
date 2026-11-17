@@ -2,8 +2,7 @@ import { useState, useCallback } from 'react';
 import {
   Box, Typography, Paper, Button, TextField, Select, MenuItem, FormControl,
   InputLabel, CircularProgress, Dialog, DialogTitle, DialogContent,
-  DialogActions, Table, TableBody, TableCell, TableContainer, TableHead,
-  TableRow, FormControlLabel, Switch, Checkbox,
+  DialogActions, FormControlLabel, Switch, Checkbox, Alert, Chip,
 } from '@mui/material';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import { useConfig } from '../hooks';
@@ -12,7 +11,7 @@ import type { EventExporterConfig } from '../types';
 import IdMultiSelect from '../components/IdMultiSelect';
 import SearchableSelect from '../components/SearchableSelect';
 import KeyValueEditor, { rowsToObject, type KeyValueRow } from '../components/KeyValueEditor';
-import { useConfirm } from '../components/ConfirmDialog';
+import ConfirmDialog, { useConfirm } from '../components/ConfirmDialog';
 import { toLocalInput } from '../components/ActivationIntervalInput';
 import { TORS, REQUEST_TYPES } from '../cgrConsts';
 
@@ -64,6 +63,7 @@ export function Component() {
   const exporters: EventExporterConfig[] = config?.ees?.exporters || [];
   const exporterIdOptions = exporters.map(e => e.id).filter(id => id !== '*default');
   const failedPostsDir: string = config?.ees?.failed_posts?.dir || '';
+  const eesOff = !!config && !config?.ees?.enabled;
 
   // Exporter detail modal
   const [detail, setDetail] = useState<EventExporterConfig | null>(null);
@@ -82,6 +82,10 @@ export function Component() {
   const [verbose, setVerbose] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [exportResult, setExportResult] = useState<string | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewCount, setReviewCount] = useState<number | null>(null);
+  const [reviewCountErr, setReviewCountErr] = useState<string | null>(null);
+  const [typed, setTyped] = useState('');
 
   // EeSv1.ProcessEvent test event
   const [testOpen, setTestOpen] = useState(false);
@@ -144,19 +148,33 @@ export function Component() {
     setExportOpen(true);
   };
 
+  // utils.RPCCDRsFilter, shared by ExportCDRs and GetCDRsCount.
+  const cdrFilter = useCallback(() => {
+    const f: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(lists)) if (v.length) f[k] = v;
+    for (const [k, v] of Object.entries(times)) if (v) f[k] = v;
+    if (minUsage) f.MinUsage = minUsage;
+    if (maxUsage) f.MaxUsage = maxUsage;
+    return f;
+  }, [lists, times, minUsage, maxUsage]);
+
+  const openReview = async () => {
+    if (!baseUrl) return;
+    setTyped(''); setReviewCount(null); setReviewCountErr(null); setReviewOpen(true);
+    try { setReviewCount(await api.getCDRsCount(baseUrl, cdrFilter())); }
+    catch (e: unknown) { setReviewCountErr(e instanceof Error ? e.message : 'Count failed'); }
+  };
+
+  const exportTarget = exporterIds.length ? exporterIds.join(', ') : 'every exporter whose filters match';
+  const confirmWord = reviewCount !== null ? String(reviewCount) : exporterIds.length ? exporterIds.join(',') : 'export';
+
   const handleExport = useCallback(async () => {
     if (!baseUrl) return;
+    setReviewOpen(false);
     setExporting(true);
     setExportResult(null);
     try {
-      const params: Record<string, unknown> = {
-        ExporterIDs: exporterIds,
-        Verbose: verbose,
-      };
-      for (const [k, v] of Object.entries(lists)) if (v.length) params[k] = v;
-      for (const [k, v] of Object.entries(times)) if (v) params[k] = v;
-      if (minUsage) params.MinUsage = minUsage;
-      if (maxUsage) params.MaxUsage = maxUsage;
+      const params: Record<string, unknown> = { ExporterIDs: exporterIds, Verbose: verbose, ...cdrFilter() };
       if (orderBy) params.OrderBy = orderDesc ? `${orderBy};desc` : orderBy;
       const result = await api.exportCDRs(baseUrl, params);
       setExportResult(JSON.stringify(result, null, 2));
@@ -165,7 +183,7 @@ export function Component() {
     } finally {
       setExporting(false);
     }
-  }, [baseUrl, exporterIds, verbose, lists, times, minUsage, maxUsage, orderBy, orderDesc]);
+  }, [baseUrl, exporterIds, verbose, cdrFilter, orderBy, orderDesc]);
 
   const handleReplay = useCallback(async () => {
     if (!baseUrl) return;
@@ -185,45 +203,57 @@ export function Component() {
     }
   }, [baseUrl, sourcePath, failedPath, modules]);
 
+  const [replayConfirm, setReplayConfirm] = useState(false);
+
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h5" sx={{ flexGrow: 1 }}>Event Exporter Service</Typography>
-        <Button variant="contained" sx={{ mr: 1 }} onClick={() => openExport([])}>Export CDRs</Button>
-        <Button variant="outlined" onClick={() => { setReplayResult(null); setReplayOpen(true); }}>
-          Replay Failed Posts
-        </Button>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
+        <Typography variant="h5" sx={{ flexGrow: 1 }}>Event Exporter</Typography>
+        <Button variant="outlined" onClick={() => openExport([])}>Export CDRs…</Button>
+        <Button variant="outlined" onClick={() => { setReplayResult(null); setReplayOpen(true); }}>Replay failed posts…</Button>
       </Box>
 
       {outcomeAlert}
+      {eesOff && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Event export (EventExporterS) is not enabled on this OCS.
+          <Typography variant="caption" component="div" color="text.secondary">ees.enabled is false in the running config; exports and test events will fail.</Typography>
+        </Alert>
+      )}
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Configured exporters from the running CGrateS config. Select an exporter to export CDRs through it via APIerSv1.ExportCDRs.
+        Exporters from the running config. CGrateS does not report per-exporter failure counts or how many failed posts are waiting on disk.
       </Typography>
 
-      <TableContainer component={Paper}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>#</TableCell>
-              <TableCell>ID</TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell>Export Path</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {exporters.length > 0 ? exporters.map((e, i) => (
-              <TableRow key={i} hover sx={{ cursor: 'pointer' }} onClick={() => openExporter(e)}>
-                <TableCell>{i + 1}</TableCell>
-                <TableCell>{e.id}</TableCell>
-                <TableCell>{e.type || 'N/A'}</TableCell>
-                <TableCell>{e.export_path || 'N/A'}</TableCell>
-              </TableRow>
-            )) : (
-              <TableRow><TableCell colSpan={4} align="center">No exporters found</TableCell></TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      {exporters.length === 0 && <Typography variant="body2" color="text.secondary">No exporters found</Typography>}
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 2 }}>
+        {exporters.map((e, i) => {
+          const placeholder = e.type === '*none';
+          const row = (k: string, v: unknown) => (
+            <Box key={k} sx={{ display: 'flex', gap: 1 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ minWidth: 120 }}>{k}</Typography>
+              <Typography variant="caption" sx={{ wordBreak: 'break-all' }}>{v === undefined || v === '' ? '—' : String(v)}</Typography>
+            </Box>
+          );
+          return (
+            <Paper key={i} variant="outlined" sx={{ p: 2, ...(placeholder && { opacity: 0.55 }) }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{e.id}</Typography>
+                <Chip size="small" label={e.type || 'N/A'} />
+                {placeholder && <Chip size="small" variant="outlined" label="placeholder, type *none" />}
+              </Box>
+              {row('Export path', e.export_path)}
+              {row('Attempts', e.attempts)}
+              {row('Synchronous', e.synchronous)}
+              {row('Failed posts dir', e.failed_posts_dir)}
+              {row('Pending failed posts', 'not reported by the API')}
+              <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
+                <Button size="small" onClick={() => openExporter(e)}>Details</Button>
+                {!placeholder && <Button size="small" onClick={() => openExport([e.id])}>Export CDRs…</Button>}
+              </Box>
+            </Paper>
+          );
+        })}
+      </Box>
 
       {/* Exporter detail modal */}
       <Dialog open={detailOpen} onClose={() => setDetailOpen(false)} maxWidth="md" fullWidth>
@@ -236,7 +266,7 @@ export function Component() {
         <DialogActions>
           <Button onClick={() => { setDetailOpen(false); confirmResetMetrics(detail!.id); }}>Reset metrics</Button>
           <Button onClick={() => { setDetailOpen(false); setTestEeIds(detail ? [detail.id] : []); setTestOpen(true); }}>Send test event</Button>
-          <Button variant="contained" onClick={() => { setDetailOpen(false); openExport(detail ? [detail.id] : []); }}>Export CDRs</Button>
+          <Button variant="outlined" onClick={() => { setDetailOpen(false); openExport(detail ? [detail.id] : []); }}>Export CDRs…</Button>
           <Button onClick={() => setDetailOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
@@ -304,10 +334,10 @@ export function Component() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button variant="contained" onClick={handleExport} disabled={exporting}>
-            {exporting ? <CircularProgress size={20} /> : 'Export CDRs'}
-          </Button>
           <Button onClick={() => setExportOpen(false)}>Close</Button>
+          <Button variant="contained" color="error" onClick={openReview} disabled={exporting}>
+            {exporting ? <CircularProgress size={20} /> : 'Review export…'}
+          </Button>
         </DialogActions>
       </Dialog>
 
@@ -357,13 +387,41 @@ export function Component() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button variant="contained" onClick={handleReplay} disabled={replaying}>
-            {replaying ? <CircularProgress size={20} /> : 'Replay'}
-          </Button>
           <Button onClick={() => setReplayOpen(false)}>Close</Button>
+          <Button variant="contained" color="error" onClick={() => setReplayConfirm(true)} disabled={replaying}>
+            {replaying ? <CircularProgress size={20} /> : 'Replay…'}
+          </Button>
         </DialogActions>
       </Dialog>
       {confirmDialog}
+
+      <ConfirmDialog open={reviewOpen} title="Export CDRs for real?" confirmLabel="Export"
+        confirmDisabled={reviewCount === 0 || typed.trim() !== confirmWord} onConfirm={handleExport} onClose={() => setReviewOpen(false)}>
+        <Typography variant="body2" sx={{ mb: 1 }}>Sends the matching CDRs to <strong>{exportTarget}</strong> (APIerSv1.ExportCDRs).</Typography>
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          Matching CDRs:{' '}
+          {reviewCount !== null ? <strong>{reviewCount}</strong> : reviewCountErr ? <em>count unavailable ({reviewCountErr})</em> : <CircularProgress size={14} />}
+        </Typography>
+        <Paper variant="outlined" sx={{ p: 1, mb: 2, maxHeight: 200, overflow: 'auto' }}>
+          <pre style={{ fontSize: 12, margin: 0 }}>{JSON.stringify({ ...cdrFilter(), ...(orderBy && { OrderBy: orderDesc ? `${orderBy};desc` : orderBy }) }, null, 2)}</pre>
+        </Paper>
+        {reviewCount === 0 && <Alert severity="info" sx={{ mb: 2 }}>No CDRs match these filters, so there is nothing to export.</Alert>}
+        {Object.keys(cdrFilter()).length === 0 && <Alert severity="warning" sx={{ mb: 2 }}>No filters set: this exports every stored CDR.</Alert>}
+        <TextField size="small" fullWidth autoFocus value={typed} onChange={e => setTyped(e.target.value)}
+          label={reviewCount !== null ? `Type ${confirmWord} (the CDR count) to confirm` : reviewCountErr ? `Type ${confirmWord} to confirm` : 'Counting matching CDRs…'}
+          disabled={reviewCount === null && !reviewCountErr} />
+      </ConfirmDialog>
+
+      <ConfirmDialog open={replayConfirm} title="Replay failed posts?" confirmLabel="Replay" busy={replaying}
+        onConfirm={async () => { await handleReplay(); setReplayConfirm(false); }} onClose={() => setReplayConfirm(false)}>
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          Re-sends every failed export found in <code>{sourcePath || failedPostsDir || 'the configured failed_posts dir'}</code>
+          {modules ? ` for modules ${modules}` : ''}; ones that fail again go to <code>{failedPath || 'the same directory'}</code>.
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          CGrateS has no API that lists or counts pending failed posts, so this can't say how many will be sent (possibly none).
+        </Typography>
+      </ConfirmDialog>
     </Box>
   );
 }
