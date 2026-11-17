@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Box, Typography, Paper, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, TableSortLabel, TextField, Checkbox, FormControlLabel, ToggleButton, ToggleButtonGroup, Chip, IconButton, Tooltip, Menu, MenuItem, Tabs, Tab } from '@mui/material';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -172,7 +173,11 @@ export function Component() {
   const [terminateLoading, setTerminateLoading] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
-  const [filters, setFilters] = useState<string[]>([]);
+  const [searchParams] = useSearchParams();
+  const [filters, setFilters] = useState<string[]>(() => {
+    const a = searchParams.get('account');
+    return a ? [`*string:~*req.Account:${a}`] : [];
+  });
   const [limit, setLimit] = useState('');
   const [termOpts, setTermOpts] = useState<Record<TerminateBool, boolean>>({
     TerminateSession: true, ForceDuration: false, ReleaseIP: false, ReleaseResources: false, ProcessThresholds: false, ProcessStats: false,
@@ -209,6 +214,13 @@ export function Component() {
   }, [baseUrl, tenant, filters, limit, passive]);
 
   useEffect(() => { setSessions([]); setSelected(new Set()); }, [passive]);
+
+  const linkedAccount = useRef(searchParams.get('account'));
+  useEffect(() => {
+    if (!linkedAccount.current) return;
+    linkedAccount.current = null;
+    void fetchSessions();
+  }, [fetchSessions]);
 
   const confirmForceDisconnect = (s: Session) => ask({
     title: 'Force disconnect',
