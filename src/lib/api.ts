@@ -1,4 +1,4 @@
-import type { ActionPlan, ActionTriggerEntry, CGREventArgs, JsonRpcResponse } from './types';
+import type { ActionPlan, ActionTriggerEntry, CGREventArgs, JsonRpcResponse, ScheduledAction } from './types';
 
 let rpcId = 0;
 
@@ -50,6 +50,10 @@ export function getAccounts(baseUrl: string, tenant: string, offset = 0, limit =
     Limit: limit,
     Filter: null,
   }]);
+}
+
+export function getAccountsCount(baseUrl: string, tenant: string) {
+  return jsonRpc(baseUrl, 'APIerSv1.GetAccountsCount', [{ Tenant: tenant }]);
 }
 
 export function setAccount(baseUrl: string, params: Record<string, unknown>) {
@@ -358,6 +362,11 @@ export function getScheduledActions(baseUrl: string, offset = 0, limit = 50) {
   return jsonRpc(baseUrl, 'ApierV1.GetScheduledActions', [{ Offset: offset, Limit: limit }]);
 }
 
+/** The whole scheduler queue, optionally only next runs in [start, end). */
+export function getAllScheduledActions(baseUrl: string, start?: Date, end?: Date) {
+  return jsonRpc<ScheduledAction[]>(baseUrl, 'APIerSv1.GetScheduledActions', [{ TimeStart: start?.toISOString(), TimeEnd: end?.toISOString() }]);
+}
+
 // --- Chargers ---
 
 export function getChargerProfileIDs(baseUrl: string, tenant: string) {
@@ -382,8 +391,9 @@ export function chargerSEvent(baseUrl: string, method: 'ChargerSv1.GetChargersFo
 
 // --- Attributes ---
 
-export function getAttributeProfileIDs(baseUrl: string, tenant: string) {
-  return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetAttributeProfileIDs', [{ Tenant: tenant }]);
+/** search is a server-side "ID contains" match. */
+export function getAttributeProfileIDs(baseUrl: string, tenant: string, search?: string) {
+  return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetAttributeProfileIDs', [{ Tenant: tenant, ...(search ? { Search: search } : {}) }]);
 }
 
 export function getAttributeProfile(baseUrl: string, tenant: string, id: string) {
@@ -408,8 +418,9 @@ export function attributeSEvent(baseUrl: string, method: 'AttributeSv1.ProcessEv
 
 // --- Filters ---
 
-export function getFilterIDs(baseUrl: string, tenant: string) {
-  return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetFilterIDs', [{ Tenant: tenant }]);
+/** search is a server-side "ID contains" match. */
+export function getFilterIDs(baseUrl: string, tenant: string, search?: string) {
+  return jsonRpc<string[]>(baseUrl, 'APIerSv1.GetFilterIDs', [{ Tenant: tenant, ...(search ? { Search: search } : {}) }]);
 }
 
 export function getFilter(baseUrl: string, tenant: string, id: string) {
@@ -465,9 +476,6 @@ export function removeResourceProfile(baseUrl: string, tenant: string, id: strin
   return jsonRpc(baseUrl, 'APIerSv1.RemoveResourceProfile', [{ ID: id, Tenant: tenant, APIOpts: apiOpts }]);
 }
 
-export function getResourceWithConfig(baseUrl: string, tenant: string, id: string) {
-  return jsonRpc(baseUrl, 'ResourceSv1.GetResourceWithConfig', [{ Tenant: tenant, ID: id, APIOpts: {} }]);
-}
 
 export function resourceSEvent(
   baseUrl: string,

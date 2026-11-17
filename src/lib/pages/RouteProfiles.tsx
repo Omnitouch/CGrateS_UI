@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Box, Typography, Paper, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, IconButton,
@@ -6,14 +7,16 @@ import {
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
+import ScienceIcon from '@mui/icons-material/Science';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
-import SearchableSelect from '../components/SearchableSelect';
 import IdMultiSelect from '../components/IdMultiSelect';
-import CachingSelect, { cachingOpts } from '../components/CachingSelect';
+import { CachingAdvanced, cachingOpts } from '../components/CachingSelect';
 import ActivationIntervalInput, { formatActivationInterval } from '../components/ActivationIntervalInput';
-import EventTester from '../components/EventTester';
+import TenantPicker from '../components/TenantPicker';
+import RowActionsMenu from '../components/RowActionsMenu';
+import TypedDeleteDialog from '../components/TypedDeleteDialog';
+import { FilterIdsText } from '../components/FilterText';
 import { useIdOptions } from '../components/useIdOptions';
 import type { Route as RouteEntry, RouteProfile as RouteProfileForm } from '../types';
 
@@ -64,9 +67,9 @@ const list = (ids: string[] | null | undefined) => (ids || []).join(', ') || '-'
 
 export function Component() {
   const baseUrl = useOcsBaseUrl();
-  const { tenants, defaultTenant } = useOcsTenants();
+  const { defaultTenant } = useOcsTenants();
   const [tenant, setTenant] = useState(defaultTenant);
-  const [ids, setIds] = useState<string[]>([]);
+  const [ids, setIds] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -76,6 +79,8 @@ export function Component() {
   const [form, setForm] = useState<RouteProfileForm>(emptyForm(defaultTenant));
   const [dialogTab, setDialogTab] = useState(0);
   const [caching, setCaching] = useState('');
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const idOptions = useIdOptions(['filters', 'accounts', 'ratingPlans', 'resources', 'stats'], tenant, detailOpen && editing);
 
   const fetchIds = useCallback(async () => {
@@ -86,21 +91,24 @@ export function Component() {
       const result = await api.getRouteProfileIDs(baseUrl, tenant) as string[];
       setIds(result || []);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to fetch');
       setIds([]);
+      if (!api.isNotFound(e)) setError(e instanceof Error ? e.message : 'Failed to fetch');
     } finally {
       setLoading(false);
     }
   }, [baseUrl, tenant]);
 
-  const fetchDetail = useCallback(async (id: string) => {
+  useEffect(() => { fetchIds(); }, [fetchIds]);
+
+  const fetchDetail = useCallback(async (id: string, edit = false) => {
     if (!baseUrl) return;
     try {
       const result = await api.getRouteProfile(baseUrl, tenant, id) as RouteProfileForm;
       setDetail(result);
       setForm(toForm(result));
       setSelectedId(id);
-      setEditing(false);
+      setEditing(edit);
+      setCaching('');
       setDialogTab(0);
       setDetailOpen(true);
     } catch (e: unknown) {
@@ -120,21 +128,29 @@ export function Component() {
   }, [baseUrl, form, caching, fetchIds]);
 
   const handleDelete = useCallback(async (id: string) => {
-    if (!baseUrl || !window.confirm(`Delete ${id}?`)) return;
+    if (!baseUrl) return;
+    setDeleting(true);
     try {
       await api.removeRouteProfile(baseUrl, tenant, id, cachingOpts(caching));
-      fetchIds();
+      setDeleteId(null);
       setDetailOpen(false);
+      fetchIds();
     } catch (e: unknown) {
+      setDeleteId(null);
       setError(e instanceof Error ? e.message : 'Failed to delete');
+    } finally {
+      setDeleting(false);
     }
   }, [baseUrl, tenant, caching, fetchIds]);
+
+  const askDelete = (id: string) => { setCaching(''); setDeleteId(id); };
 
   const handleCreate = useCallback(() => {
     setDetail(null);
     setSelectedId(null);
     setForm(emptyForm(tenant));
     setEditing(true);
+    setCaching('');
     setDialogTab(0);
     setDetailOpen(true);
   }, [tenant]);
@@ -169,7 +185,7 @@ export function Component() {
           <TableBody>
             <TableRow><TableCell sx={{ fontWeight: 'bold' }}>Tenant</TableCell><TableCell>{d.Tenant}</TableCell></TableRow>
             <TableRow><TableCell sx={{ fontWeight: 'bold' }}>ID</TableCell><TableCell>{d.ID}</TableCell></TableRow>
-            <TableRow><TableCell sx={{ fontWeight: 'bold' }}>Filter IDs</TableCell><TableCell>{list(d.FilterIDs)}</TableCell></TableRow>
+            <TableRow><TableCell sx={{ fontWeight: 'bold' }}>Filter IDs</TableCell><TableCell><FilterIdsText ids={d.FilterIDs} /></TableCell></TableRow>
             <TableRow><TableCell sx={{ fontWeight: 'bold' }}>Activation Interval</TableCell><TableCell>{formatActivationInterval(d.ActivationInterval)}</TableCell></TableRow>
             <TableRow><TableCell sx={{ fontWeight: 'bold' }}>Sorting</TableCell><TableCell>{d.Sorting}{SORTING[d.Sorting] ? ` (${SORTING[d.Sorting].label})` : ''}</TableCell></TableRow>
             <TableRow><TableCell sx={{ fontWeight: 'bold' }}>Sorting Parameters</TableCell><TableCell>{list(d.SortingParameters)}</TableCell></TableRow>
@@ -270,6 +286,7 @@ export function Component() {
               </Box>
             </Paper>
           ))}
+          <CachingAdvanced value={caching} onChange={setCaching} />
         </>
       ) : (
         <Paper sx={{ p: 1, maxHeight: 400, overflow: 'auto', bgcolor: 'grey.50' }}>
@@ -281,52 +298,50 @@ export function Component() {
 
   return (
     <Box>
-      <Typography variant="h5" gutterBottom>Route Profiles</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2, mb: 1 }}>
+        <Typography variant="h5">Route Profiles</Typography>
+        {ids && ids.length > 0 && <Typography variant="body2" color="text.secondary">{ids.length} {ids.length === 1 ? 'profile' : 'profiles'}</Typography>}
+      </Box>
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <SearchableSelect label="Tenant" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 200 }} />
-          <Button variant="contained" onClick={fetchIds}>Fetch</Button>
-          <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>
-          <CachingSelect value={caching} onChange={setCaching} />
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+          <TenantPicker value={tenant} onChange={setTenant} />
+          <Box sx={{ flex: 1 }} />
+          <Button variant="outlined" startIcon={<ScienceIcon />} component={RouterLink} to="../routes" relative="path">
+            Test routing…
+          </Button>
+          {!!ids?.length && <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>}
         </Box>
       </Paper>
 
-      <EventTester
-        tenant={tenant}
-        methods={['RouteSv1.GetRouteProfilesForEvent']}
-        opts={[]}
-        initialFields={[['Account', ''], ['Destination', '']]}
-        run={(_method, args) => api.getRouteProfilesForEvent(baseUrl!, args)}
-        title="Which profiles match an event"
-      />
-
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
-      {loading ? (
+      {loading || ids === null ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+      ) : ids.length === 0 ? (
+        <Paper sx={{ p: 3, textAlign: 'center' }}>
+          <Typography color="text.secondary" sx={{ mb: 2 }}>No route profiles for {tenant}. Routing isn't configured on this OCS.</Typography>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>Create New</Button>
+        </Paper>
       ) : (
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} sx={{ maxWidth: 900 }}>
           <Table size="small">
             <TableHead>
               <TableRow>
                 <TableCell>#</TableCell>
                 <TableCell>ID</TableCell>
-                <TableCell align="right">Actions</TableCell>
+                <TableCell padding="checkbox" />
               </TableRow>
             </TableHead>
             <TableBody>
-              {ids.length > 0 ? ids.map((id, idx) => (
+              {ids.map((id, idx) => (
                 <TableRow key={id} hover sx={{ cursor: 'pointer' }} onClick={() => fetchDetail(id)}>
                   <TableCell>{idx + 1}</TableCell>
                   <TableCell>{id}</TableCell>
-                  <TableCell align="right">
-                    <IconButton size="small" onClick={e => { e.stopPropagation(); fetchDetail(id); }}><EditIcon fontSize="small" /></IconButton>
-                    <IconButton size="small" color="error" onClick={e => { e.stopPropagation(); handleDelete(id); }}><DeleteIcon fontSize="small" /></IconButton>
+                  <TableCell padding="checkbox">
+                    <RowActionsMenu id={id} onEdit={() => fetchDetail(id, true)} onDelete={() => askDelete(id)} />
                   </TableCell>
                 </TableRow>
-              )) : (
-                <TableRow><TableCell colSpan={3} align="center">No items found</TableCell></TableRow>
-              )}
+              ))}
             </TableBody>
           </Table>
         </TableContainer>
@@ -338,15 +353,18 @@ export function Component() {
           {editing ? renderEditForm() : renderStructuredView()}
         </DialogContent>
         <DialogActions>
+          {selectedId && <Button color="error" onClick={() => askDelete(selectedId)} sx={{ mr: 'auto' }}>Delete…</Button>}
+          <Button onClick={() => setDetailOpen(false)}>{editing ? 'Cancel' : 'Close'}</Button>
           {editing ? (
             <Button variant="contained" onClick={handleSave}>Save</Button>
           ) : (
-            <Button onClick={() => { setForm(toForm(detail!)); setEditing(true); }}>Edit</Button>
+            <Button variant="contained" onClick={() => { setForm(toForm(detail!)); setEditing(true); }}>Edit</Button>
           )}
-          {selectedId && <Button color="error" onClick={() => handleDelete(selectedId)}>Delete</Button>}
-          <Button onClick={() => setDetailOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      <TypedDeleteDialog id={deleteId} kind="route profile" busy={deleting} caching={caching} onCaching={setCaching}
+        onConfirm={handleDelete} onClose={() => setDeleteId(null)} />
     </Box>
   );
 }

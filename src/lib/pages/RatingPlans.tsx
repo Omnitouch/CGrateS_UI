@@ -1,8 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   Box, Typography, Paper, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, TextField, IconButton,
-  ToggleButton, ToggleButtonGroup, Collapse,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, TextField, IconButton, Collapse,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -10,9 +9,9 @@ import { useOcsBaseUrl } from '../OcsContext';
 import * as api from '../api';
 import SearchableSelect from '../components/SearchableSelect';
 import TpToolbar, { useTpIdList, errMsg, isNotFound } from '../components/TpToolbar';
-import { formatDuration } from '../components/BalanceValue';
-
-type Source = 'tp' | 'live';
+import RatingSourceToggle, { useRatingSource, SOURCE_LABEL } from '../components/RatingSource';
+import RemoveConfirm, { DangerFooter } from '../components/RemoveConfirm';
+import { RateSlotText, RoundingCell, CapCell } from '../components/RatingTerms';
 
 interface Binding { DestinationRatesId: string; TimingId: string; Weight: number }
 interface PlanForm { TPid: string; ID: string; RatingPlanBindings: Binding[] }
@@ -21,7 +20,7 @@ interface PlanForm { TPid: string; ID: string; RatingPlanBindings: Binding[] }
 interface LivePlan {
   Id: string;
   Timings: Record<string, { ID: string; StartTime: string; EndTime: string; WeekDays: number[] }>;
-  Ratings: Record<string, { ConnectFee: number; RoundingMethod: string; RoundingDecimals: number; Rates: { GroupIntervalStart: number; Value: number; RateIncrement: number; RateUnit: number }[] }>;
+  Ratings: Record<string, { ConnectFee: number; RoundingMethod: string; RoundingDecimals: number; MaxCost: number; MaxCostStrategy: string; Rates: { GroupIntervalStart: number; Value: number; RateIncrement: number; RateUnit: number }[] }>;
   DestinationRates: Record<string, { Timing: string; Rating: string; Weight: number }[]>;
 }
 
@@ -34,7 +33,7 @@ function LivePlanView({ plan }: { plan: LivePlan }) {
     <Box sx={{ mt: 1 }}>
       <Table size="small">
         <TableHead><TableRow>
-          <TableCell>Destination</TableCell><TableCell>Timing</TableCell><TableCell>Rates</TableCell><TableCell align="right">Weight</TableCell>
+          <TableCell>Destination</TableCell><TableCell>Timing</TableCell><TableCell>Rates</TableCell><TableCell>Rounding</TableCell><TableCell>Spending cap</TableCell><TableCell align="right">Weight</TableCell>
         </TableRow></TableHead>
         <TableBody>
           {dests.flatMap(d => plan.DestinationRates[d].map((b, i) => {
@@ -46,10 +45,12 @@ function LivePlanView({ plan }: { plan: LivePlan }) {
                 <TableCell>{t ? `${t.ID} ${t.StartTime}${t.EndTime ? `–${t.EndTime}` : ''}` : b.Timing}</TableCell>
                 <TableCell>
                   {r ? r.Rates.map((x, j) => (
-                    <div key={j}>{x.Value} / {formatDuration(x.RateUnit)} (step {formatDuration(x.RateIncrement)}, from {formatDuration(x.GroupIntervalStart)})</div>
+                    <div key={j}><RateSlotText slot={x} /></div>
                   )) : b.Rating}
                   {r && r.ConnectFee ? <div>connect fee {r.ConnectFee}</div> : null}
                 </TableCell>
+                <TableCell>{r ? <RoundingCell method={r.RoundingMethod} decimals={r.RoundingDecimals} /> : '—'}</TableCell>
+                <TableCell>{r ? <CapCell max={r.MaxCost} strategy={r.MaxCostStrategy} /> : '—'}</TableCell>
                 <TableCell align="right">{b.Weight}</TableCell>
               </TableRow>
             );
@@ -57,11 +58,11 @@ function LivePlanView({ plan }: { plan: LivePlan }) {
         </TableBody>
       </Table>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-        Units shown as durations; for *data plans they are bytes.
+        Rate unit, increment and start are the raw integers CGrateS stores (typed as nanosecond durations). The plan doesn't say whether it rates time, bytes or units; hover a rate for both readings.
       </Typography>
       <Button size="small" onClick={() => setRaw(r => !r)} sx={{ mt: 1 }}>{raw ? 'Hide' : 'Show'} raw</Button>
       <Collapse in={raw}>
-        <Paper sx={{ p: 1, maxHeight: 400, overflow: 'auto', bgcolor: 'grey.50' }}>
+        <Paper sx={{ p: 1, maxHeight: 400, overflow: 'auto', bgcolor: 'action.hover' }}>
           <pre style={{ fontSize: 12, margin: 0 }}>{JSON.stringify(plan, null, 2)}</pre>
         </Paper>
       </Collapse>
@@ -71,7 +72,7 @@ function LivePlanView({ plan }: { plan: LivePlan }) {
 
 export function Component() {
   const baseUrl = useOcsBaseUrl();
-  const [source, setSource] = useState<Source>('tp');
+  const [source, setSource] = useRatingSource();
   const list = useTpIdList(baseUrl, api.getTPRatingPlanIds);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,6 +82,8 @@ export function Component() {
   const [livePlan, setLivePlan] = useState<LivePlan | null>(null);
 
   const [form, setForm] = useState<PlanForm | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [isNew, setIsNew] = useState(false);
   const [drIds, setDrIds] = useState<string[]>([]);
@@ -107,10 +110,7 @@ export function Component() {
     }
   }, [baseUrl, liveSearch]);
 
-  const changeSource = (s: Source) => {
-    setSource(s);
-    if (s === 'live' && liveIds === null) fetchLive();
-  };
+  useEffect(() => { if (source === 'live' && liveIds === null) fetchLive(); }, [source, liveIds, fetchLive]);
 
   const openTP = useCallback(async (id: string) => {
     if (!baseUrl) return;
@@ -148,16 +148,20 @@ export function Component() {
     }
   }, [baseUrl, form, list]);
 
-  const remove = useCallback(async (id: string) => {
-    if (!baseUrl || !window.confirm(`Remove rating plan ${id} from tariff plan ${list.tpid}?`)) return;
+  const remove = useCallback(async () => {
+    if (!baseUrl || !removing) return;
+    setBusy(true);
     try {
-      await api.removeTPRatingPlan(baseUrl, list.tpid, id);
+      await api.removeTPRatingPlan(baseUrl, list.tpid, removing);
       setForm(null);
       list.refresh();
     } catch (e: unknown) {
       setError(errMsg(e, 'Failed to remove'));
+    } finally {
+      setBusy(false);
+      setRemoving(null);
     }
-  }, [baseUrl, list]);
+  }, [baseUrl, list, removing]);
 
   const setBinding = (i: number, patch: Partial<Binding>) =>
     setForm(f => f && { ...f, RatingPlanBindings: f.RatingPlanBindings.map((b, j) => j === i ? { ...b, ...patch } : b) });
@@ -171,10 +175,7 @@ export function Component() {
       <Typography variant="h5" gutterBottom>Rating Plans</Typography>
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-          <ToggleButtonGroup size="small" exclusive value={source} onChange={(_, v) => v && changeSource(v)}>
-            <ToggleButton value="tp">Tariff plan (StorDB)</ToggleButton>
-            <ToggleButton value="live">Live (DataDB)</ToggleButton>
-          </ToggleButtonGroup>
+          <RatingSourceToggle value={source} onChange={setSource} />
           {source === 'tp' ? (
             <TpToolbar tpids={list.tpids} tpid={list.tpid} onTpid={list.setTpid} search={list.search} onSearch={list.setSearch} onRefresh={list.refresh}>
               <Button variant="outlined" startIcon={<AddIcon />} onClick={() => { setForm({ TPid: list.tpid, ID: '', RatingPlanBindings: [emptyBinding()] }); setEditing(true); setIsNew(true); }}>Create New</Button>
@@ -183,7 +184,7 @@ export function Component() {
             <>
               <TextField size="small" label="Search ID" value={liveSearch} onChange={e => setLiveSearch(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') fetchLive(); }} />
               <Button variant="contained" onClick={fetchLive}>Search</Button>
-              <Typography variant="caption" color="text.secondary">Read-only: load a tariff plan to change live rating plans.</Typography>
+              <Typography variant="caption" color="text.secondary">Read-only: edit a draft tariff plan and load it to change live rating plans.</Typography>
             </>
           )}
         </Box>
@@ -194,16 +195,16 @@ export function Component() {
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
       ) : (
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} sx={{ maxWidth: 900 }}>
           <Table size="small">
-            <TableHead><TableRow><TableCell>#</TableCell><TableCell>ID</TableCell></TableRow></TableHead>
+            <TableHead><TableRow><TableCell>ID</TableCell></TableRow></TableHead>
             <TableBody>
-              {ids.length > 0 ? ids.map((id, idx) => (
+              {ids.length > 0 ? ids.map(id => (
                 <TableRow key={id} hover sx={{ cursor: 'pointer' }} onClick={() => (source === 'tp' ? openTP(id) : openLive(id))}>
-                  <TableCell>{idx + 1}</TableCell><TableCell>{id}</TableCell>
+                  <TableCell sx={{ wordBreak: 'break-word' }}>{id}</TableCell>
                 </TableRow>
               )) : (
-                <TableRow><TableCell colSpan={2} align="center">{source === 'tp' && !list.tpid ? 'Select a tariff plan' : 'No rating plans'}</TableCell></TableRow>
+                <TableRow><TableCell align="center">{source === 'tp' && !list.tpid ? 'Select a tariff plan' : 'No rating plans'}</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -213,7 +214,7 @@ export function Component() {
       <Dialog open={!!form} onClose={() => setForm(null)} maxWidth="md" fullWidth>
         <DialogTitle>
           {isNew ? 'New rating plan' : `Rating plan ${form?.ID}`}
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Tariff plan (StorDB){form?.TPid ? `: ${form.TPid}` : ''}</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{SOURCE_LABEL.tp}{form?.TPid ? `: ${form.TPid}` : ''}</Typography>
         </DialogTitle>
         <DialogContent>
           {form && !editing && (
@@ -245,17 +246,18 @@ export function Component() {
             </Box>
           )}
         </DialogContent>
-        <DialogActions>
-          {!isNew && form && <Button color="error" onClick={() => remove(form.ID)}>Remove</Button>}
-          {editing ? <Button variant="contained" onClick={save}>Save</Button> : <Button onClick={() => setEditing(true)}>Edit</Button>}
+        <DangerFooter onRemove={!isNew && form ? () => setRemoving(form.ID) : undefined}>
           <Button onClick={() => setForm(null)}>Close</Button>
-        </DialogActions>
+          {editing ? <Button variant="contained" onClick={save}>Save</Button> : <Button variant="contained" onClick={() => setEditing(true)}>Edit</Button>}
+        </DangerFooter>
       </Dialog>
+
+      <RemoveConfirm id={removing} what="rating plan" where={`tariff plan ${list.tpid}`} busy={busy} onConfirm={remove} onClose={() => setRemoving(null)} />
 
       <Dialog open={!!livePlan} onClose={() => setLivePlan(null)} maxWidth="lg" fullWidth>
         <DialogTitle>
           Rating plan {livePlan?.Id}
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Live DataDB</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{SOURCE_LABEL.live}</Typography>
         </DialogTitle>
         <DialogContent>{livePlan && <LivePlanView plan={livePlan} />}</DialogContent>
         <DialogActions><Button onClick={() => setLivePlan(null)}>Close</Button></DialogActions>

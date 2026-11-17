@@ -9,9 +9,9 @@ import MenuIcon from '@mui/icons-material/Menu';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createHashRouter, RouterProvider, useNavigate, useLocation, Outlet } from 'react-router-dom';
-import { OcsProvider } from './lib/OcsContext';
+import { OcsProvider, useOcsShowEngineering } from './lib/OcsContext';
 import ocsRouteDefs from './lib/routes';
-import { ocsNavGroups, ocsNavSubsystems, useOcsSubsystems, OCS_SUBSYSTEM_LABELS } from './lib';
+import { ocsNavGroups, filterOcsNavGroups, ocsNavSubsystems, useOcsSubsystems, OCS_SUBSYSTEM_LABELS } from './lib';
 
 const DRAWER_WIDTH = 240;
 
@@ -32,13 +32,16 @@ interface AppConfig {
   tenants: string;
 }
 
-const NAV_ITEMS = ocsNavGroups.flatMap(g => [{ section: g.label }, ...g.items]);
-
 function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(true);
   const { enabled } = useOcsSubsystems();
+  const showEngineering = useOcsShowEngineering();
+  const navItems = useMemo(
+    () => filterOcsNavGroups(ocsNavGroups, { showEngineering }).flatMap(g => [{ section: g.label }, ...g.items]),
+    [showEngineering],
+  );
 
   const currentPath = location.pathname.replace(/^\//, '');
 
@@ -65,7 +68,7 @@ function Layout() {
         <Toolbar />
         <Box sx={{ overflow: 'auto' }}>
           <List dense>
-            {NAV_ITEMS.map((item, i) => {
+            {navItems.map((item, i) => {
               if ('section' in item) {
                 return (
                   <Box key={i}>
