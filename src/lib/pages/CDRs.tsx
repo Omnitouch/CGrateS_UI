@@ -5,18 +5,21 @@ import {
   InputLabel, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert,
   FormControlLabel, Switch, Collapse, ToggleButton, ToggleButtonGroup, IconButton,
-  RadioGroup, Radio, Checkbox,
+  RadioGroup, Radio, Menu, TableSortLabel, Accordion, AccordionSummary, AccordionDetails,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import type { CDR } from '../types';
 import IdMultiSelect from '../components/IdMultiSelect';
 import { toLocalInput } from '../components/ActivationIntervalInput';
 import { TORS, REQUEST_TYPES } from '../cgrConsts';
+import JsonTree, { parseJsonString } from '../components/JsonTree';
+import { formatDateTime } from '../formatTime';
 
 const pastOptions = [
   { label: 'Past 15 minutes', value: 15 },
@@ -63,6 +66,11 @@ interface ExtraFieldRow { key: string; value: string; exclude: boolean }
 
 type Scope = 'page' | 'all';
 
+interface Order { by: string; dir: 'asc' | 'desc' }
+
+const SUMMARY_FIELDS = ['Account', 'Subject', 'ToR', 'Category', 'Destination', 'SetupTime', 'AnswerTime', 'Usage', 'Cost', 'CostSource'];
+const TECH_FIELDS = ['CGRID', 'RunID', 'OrderID', 'OriginID'];
+
 function formatNsToHMS(ns: number): string {
   const totalSeconds = Math.floor(ns / 1e9);
   const h = Math.floor(totalSeconds / 3600);
@@ -91,21 +99,90 @@ function exactRowFilters(rows: CDR[]): Record<string, unknown>[] {
   return [...byRun.entries()].map(([runId, cgrids]) => ({ RunIDs: [runId], CGRIDs: cgrids }));
 }
 
+function MatchSelect({ exclude, onChange, inline }: { exclude: boolean; onChange: (exclude: boolean) => void; inline?: string }) {
+  const items = [<MenuItem key="is" value="is">is</MenuItem>, <MenuItem key="not" value="not">is not</MenuItem>];
+  const value = exclude ? 'not' : 'is';
+  const change = (v: string) => onChange(v === 'not');
+  if (!inline) {
+    return <TextField select size="small" label="Match" value={value} onChange={e => change(e.target.value)} sx={{ width: 110, flexShrink: 0 }}>{items}</TextField>;
+  }
+  return (
+    <Select variant="standard" disableUnderline size="small" value={value} onChange={e => change(e.target.value)}
+      onMouseDown={e => e.stopPropagation()} inputProps={{ 'aria-label': `${inline} match` }}
+      // Autocomplete squeezes every .MuiInputBase-input inside it to width 0.
+      sx={{ mr: 1, fontSize: 13, fontWeight: 600, color: exclude ? 'warning.main' : 'text.secondary', flexShrink: 0,
+        '& .MuiSelect-select.MuiInputBase-input': { width: 'auto', minWidth: '4em', p: '2px 24px 2px 0' } }}>
+      {items}
+    </Select>
+  );
+}
+
+const formatCost = (cost: number) => (cost === -1 ? 'Not rated' : String(cost));
+
+function CdrValue({ field, value, cdr }: { field: string; value: unknown; cdr: CDR }) {
+  if (field === 'Usage' && typeof value === 'number') return <>{formatUsage(value, cdr.ToR)}</>;
+  if (field === 'Cost' && value === -1) return <>Not rated (-1)</>;
+  if ((field === 'SetupTime' || field === 'AnswerTime') && typeof value === 'string') {
+    return <>{formatDateTime(value)} <Typography component="span" variant="caption" color="text.secondary">{value}</Typography></>;
+  }
+  if (value !== null && typeof value === 'object') return <JsonTree value={value} open={field !== 'CostDetails'} />;
+  if (typeof value === 'string' && parseJsonString(value)) return <JsonTree value={value} />;
+  if (value === null || value === '') return <Typography component="span" variant="body2" color="text.disabled">{value === null ? 'null' : '(empty)'}</Typography>;
+  return <>{String(value)}</>;
+}
+
+function CdrFieldTable({ cdr, fields }: { cdr: CDR; fields: string[] }) {
+  const rec = cdr as unknown as Record<string, unknown>;
+  return (
+    <Table size="small">
+      <TableBody>
+        {fields.map(f => (
+          <TableRow key={f}>
+            <TableCell sx={{ width: 160, verticalAlign: 'top' }}><strong>{f}</strong></TableCell>
+            <TableCell sx={{ wordBreak: 'break-word' }}><CdrValue field={f} value={rec[f]} cdr={cdr} /></TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+function CdrDetail({ cdr }: { cdr: CDR }) {
+  const keys = Object.keys(cdr);
+  const summary = SUMMARY_FIELDS.filter(k => keys.includes(k));
+  const tech = TECH_FIELDS.filter(k => keys.includes(k));
+  const other = keys.filter(k => !summary.includes(k) && !tech.includes(k));
+  return (
+    <Box>
+      <Typography variant="overline" color="text.secondary">Summary</Typography>
+      <CdrFieldTable cdr={cdr} fields={summary} />
+      <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mt: 2 }}>Network and other fields</Typography>
+      <CdrFieldTable cdr={cdr} fields={other} />
+      <Accordion disableGutters variant="outlined" sx={{ mt: 2 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Typography variant="overline" color="text.secondary">Technical IDs ({tech.join(', ')})</Typography>
+        </AccordionSummary>
+        <AccordionDetails sx={{ p: 0 }}><CdrFieldTable cdr={cdr} fields={tech} /></AccordionDetails>
+      </Accordion>
+    </Box>
+  );
+}
+
+function TypedCount({ count, value, onChange }: { count: number; value: string; onChange: (v: string) => void }) {
+  return (
+    <TextField size="small" label={`Type ${count} to confirm`} value={value} onChange={e => onChange(e.target.value)}
+      autoComplete="off" error={value !== '' && value !== String(count)} />
+  );
+}
+
 function ListFilterInput({ k, filter, options, onChange }: {
   k: ListKey; filter: ListFilter; options: string[]; onChange: (f: ListFilter) => void;
 }) {
   return (
-    <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'flex-start', flex: '1 1 300px', minWidth: 260 }}>
-      <IdMultiSelect
-        label={filter.exclude ? `Not ${LIST_LABELS[k].toLowerCase()}` : LIST_LABELS[k]}
-        value={filter.values} options={options}
+    <Box sx={{ flex: '1 1 300px', minWidth: 260 }}>
+      <IdMultiSelect label={LIST_LABELS[k]} value={filter.values} options={options}
         onChange={values => onChange({ ...filter, values })}
-      />
-      <ToggleButtonGroup size="small" exclusive value={filter.exclude ? 'ex' : 'in'}
-        onChange={(_, v) => v && onChange({ ...filter, exclude: v === 'ex' })}>
-        <ToggleButton value="in" title="Include matching">=</ToggleButton>
-        <ToggleButton value="ex" title={`Exclude (Not${k})`}>≠</ToggleButton>
-      </ToggleButtonGroup>
+        startAdornment={<MatchSelect inline={LIST_LABELS[k]} exclude={filter.exclude} onChange={exclude => onChange({ ...filter, exclude })} />} />
     </Box>
   );
 }
@@ -138,8 +215,10 @@ export function Component() {
   const [maxUsage, setMaxUsage] = useState('');
   const [minCost, setMinCost] = useState('');
   const [maxCost, setMaxCost] = useState('');
-  const [orderBy, setOrderBy] = useState(() => (searchParams.get('account') ? 'SetupTime' : ''));
+  const [orderBy, setOrderBy] = useState('SetupTime');
   const [orderDir, setOrderDir] = useState<'asc' | 'desc'>('desc');
+  const [appliedOrder, setAppliedOrder] = useState<Order | null>(null);
+  const [bulkAnchor, setBulkAnchor] = useState<HTMLElement | null>(null);
   const [limit, setLimit] = useState(50);
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -175,7 +254,9 @@ export function Component() {
   const [rateMethod, setRateMethod] = useState<'rate' | 'reprocess'>('rate');
   const [rateFlags, setRateFlags] = useState<string[]>([]);
   const [rateScope, setRateScope] = useState<Scope>('page');
-  const [rateConfirmed, setRateConfirmed] = useState(false);
+  const [rateTyped, setRateTyped] = useState('');
+  const [deleteTyped, setDeleteTyped] = useState('');
+  const [exportDeleteTyped, setExportDeleteTyped] = useState('');
   const [rateResult, setRateResult] = useState<string | null>(null);
   const [isRating, setIsRating] = useState(false);
 
@@ -226,14 +307,16 @@ export function Component() {
     return f;
   }, [lists, times, extraFields, minUsage, maxUsage, minCost, maxCost]);
 
-  const runQuery = useCallback(async (filter: Record<string, unknown>, off: number, withCount: boolean) => {
+  const runQuery = useCallback(async (filter: Record<string, unknown>, off: number, withCount: boolean, order?: Order) => {
     if (!baseUrl) return;
+    const o = order ?? appliedOrder ?? { by: orderBy, dir: orderDir };
     setLoading(true);
     setError(null);
     setNoResults(false);
     const startTime = Date.now();
     const params: Record<string, unknown> = { ...filter, Limit: limit, Offset: off };
-    if (orderBy) params.OrderBy = orderDir === 'desc' ? `${orderBy};desc` : orderBy;
+    if (o.by) params.OrderBy = o.dir === 'desc' ? `${o.by};desc` : o.by;
+    setAppliedOrder(o);
     setApiQuery(JSON.stringify({ method: 'CDRsV2.GetCDRs', params: [params], id: 0 }, null, 2));
     try {
       if (withCount) setTotal(await api.getCDRsCount(baseUrl, filter));
@@ -249,12 +332,12 @@ export function Component() {
     } finally {
       setLoading(false);
     }
-  }, [baseUrl, limit, orderBy, orderDir]);
+  }, [baseUrl, limit, orderBy, orderDir, appliedOrder]);
 
   const search = () => {
     const filter = buildFilter();
     setLastFilter(filter);
-    runQuery(filter, 0, true);
+    runQuery(filter, 0, true, { by: orderBy, dir: orderDir });
   };
 
   // Linked with ?account=<id>: search that account's last day straight away.
@@ -264,6 +347,20 @@ export function Component() {
     linkedAccount.current = null;
     search();
   });
+
+  const sortBy = (by: string) => {
+    const dir = appliedOrder?.by === by && appliedOrder.dir === 'desc' ? 'asc' : 'desc';
+    setOrderBy(by);
+    setOrderDir(dir);
+    if (lastFilter) runQuery(lastFilter, 0, false, { by, dir });
+  };
+
+  const sortHeader = (by: string, label: string) => (
+    <TableSortLabel active={appliedOrder?.by === by} direction={appliedOrder?.by === by ? appliedOrder.dir : 'desc'}
+      onClick={() => sortBy(by)} disabled={!lastFilter || loading}>
+      {label}
+    </TableSortLabel>
+  );
 
   const goToPage = (off: number) => { if (lastFilter) runQuery(lastFilter, off, false); };
   const refresh = () => { if (lastFilter) runQuery(lastFilter, offset, true); };
@@ -330,16 +427,17 @@ export function Component() {
       setRateResult(errMsg(e, 'Failed'));
     } finally {
       setIsRating(false);
-      setRateConfirmed(false);
+      setRateTyped('');
     }
   }, [baseUrl, lastFilter, rateMethod, rateScope, pageFilters, rateFlags]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const categoryTotals = useMemo(() => {
-    const acc: Record<string, { cost: number; count: number }> = {};
+    const acc: Record<string, { cost: number; count: number; unrated: number }> = {};
     for (const r of results) {
       const cat = r.Category || 'unknown';
-      if (!acc[cat]) acc[cat] = { cost: 0, count: 0 };
+      if (!acc[cat]) acc[cat] = { cost: 0, count: 0, unrated: 0 };
       if (r.Cost >= 0) acc[cat].cost += r.Cost;
+      else if (r.Cost === -1) acc[cat].unrated++;
       acc[cat].count++;
     }
     return acc;
@@ -409,11 +507,7 @@ export function Component() {
             {extraFields.map((r, i) => (
               <Box key={i} sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 1 }}>
                 <TextField size="small" label="Field" value={r.key} onChange={e => setExtraFields(p => p.map((x, j) => j === i ? { ...x, key: e.target.value } : x))} />
-                <ToggleButtonGroup size="small" exclusive value={r.exclude ? 'ex' : 'in'}
-                  onChange={(_, v) => v && setExtraFields(p => p.map((x, j) => j === i ? { ...x, exclude: v === 'ex' } : x))}>
-                  <ToggleButton value="in">=</ToggleButton>
-                  <ToggleButton value="ex">≠</ToggleButton>
-                </ToggleButtonGroup>
+                <MatchSelect exclude={r.exclude} onChange={exclude => setExtraFields(p => p.map((x, j) => j === i ? { ...x, exclude } : x))} />
                 <TextField size="small" label="Value" value={r.value} onChange={e => setExtraFields(p => p.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} />
                 <IconButton size="small" onClick={() => setExtraFields(p => p.filter((_, j) => j !== i))}><DeleteIcon fontSize="small" /></IconButton>
               </Box>
@@ -427,15 +521,23 @@ export function Component() {
             <MenuItem value=""><em>Storage order</em></MenuItem>
             {ORDER_BY_FIELDS.map(o => <MenuItem key={o} value={o}>{o}</MenuItem>)}
           </TextField>
-          <ToggleButtonGroup size="small" exclusive value={orderDir} onChange={(_, v) => v && setOrderDir(v)} disabled={!orderBy}>
+          <ToggleButtonGroup size="small" exclusive value={orderBy ? orderDir : null} onChange={(_, v) => v && setOrderDir(v)} disabled={!orderBy}>
             <ToggleButton value="asc">Asc</ToggleButton>
             <ToggleButton value="desc">Desc</ToggleButton>
           </ToggleButtonGroup>
           <TextField size="small" label="Page size" type="number" value={limit} onChange={e => setLimit(Math.max(1, parseInt(e.target.value) || 1))} sx={{ width: 110 }} />
           <Button variant="contained" onClick={search}>Search</Button>
-          <Button variant="outlined" color="secondary" disabled={!lastFilter || noResults} onClick={() => { setExportResult(null); setDeleteResult(null); setExportScope('page'); setDeleteAfterExport(false); setExportOpen(true); }}>Export</Button>
-          <Button variant="outlined" color="warning" disabled={!lastFilter || noResults} onClick={() => { setRateResult(null); setRateConfirmed(false); setRateScope('page'); setRateOpen(true); }}>Re-rate…</Button>
-          <Button variant="outlined" color="error" disabled={!results.length} onClick={() => { setDeleteResult(null); setDeleteOpen(true); }}>Delete shown CDRs</Button>
+          <Button variant="outlined" color="secondary" disabled={!lastFilter || noResults} onClick={() => { setExportResult(null); setDeleteResult(null); setExportScope('page'); setDeleteAfterExport(false); setExportDeleteTyped(''); setExportOpen(true); }}>Export</Button>
+          <Box sx={{ flexGrow: 1 }} />
+          <Button variant="text" color="inherit" endIcon={<MoreVertIcon />} disabled={!results.length} onClick={e => setBulkAnchor(e.currentTarget)}>Bulk actions</Button>
+          <Menu anchorEl={bulkAnchor} open={!!bulkAnchor} onClose={() => setBulkAnchor(null)}>
+            <MenuItem onClick={() => { setBulkAnchor(null); setRateResult(null); setRateTyped(''); setRateScope('page'); setRateOpen(true); }}>
+              Re-rate… ({results.length} shown{total !== null ? `, ${total} matching` : ''})
+            </MenuItem>
+            <MenuItem sx={{ color: 'error.main' }} onClick={() => { setBulkAnchor(null); setDeleteResult(null); setDeleteTyped(''); setDeleteOpen(true); }}>
+              Delete the {results.length} shown CDRs…
+            </MenuItem>
+          </Menu>
         </Box>
       </Paper>
 
@@ -449,7 +551,7 @@ export function Component() {
       )}
 
       {apiQuery && (
-        <Paper sx={{ p: 1, mb: 2, bgcolor: 'grey.50', maxHeight: 200, overflow: 'auto' }}>
+        <Paper sx={{ p: 1, mb: 2, bgcolor: 'action.hover', maxHeight: 200, overflow: 'auto' }}>
           <Typography variant="caption" color="text.secondary">API Query:</Typography>
           <pre style={{ fontSize: 11, margin: 0 }}>{apiQuery}</pre>
         </Paper>
@@ -464,27 +566,27 @@ export function Component() {
               <TableHead>
                 <TableRow>
                   <TableCell>#</TableCell>
-                  <TableCell>Setup Time</TableCell>
+                  <TableCell>{sortHeader('SetupTime', 'Setup time')}</TableCell>
                   <TableCell>Account</TableCell>
                   <TableCell>Subject</TableCell>
                   <TableCell>Category</TableCell>
                   <TableCell>Destination</TableCell>
                   <TableCell>RunID</TableCell>
-                  <TableCell>Cost</TableCell>
-                  <TableCell>Usage</TableCell>
+                  <TableCell>{sortHeader('Cost', 'Cost')}</TableCell>
+                  <TableCell>{sortHeader('Usage', 'Usage')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {results.length > 0 ? results.map((cdr, idx) => (
                   <TableRow key={`${cdr.CGRID}-${cdr.RunID}`} hover sx={{ cursor: 'pointer' }} onClick={() => { setSelectedCDR(cdr); setDetailOpen(true); }}>
                     <TableCell>{offset + idx + 1}</TableCell>
-                    <TableCell>{new Date(cdr.SetupTime).toLocaleString()}</TableCell>
+                    <TableCell title={cdr.SetupTime}>{formatDateTime(cdr.SetupTime)}</TableCell>
                     <TableCell>{cdr.Account}</TableCell>
                     <TableCell>{cdr.Subject}</TableCell>
                     <TableCell>{cdr.Category}</TableCell>
                     <TableCell>{cdr.Destination}</TableCell>
                     <TableCell>{cdr.RunID}</TableCell>
-                    <TableCell>{cdr.Cost}</TableCell>
+                    <TableCell sx={cdr.Cost === -1 ? { color: 'text.secondary', fontStyle: 'italic' } : undefined}>{formatCost(cdr.Cost)}</TableCell>
                     <TableCell>{formatUsage(cdr.Usage, cdr.ToR)}</TableCell>
                   </TableRow>
                 )) : (
@@ -507,7 +609,7 @@ export function Component() {
                 <TableHead><TableRow><TableCell>Category</TableCell><TableCell>Count</TableCell><TableCell>Total Cost</TableCell></TableRow></TableHead>
                 <TableBody>
                   {Object.entries(categoryTotals).map(([cat, v]) => (
-                    <TableRow key={cat}><TableCell>{cat}</TableCell><TableCell>{v.count}</TableCell><TableCell>{v.cost.toFixed(4)}</TableCell></TableRow>
+                    <TableRow key={cat}><TableCell>{cat}</TableCell><TableCell>{v.count}</TableCell><TableCell>{v.cost.toFixed(4)}{v.unrated ? ` (${v.unrated} not rated)` : ''}</TableCell></TableRow>
                   ))}
                 </TableBody>
               </Table>
@@ -517,23 +619,8 @@ export function Component() {
       )}
 
       <Dialog open={detailOpen} onClose={() => setDetailOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>CDR Details</DialogTitle>
-        <DialogContent>
-          {selectedCDR && (
-            <TableContainer>
-              <Table size="small">
-                <TableBody>
-                  {Object.entries(selectedCDR).map(([key, value]) => (
-                    <TableRow key={key}>
-                      <TableCell><strong>{key}</strong></TableCell>
-                      <TableCell>{key === 'Usage' ? formatUsage(value as number, selectedCDR.ToR) : (typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value))}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DialogContent>
+        <DialogTitle>CDR details</DialogTitle>
+        <DialogContent>{selectedCDR && <CdrDetail cdr={selectedCDR} />}</DialogContent>
         <DialogActions><Button onClick={() => setDetailOpen(false)}>Close</Button></DialogActions>
       </Dialog>
 
@@ -549,8 +636,9 @@ export function Component() {
               control={<Switch checked={deleteAfterExport} disabled={exportScope !== 'page'} onChange={e => setDeleteAfterExport(e.target.checked)} />}
               label={`Delete the ${results.length} shown CDRs after export`} />
             {deleteAfterExport && <Alert severity="warning">After exporting, exactly the {results.length} CDRs on this page are permanently deleted.</Alert>}
+            {deleteAfterExport && <TypedCount count={results.length} value={exportDeleteTyped} onChange={setExportDeleteTyped} />}
             {exportResult && (
-              <Paper sx={{ p: 1, bgcolor: 'grey.50', maxHeight: 300, overflow: 'auto' }}>
+              <Paper sx={{ p: 1, bgcolor: 'action.hover', maxHeight: 300, overflow: 'auto' }}>
                 <Typography variant="caption">Export Result:</Typography>
                 <pre style={{ fontSize: 11, margin: 0 }}>{exportResult}</pre>
               </Paper>
@@ -559,7 +647,7 @@ export function Component() {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button variant="contained" onClick={handleExport} disabled={isExporting || isDeleting || !selectedExporters.length}>
+          <Button variant="contained" onClick={handleExport} disabled={isExporting || isDeleting || !selectedExporters.length || (deleteAfterExport && exportDeleteTyped !== String(results.length))}>
             {isExporting || isDeleting ? <CircularProgress size={20} /> : `Export ${scopeCount(exportScope)} CDRs${deleteAfterExport ? ' and delete them' : ''}`}
           </Button>
           <Button onClick={() => setExportOpen(false)}>Close</Button>
@@ -581,16 +669,16 @@ export function Component() {
             </Typography>
             <IdMultiSelect label="Flags" value={rateFlags} options={RATE_FLAGS} onChange={setRateFlags} helperText='Add ":false" to disable one, e.g. *store:false' />
             {scopeRadio(rateScope, setRateScope, 'Re-rate')}
-            <FormControlLabel control={<Checkbox checked={rateConfirmed} onChange={e => setRateConfirmed(e.target.checked)} />}
-              label={`I understand this changes ${scopeCount(rateScope)} stored CDRs and may debit accounts`} />
+            <Alert severity="warning">This changes {scopeCount(rateScope)} stored CDRs and may debit accounts.</Alert>
+            <TypedCount count={scopeCount(rateScope)} value={rateTyped} onChange={setRateTyped} />
             {rateResult && <Alert severity={rateResult === 'OK' ? 'success' : 'error'}>{rateResult}</Alert>}
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button variant="contained" color="warning" onClick={handleRate} disabled={isRating || !rateConfirmed || !scopeCount(rateScope)}>
+          <Button onClick={() => setRateOpen(false)}>Cancel</Button>
+          <Button variant="contained" color="warning" onClick={handleRate} disabled={isRating || rateTyped !== String(scopeCount(rateScope)) || !scopeCount(rateScope)}>
             {isRating ? <CircularProgress size={20} /> : `Re-rate ${scopeCount(rateScope)} CDRs`}
           </Button>
-          <Button onClick={() => setRateOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
 
@@ -600,17 +688,18 @@ export function Component() {
           <Alert severity="warning" sx={{ mt: 1, mb: 2 }}>
             This permanently deletes exactly the {results.length} CDRs shown on this page (matched by CGRID and RunID). It cannot be undone.
           </Alert>
-          <Paper sx={{ p: 1, bgcolor: 'grey.50', mb: 2, maxHeight: 200, overflow: 'auto' }}>
+          <Paper sx={{ p: 1, bgcolor: 'action.hover', mb: 2, maxHeight: 200, overflow: 'auto' }}>
             <Typography variant="caption">RemoveCDRs requests:</Typography>
             <pre style={{ fontSize: 11, margin: 0 }}>{JSON.stringify(pageFilters, null, 2)}</pre>
           </Paper>
-          {deleteResult && <Alert severity="info">{deleteResult}</Alert>}
+          <TypedCount count={results.length} value={deleteTyped} onChange={setDeleteTyped} />
+          {deleteResult && <Alert severity="info" sx={{ mt: 2 }}>{deleteResult}</Alert>}
         </DialogContent>
         <DialogActions>
-          <Button variant="contained" color="error" onClick={handleDeleteCDRs} disabled={isDeleting || !results.length}>
+          <Button onClick={() => setDeleteOpen(false)}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={handleDeleteCDRs} disabled={isDeleting || !results.length || deleteTyped !== String(results.length)}>
             {isDeleting ? <CircularProgress size={20} /> : `Delete ${results.length} CDRs`}
           </Button>
-          <Button onClick={() => setDeleteOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>
