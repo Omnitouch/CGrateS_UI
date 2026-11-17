@@ -3,8 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Box, Typography, Paper, Button, TextField, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Alert,
-  IconButton, Card, CardContent, Checkbox, FormControlLabel,
+  IconButton, Card, CardContent, Checkbox, FormControlLabel, Menu, MenuItem, ListItemIcon, ListItemText, Tooltip, Divider,
 } from '@mui/material';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import EditIcon from '@mui/icons-material/Edit';
@@ -20,6 +21,7 @@ import IdMultiSelect from '../components/IdMultiSelect';
 import { formatBalanceValue } from '../components/BalanceValue';
 import BalanceDialog, { type BalanceDialogMode } from '../components/BalanceDialog';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { formatDateTime, formatRelative } from '../formatTime';
 import ActionTriggerFormFields, {
   type TriggerForm, emptyTriggerForm, triggerToForm, formToActionTrigger, triggerFormErrors, clearedBalanceFields,
 } from '../components/ActionTriggerForm';
@@ -110,6 +112,8 @@ function splitAccountId(id: string): [string, string] {
 const errMsg = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 /** UUIDv4 from getRandomValues, which unlike randomUUID also works on plain-HTTP origins. */
+const balanceLabel = (b: Balance) => b.ID || b.Uuid || 'unnamed default balance';
+
 function newUuid() {
   const b = crypto.getRandomValues(new Uint8Array(16));
   b[6] = (b[6] & 0x0f) | 0x40;
@@ -326,6 +330,9 @@ export function Component() {
     `Failed to update ${option}`,
   );
 
+  const [rowMenu, setRowMenu] = useState<{ anchor: HTMLElement; balance: Balance; category: string } | null>(null);
+  const [removeBalance, setRemoveBalance] = useState<{ balance: Balance; category: string } | null>(null);
+
   const openCreate = () => {
     setNewAccountId('');
     setNewAllowNegative(false);
@@ -361,11 +368,13 @@ export function Component() {
   };
 
   // CGrateS removes every balance matching the filter, so match on the UUID to remove just this one.
-  const handleRemoveBalance = (balance: Balance, category: string) => {
-    if (!window.confirm(`Remove balance ${balance.ID || balance.Uuid}?`)) return;
-    run((t, a) => api.removeBalances(baseUrl!, {
+  const handleRemoveBalance = async () => {
+    if (!removeBalance) return;
+    const { balance, category } = removeBalance;
+    await run((t, a) => api.removeBalances(baseUrl!, {
       Tenant: t, Account: a, BalanceType: category, Balance: { UUID: balance.Uuid }, Cdrlog: false,
-    }), 'Failed to remove balance', `Removed balance ${balance.ID || balance.Uuid}.`);
+    }), 'Failed to remove balance', `Removed balance ${balanceLabel(balance)}.`);
+    setRemoveBalance(null);
   };
 
   const handleRemoveActionTrigger = (trigger: ActionTriggerEntry) => {
@@ -433,7 +442,7 @@ export function Component() {
       'Failed to delete action plan globally', `Deleted ${plan.ActionPlanId}.`);
   };
 
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [danger, setDanger] = useState<{ kind: 'delete' | 'Disabled' | 'AllowNegative'; typed: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const handleDeleteFromModal = useCallback(async () => {
@@ -442,7 +451,7 @@ export function Component() {
     setDeleting(true);
     try {
       await api.removeAccount(baseUrl, t, a);
-      setDeleteConfirm(null);
+      setDanger(null);
       handleCloseModal();
       fetchAccounts(page);
     } catch (e: unknown) {
@@ -466,14 +475,15 @@ export function Component() {
               <TableCell>Expiration Date</TableCell>
               <TableCell>Weight</TableCell>
               <TableCell>Blocker</TableCell>
-              <TableCell>Actions</TableCell>
+              <TableCell padding="checkbox" />
             </TableRow>
           </TableHead>
           <TableBody>
             {balances.map((balance, i) => {
               const { prettyDate, timeUntil } = formatExpiration(balance.ExpirationDate);
               return (
-                <TableRow key={balance.Uuid || i}>
+                <TableRow key={balance.Uuid || i} hover sx={{ cursor: 'pointer' }}
+                  onClick={() => { setSelectedBalance(balance); setBalanceModalOpen(true); }}>
                   <TableCell><BalanceName id={balance.ID} /></TableCell>
                   <TableCell>
                     {formatUsage(balance.Value, category)}
@@ -488,24 +498,11 @@ export function Component() {
                   </TableCell>
                   <TableCell>{balance.Weight}</TableCell>
                   <TableCell>{balance.Blocker ? 'Yes' : 'No'}</TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                      <Button size="small" variant="outlined" color="success"
-                        startIcon={<VisibilityIcon />}
-                        onClick={() => { setSelectedBalance(balance); setBalanceModalOpen(true); }}>
-                        View
-                      </Button>
-                      <Button size="small" variant="outlined"
-                        startIcon={<EditIcon />}
-                        onClick={() => setBalanceDialog({ mode: 'set', balance: { ...balance, Type: category } })}>
-                        Edit
-                      </Button>
-                      <Button size="small" variant="outlined" color="error"
-                        startIcon={<DeleteIcon />}
-                        onClick={() => handleRemoveBalance(balance, category)}>
-                        Remove
-                      </Button>
-                    </Box>
+                  <TableCell padding="checkbox">
+                    <IconButton size="small" aria-label={`Actions for ${balanceLabel(balance)}`}
+                      onClick={e => { e.stopPropagation(); setRowMenu({ anchor: e.currentTarget, balance, category }); }}>
+                      <MoreVertIcon fontSize="small" />
+                    </IconButton>
                   </TableCell>
                 </TableRow>
               );
@@ -517,6 +514,36 @@ export function Component() {
   };
 
   const [selTenant, selAccount] = selectedAccount ? splitAccountId(selectedAccount.ID) : ['', ''];
+
+  const dangerText = !selectedAccount || !danger ? { title: '', body: '' }
+    : danger.kind === 'delete' ? {
+      title: 'Delete account',
+      body: `This removes ${selectedAccount.ID} and all its balances from the OCS. It can't be undone.`,
+    } : danger.kind === 'Disabled' ? {
+      title: selectedAccount.Disabled ? 'Enable account' : 'Disable account',
+      body: selectedAccount.Disabled
+        ? `${selectedAccount.ID} will be able to rate and charge again.`
+        : `${selectedAccount.ID} will be refused for all rating and charging until it is enabled again.`,
+    } : {
+      title: selectedAccount.AllowNegative ? 'Disallow negative balance' : 'Allow negative balance',
+      body: selectedAccount.AllowNegative
+        ? `${selectedAccount.ID} will no longer be able to go below zero.`
+        : `${selectedAccount.ID} will be able to keep spending below zero.`,
+    };
+
+  const dangerRows = selectedAccount ? [
+    {
+      kind: 'Disabled' as const,
+      label: selectedAccount.Disabled ? 'Enable account' : 'Disable account',
+      help: selectedAccount.Disabled ? 'The account is disabled; it is refused for rating and charging.' : 'Refuse all rating and charging for this account.',
+    },
+    {
+      kind: 'AllowNegative' as const,
+      label: selectedAccount.AllowNegative ? 'Disallow negative' : 'Allow negative',
+      help: selectedAccount.AllowNegative ? 'Balances may currently go below zero.' : 'Let balances go below zero.',
+    },
+    { kind: 'delete' as const, label: 'Delete account', help: 'Remove the account and all its balances. Cannot be undone.' },
+  ] : [];
 
   return (
     <Box>
@@ -578,17 +605,39 @@ export function Component() {
         <Button disabled={total !== null ? (page + 1) * pageSize >= total : accounts.length < pageSize} onClick={() => fetchAccounts(page + 1)}>Next</Button>
       </Box>
 
-      <ConfirmDialog open={deleteConfirm !== null && !!selectedAccount} title="Delete account"
-        confirmLabel="Delete account" busy={deleting}
-        confirmDisabled={deleteConfirm !== splitAccountId(selectedAccount?.ID ?? '')[1]}
-        onConfirm={handleDeleteFromModal} onClose={() => setDeleteConfirm(null)}>
+      <ConfirmDialog open={!!danger && !!selectedAccount} title={dangerText.title}
+        confirmLabel={dangerText.title} busy={deleting}
+        confirmDisabled={danger?.typed !== selAccount}
+        onConfirm={async () => {
+          if (danger?.kind === 'delete') return handleDeleteFromModal();
+          if (danger) await handleToggle(danger.kind);
+          setDanger(null);
+        }}
+        onClose={() => setDanger(null)}>
         <Typography sx={{ mb: 2 }}>
-          This removes <strong>{selectedAccount?.ID}</strong> and all its balances from the OCS. It can't be undone.
-          Type the account name to confirm.
+          {dangerText.body} Type the account name <strong>{selAccount}</strong> to confirm.
         </Typography>
-        <TextField autoFocus fullWidth size="small" label="Account name" value={deleteConfirm ?? ''}
-          onChange={e => setDeleteConfirm(e.target.value)} />
+        <TextField autoFocus fullWidth size="small" label="Account name" value={danger?.typed ?? ''}
+          onChange={e => setDanger(d => d && { ...d, typed: e.target.value })} />
       </ConfirmDialog>
+
+      <ConfirmDialog open={!!removeBalance} title="Remove balance" confirmLabel="Remove balance"
+        onConfirm={handleRemoveBalance} onClose={() => setRemoveBalance(null)}>
+        <Typography>
+          Removes the {removeBalance?.category} balance <strong>{removeBalance && balanceLabel(removeBalance.balance)}</strong> (UUID {removeBalance?.balance.Uuid || 'empty'}) from <strong>{selectedAccount?.ID}</strong>.
+        </Typography>
+      </ConfirmDialog>
+
+      <Menu anchorEl={rowMenu?.anchor} open={!!rowMenu} onClose={() => setRowMenu(null)}>
+        <MenuItem onClick={() => { setBalanceDialog({ mode: 'set', balance: { ...rowMenu!.balance, Type: rowMenu!.category } }); setRowMenu(null); }}>
+          <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>Edit…</ListItemText>
+        </MenuItem>
+        <MenuItem sx={{ color: 'error.main' }} onClick={() => { setRemoveBalance({ balance: rowMenu!.balance, category: rowMenu!.category }); setRowMenu(null); }}>
+          <ListItemIcon><DeleteIcon fontSize="small" color="error" /></ListItemIcon>
+          <ListItemText>Remove…</ListItemText>
+        </MenuItem>
+      </Menu>
 
       {/* Account Detail Dialog */}
       <Dialog open={detailOpen} onClose={handleCloseModal} maxWidth="lg" fullWidth>
@@ -604,7 +653,12 @@ export function Component() {
             <Box>
               <Typography><strong>Allow Negative:</strong> {selectedAccount.AllowNegative ? 'Yes' : 'No'}</Typography>
               <Typography><strong>Disabled:</strong> {selectedAccount.Disabled ? 'Yes' : 'No'}</Typography>
-              <Typography><strong>Updated:</strong> {selectedAccount.UpdateTime}</Typography>
+              <Typography>
+                <strong>Updated</strong>{' '}
+                <Tooltip title={formatDateTime(selectedAccount.UpdateTime)}>
+                  <span>{formatRelative(selectedAccount.UpdateTime)}</span>
+                </Tooltip>
+              </Typography>
 
               {/* Balances */}
               <Box sx={{ mt: 3 }}>
@@ -794,28 +848,30 @@ export function Component() {
                   <pre style={{ fontSize: 12, margin: 0 }}>{JSON.stringify(selectedAccount, null, 2)}</pre>
                 </Paper>
               </Box>
+
+              <Paper variant="outlined" sx={{ mt: 3, borderColor: 'error.main' }}>
+                <Typography variant="h6" color="error" sx={{ px: 2, pt: 1.5, pb: 1 }}>Danger zone</Typography>
+                {dangerRows.map(r => (
+                  <Box key={r.kind}>
+                    <Divider />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, px: 2, py: 1.5 }}>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="subtitle2">{r.label}</Typography>
+                        <Typography variant="body2" color="text.secondary">{r.help}</Typography>
+                      </Box>
+                      <Button variant="outlined" color="error" size="small" onClick={() => setDanger({ kind: r.kind, typed: '' })}>
+                        {r.label}…
+                      </Button>
+                    </Box>
+                  </Box>
+                ))}
+              </Paper>
             </Box>
           ) : (
             <Typography>No detailed data available for this account.</Typography>
           )}
         </DialogContent>
         <DialogActions>
-          {selectedAccount && (
-            <>
-              <Button color={selectedAccount.Disabled ? 'success' : 'warning'} onClick={() => handleToggle('Disabled')}>
-                {selectedAccount.Disabled ? 'Enable Account' : 'Disable Account'}
-              </Button>
-              <Button
-                color={selectedAccount.AllowNegative ? 'error' : 'primary'}
-                onClick={() => handleToggle('AllowNegative')}
-              >
-                {selectedAccount.AllowNegative ? 'Disallow Negative' : 'Allow Negative'}
-              </Button>
-              <Button color="error" onClick={() => setDeleteConfirm('')}>
-                Delete Account
-              </Button>
-            </>
-          )}
           <Button onClick={handleCloseModal}>Close</Button>
         </DialogActions>
       </Dialog>
