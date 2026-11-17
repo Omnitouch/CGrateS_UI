@@ -1,9 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, type MouseEvent } from 'react';
 import {
   Box, Typography, Paper, Button, Select, MenuItem, FormControl,
   InputLabel, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert, IconButton,
   TextField, Chip, List, ListItem, ListItemText, Divider, Checkbox, FormControlLabel, Tabs, Tab,
+  Menu, ListItemIcon, Tooltip,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -11,6 +12,10 @@ import EditIcon from '@mui/icons-material/Edit';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import ClearIcon from '@mui/icons-material/Clear';
 import ClearAllIcon from '@mui/icons-material/ClearAll';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import TypedConfirmDialog from '../components/TypedConfirmDialog';
 import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
 import * as api from '../api';
 import SearchableSelect from '../components/SearchableSelect';
@@ -84,6 +89,45 @@ function getMetricLabel(metricID: string): string {
   return metric ? metric.label : metricID;
 }
 
+function describeField(param: string): string {
+  const req = /^~\*req\.(.+)$/.exec(param);
+  if (req) return `each event's ${req[1]} field`;
+  if (param.startsWith('~')) return `the value of ${param} in each event`;
+  return `the constant ${param} for each event`;
+}
+
+/** Plain-language hint for a metric ID, from engine/statmetrics.go; null when the type isn't known. */
+function metricHelp(metricID: string): string | null {
+  const hash = metricID.indexOf('#');
+  const type = hash < 0 ? metricID : metricID.slice(0, hash);
+  const param = hash < 0 ? '' : metricID.slice(hash + 1);
+  const constant = param !== '' && !param.startsWith('~') && Number.isFinite(Number(param));
+  switch (type) {
+    case '*asr': return 'Answer-seizure ratio: % of events with a non-empty AnswerTime.';
+    case '*acd': return "Average of each event's Usage field, shown as a duration.";
+    case '*tcd': return "Total of each event's Usage field, shown as a duration.";
+    case '*acc': return "Average of each event's Cost field.";
+    case '*tcc': return "Total of each event's Cost field.";
+    case '*pdd': return "Average of each event's PDD (post dial delay) field.";
+    case '*ddc': return 'Number of distinct Destination values.';
+    case '*sum':
+      if (!param) return null;
+      return constant ? `Adds ${param} per event${param === '1' ? ', i.e. a count of events' : ''}.` : `Total of ${describeField(param)}.`;
+    case '*average': return param ? `Average of ${describeField(param)}.` : null;
+    case '*highest': return param ? `Highest value of ${describeField(param)}.` : null;
+    case '*lowest': return param ? `Lowest value of ${describeField(param)}.` : null;
+    case '*distinct': {
+      const req = /^~\*req\.(.+)$/.exec(param);
+      return param ? `Number of distinct ${req ? `${req[1]} values` : `values of ${param}`}.` : null;
+    }
+    case '*repsc': return 'Count of events whose ReplyState is OK.';
+    case '*repfc': return param ? `Count of events whose ReplyState contains ${param}.` : 'Count of events whose ReplyState is not OK.';
+    default: return null;
+  }
+}
+
+const NA_HELP = 'N/A: the queue holds fewer matching events than this metric needs (none yet, or under the profile\'s Min Items). The float API reports it as -1.';
+
 function nonBlank(ids: string[] | null | undefined): string[] {
   return (ids || []).map(s => s.trim()).filter(Boolean);
 }
@@ -118,6 +162,12 @@ export function Component() {
   const [rawQueue, setRawQueue] = useState<unknown>(null);
   const [metricsTab, setMetricsTab] = useState(0);
   const [metricsLoading, setMetricsLoading] = useState(false);
+
+  const [menu, setMenu] = useState<{ anchor: HTMLElement; id: string } | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [resetId, setResetId] = useState<string | null>(null);
+  const [clearAllOpen, setClearAllOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const fetchIds = useCallback(async () => {
     if (!baseUrl || !tenant) return;
@@ -207,16 +257,21 @@ export function Component() {
     }
   }, [baseUrl, editProfile, genericMetricInput, caching, fetchIds]);
 
-  const handleDelete = useCallback(async (id: string) => {
-    if (!baseUrl || !window.confirm(`Delete ${id}?`)) return;
+  const handleDelete = useCallback(async () => {
+    if (!baseUrl || !deleteId) return;
+    setBusy(true);
     try {
-      await api.removeStatQueueProfile(baseUrl, tenant, id, cachingOpts(caching));
+      await api.removeStatQueueProfile(baseUrl, tenant, deleteId, cachingOpts(caching));
       fetchIds();
       setDetailOpen(false);
+      if (metricsId === deleteId) setMetricsOpen(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to delete');
+    } finally {
+      setBusy(false);
+      setDeleteId(null);
     }
-  }, [baseUrl, tenant, caching, fetchIds]);
+  }, [baseUrl, tenant, deleteId, metricsId, caching, fetchIds]);
 
   const handleCreate = useCallback(() => {
     setSelectedProfile(null);
@@ -250,45 +305,38 @@ export function Component() {
     }
   }, [baseUrl, tenant]);
 
-  const handleClearStat = useCallback(async (id: string) => {
-    if (!baseUrl) return;
+  const handleResetQueue = useCallback(async () => {
+    if (!baseUrl || !resetId) return;
+    setBusy(true);
     try {
-      await api.resetStatQueue(baseUrl, tenant, id);
+      await api.resetStatQueue(baseUrl, tenant, resetId);
+      if (metricsOpen && metricsId === resetId) fetchMetrics(resetId);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to clear stat');
+      setError(e instanceof Error ? e.message : 'Failed to reset');
+    } finally {
+      setBusy(false);
+      setResetId(null);
     }
-  }, [baseUrl, tenant]);
+  }, [baseUrl, tenant, resetId, metricsOpen, metricsId, fetchMetrics]);
 
   const handleClearAllStats = useCallback(async () => {
     if (!baseUrl || ids.length === 0) return;
-    if (!window.confirm('Are you sure you want to clear ALL stats? This will reset all stat queues.')) return;
-
-    setLoading(true);
-    let successCount = 0;
+    setBusy(true);
     let failCount = 0;
-
     for (const id of ids) {
       try {
         await api.resetStatQueue(baseUrl, tenant, id);
-        successCount++;
       } catch {
         failCount++;
       }
     }
-
-    setLoading(false);
-    alert(`Cleared ${successCount} stats successfully.${failCount > 0 ? ` Failed to clear ${failCount} stats.` : ''}`);
+    setBusy(false);
+    setClearAllOpen(false);
+    if (failCount > 0) setError(`Reset ${ids.length - failCount} of ${ids.length} stat queues; ${failCount} failed.`);
   }, [baseUrl, tenant, ids]);
 
-  const handleResetQueue = useCallback(async (id: string) => {
-    if (!baseUrl || !window.confirm(`Reset stat queue ${id}?`)) return;
-    try {
-      await api.resetStatQueue(baseUrl, tenant, id);
-      if (metricsOpen && metricsId === id) fetchMetrics(id);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to reset');
-    }
-  }, [baseUrl, tenant, metricsOpen, metricsId, fetchMetrics]);
+  const openMenu = (e: MouseEvent<HTMLElement>, id: string) => { e.stopPropagation(); setMenu({ anchor: e.currentTarget, id }); };
+  const menuAction = (fn: (id: string) => void) => () => { if (menu) fn(menu.id); setMenu(null); };
 
   // Edit form handlers
   const handleEditChange = (name: string, value: unknown) => {
@@ -346,10 +394,10 @@ export function Component() {
             variant="outlined"
             color="warning"
             startIcon={<ClearAllIcon />}
-            onClick={handleClearAllStats}
+            onClick={() => setClearAllOpen(true)}
             disabled={ids.length === 0 || loading}
           >
-            Clear All Stats
+            Reset all counters…
           </Button>
         </Box>
       </Paper>
@@ -382,22 +430,15 @@ export function Component() {
             </TableHead>
             <TableBody>
               {ids.length > 0 ? ids.map((id, idx) => (
-                <TableRow key={id} hover sx={{ cursor: 'pointer' }} onClick={() => fetchDetail(id)}>
+                <TableRow key={id} hover sx={{ cursor: 'pointer' }} onClick={() => fetchMetrics(id)}>
                   <TableCell>{idx + 1}</TableCell>
-                  <TableCell>{id}</TableCell>
+                  <TableCell sx={{ wordBreak: 'break-all' }}>{id}</TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" title="View Metrics" onClick={e => { e.stopPropagation(); fetchMetrics(id); }}>
-                      <BarChartIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" title="Edit Stats" onClick={e => { e.stopPropagation(); fetchDetail(id, true); }}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" title="Clear Stat" color="warning" onClick={e => { e.stopPropagation(); handleClearStat(id); }}>
-                      <ClearIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" color="error" title="Remove" onClick={e => { e.stopPropagation(); handleDelete(id); }}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    <Tooltip title="Actions">
+                      <IconButton size="small" aria-label={`Actions for ${id}`} aria-haspopup="menu" onClick={e => openMenu(e, id)}>
+                        <MoreVertIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                   </TableCell>
                 </TableRow>
               )) : (
@@ -407,6 +448,25 @@ export function Component() {
           </Table>
         </TableContainer>
       )}
+
+      <Menu anchorEl={menu?.anchor} open={!!menu} onClose={() => setMenu(null)} onClick={e => e.stopPropagation()}>
+        <MenuItem onClick={menuAction(id => fetchMetrics(id))}>
+          <ListItemIcon><BarChartIcon fontSize="small" /></ListItemIcon>View metrics
+        </MenuItem>
+        <MenuItem onClick={menuAction(id => fetchDetail(id))}>
+          <ListItemIcon><VisibilityIcon fontSize="small" /></ListItemIcon>View profile
+        </MenuItem>
+        <MenuItem onClick={menuAction(id => fetchDetail(id, true))}>
+          <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>Edit…
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={menuAction(setResetId)} sx={{ color: 'warning.main' }}>
+          <ListItemIcon><ClearIcon fontSize="small" color="warning" /></ListItemIcon>Reset counters…
+        </MenuItem>
+        <MenuItem onClick={menuAction(setDeleteId)} sx={{ color: 'error.main' }}>
+          <ListItemIcon><DeleteIcon fontSize="small" color="error" /></ListItemIcon>Delete…
+        </MenuItem>
+      </Menu>
 
       {/* Profile Detail / Edit Dialog */}
       <Dialog open={detailOpen} onClose={() => setDetailOpen(false)} maxWidth="md" fullWidth>
@@ -600,6 +660,7 @@ export function Component() {
                       <Typography variant="body2">
                         <strong>{getMetricLabel(metric.MetricID)}</strong> ({metric.MetricID})
                       </Typography>
+                      {metricHelp(metric.MetricID) && <Typography variant="caption" color="text.secondary">{metricHelp(metric.MetricID)}</Typography>}
                       {(metric.FilterIDs || []).length > 0 && (
                         <Box sx={{ ml: 2 }}>
                           {metric.FilterIDs!.map((f, i) => (
@@ -620,7 +681,7 @@ export function Component() {
           ) : (
             <Button onClick={() => setEditing(true)}>Edit</Button>
           )}
-          {selectedProfile && <Button color="error" onClick={() => handleDelete(String(selectedProfile.ID))}>Delete</Button>}
+          {selectedProfile && <Button color="error" onClick={() => setDeleteId(String(selectedProfile.ID))}>Delete…</Button>}
           {selectedProfile && <Button onClick={() => fetchMetrics(String(selectedProfile.ID))}>View Metrics</Button>}
           <Button onClick={() => setDetailOpen(false)}>Close</Button>
         </DialogActions>
@@ -637,7 +698,7 @@ export function Component() {
           {metricsLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
           ) : metricsTab === 1 ? (
-            <Paper variant="outlined" sx={{ p: 1, maxHeight: 400, overflow: 'auto', bgcolor: 'grey.50' }}>
+            <Paper variant="outlined" sx={{ p: 1, maxHeight: 400, overflow: 'auto', bgcolor: 'action.hover' }}>
               <pre style={{ fontSize: 12, margin: 0 }}>{JSON.stringify(rawQueue, null, 2)}</pre>
             </Paper>
           ) : metrics ? (
@@ -647,18 +708,27 @@ export function Component() {
                   <TableRow>
                     <TableCell>Metric</TableCell>
                     <TableCell>Value</TableCell>
-                    <TableCell>Raw (float)</TableCell>
+                    <TableCell>Float value</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {Object.entries(metrics).map(([k, v]) => {
-                    const [metricType, metricValue] = k.split('#');
-                    const metricLabel = getMetricLabel(metricType);
-                    const displayText = metricValue ? `${metricLabel} of field #${metricValue}` : metricLabel;
+                    const help = metricHelp(k);
                     return (
                       <TableRow key={k}>
-                        <TableCell><Chip label={displayText} size="small" /></TableCell>
-                        <TableCell>{v}</TableCell>
+                        <TableCell>
+                          <Box component="code" sx={{ fontSize: 13, wordBreak: 'break-all' }}>{k}</Box>
+                          {help && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{help}</Typography>}
+                        </TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                          {v === 'N/A' ? (
+                            <Tooltip title={NA_HELP}>
+                              <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, cursor: 'help' }} tabIndex={0} aria-label={`N/A. ${NA_HELP}`}>
+                                N/A <HelpOutlineIcon sx={{ fontSize: 14 }} color="action" />
+                              </Box>
+                            </Tooltip>
+                          ) : v}
+                        </TableCell>
                         <TableCell>{floatMetrics?.[k] ?? '-'}</TableCell>
                       </TableRow>
                     );
@@ -671,10 +741,32 @@ export function Component() {
           )}
         </DialogContent>
         <DialogActions>
-          {metricsId && <Button color="warning" onClick={() => handleResetQueue(metricsId)}>Reset Queue</Button>}
-          <Button onClick={() => setMetricsOpen(false)}>Close</Button>
+          {metricsId && <Button color="error" onClick={() => setResetId(metricsId)} sx={{ mr: 'auto' }}>Reset counters…</Button>}
+          {metricsId && <Button onClick={() => fetchDetail(metricsId)}>View profile</Button>}
+          <Button variant="contained" onClick={() => setMetricsOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      <TypedConfirmDialog open={!!resetId} title="Reset counters" expected={resetId ?? ''}
+        confirmLabel="Reset counters" busy={busy} onConfirm={handleResetQueue} onClose={() => setResetId(null)}>
+        <Typography variant="body2">
+          Sends StatSv1.ResetStatQueue for <strong>{resetId}</strong> on tenant {tenant}. Every metric in the queue goes back to empty; the profile is kept.
+        </Typography>
+      </TypedConfirmDialog>
+
+      <TypedConfirmDialog open={!!deleteId} title="Delete stat queue profile" expected={deleteId ?? ''}
+        confirmLabel="Delete" busy={busy} onConfirm={handleDelete} onClose={() => setDeleteId(null)}>
+        <Typography variant="body2">
+          Sends APIerSv1.RemoveStatQueueProfile for <strong>{deleteId}</strong> on tenant {tenant}. The profile and its queue are removed.
+        </Typography>
+      </TypedConfirmDialog>
+
+      <TypedConfirmDialog open={clearAllOpen} title="Reset all counters" expected={String(ids.length)}
+        confirmLabel={`Reset ${ids.length} queues`} busy={busy} onConfirm={handleClearAllStats} onClose={() => setClearAllOpen(false)}>
+        <Typography variant="body2">
+          Sends StatSv1.ResetStatQueue once for each of the <strong>{ids.length}</strong> stat queues listed on tenant {tenant}. Every metric goes back to empty.
+        </Typography>
+      </TypedConfirmDialog>
     </Box>
   );
 }

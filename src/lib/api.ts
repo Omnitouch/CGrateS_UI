@@ -465,9 +465,6 @@ export function removeResourceProfile(baseUrl: string, tenant: string, id: strin
   return jsonRpc(baseUrl, 'APIerSv1.RemoveResourceProfile', [{ ID: id, Tenant: tenant, APIOpts: apiOpts }]);
 }
 
-export function getResourceWithConfig(baseUrl: string, tenant: string, id: string) {
-  return jsonRpc(baseUrl, 'ResourceSv1.GetResourceWithConfig', [{ Tenant: tenant, ID: id, APIOpts: {} }]);
-}
 
 export function resourceSEvent(
   baseUrl: string,
