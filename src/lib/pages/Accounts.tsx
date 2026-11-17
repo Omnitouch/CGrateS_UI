@@ -19,11 +19,27 @@ import SearchableSelect from '../components/SearchableSelect';
 import IdMultiSelect from '../components/IdMultiSelect';
 import { formatBalanceValue } from '../components/BalanceValue';
 import BalanceDialog, { type BalanceDialogMode } from '../components/BalanceDialog';
+import ConfirmDialog from '../components/ConfirmDialog';
 import ActionTriggerFormFields, {
   type TriggerForm, emptyTriggerForm, triggerToForm, formToActionTrigger, triggerFormErrors, clearedBalanceFields,
 } from '../components/ActionTriggerForm';
 
 // --- Utility functions ---
+
+const BALANCE_TYPE_LABEL: Record<string, string> = { '*data': 'Data', '*voice': 'Voice', '*sms': 'SMS', '*monetary': 'Credit', '*generic': 'Generic' };
+
+/** One line per balance type, every bucket the API returned, in readable units. */
+function BalanceSummary({ balanceMap }: { balanceMap: Record<string, Balance[]> | null | undefined }) {
+  if (!balanceMap || Object.keys(balanceMap).length === 0) return <Typography variant="body2" color="text.secondary">No balances</Typography>;
+  return (
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+      {Object.entries(balanceMap).map(([type, buckets]) => (
+        <Chip key={type} size="small" variant="outlined"
+          label={`${BALANCE_TYPE_LABEL[type] ?? type} ${buckets.map(b => formatBalanceValue(b.Value, type)).join(' · ')}`} />
+      ))}
+    </Box>
+  );
+}
 
 function formatExpiration(expirationDateStr: string): { prettyDate: string; timeUntil: string } {
   const expirationDate = new Date(expirationDateStr);
@@ -165,6 +181,7 @@ export function Component() {
   }, [detailOpen]);
 
   const pageSize = 50;
+  const [total, setTotal] = useState<number | null>(null);
 
   const fetchAccounts = useCallback(async (p = 0) => {
     if (!baseUrl || !tenant) return;
@@ -177,6 +194,7 @@ export function Component() {
       ) as Account[];
       setAccounts(result || []);
       setPage(p);
+      setTotal(accountFilter ? (result || []).length : await api.getAccountsCount(baseUrl, tenant) as number);
     } catch (e: unknown) {
       setError(errMsg(e, 'Failed to fetch accounts'));
       setAccounts([]);
@@ -301,17 +319,6 @@ export function Component() {
     }
   }, [baseUrl, refresh]);
 
-  const handleDelete = useCallback(async (account: Account) => {
-    if (!baseUrl || !window.confirm(`Delete account ${account.ID}?`)) return;
-    try {
-      const [t, a] = splitAccountId(account.ID);
-      await api.removeAccount(baseUrl, t, a);
-      fetchAccounts(page);
-    } catch (e: unknown) {
-      setError(errMsg(e, 'Failed to delete'));
-    }
-  }, [baseUrl, page, fetchAccounts]);
-
   const handleToggle = (option: 'Disabled' | 'AllowNegative') => run(
     (t, a) => api.setAccount(baseUrl!, {
       Tenant: t, Account: a, ExtraOptions: { [option]: !selectedAccount?.[option] },
@@ -426,16 +433,22 @@ export function Component() {
       'Failed to delete action plan globally', `Deleted ${plan.ActionPlanId}.`);
   };
 
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const handleDeleteFromModal = useCallback(async () => {
     if (!baseUrl || !selectedAccount) return;
-    if (!window.confirm(`Delete account ${selectedAccount.ID}?`)) return;
     const [t, a] = splitAccountId(selectedAccount.ID);
+    setDeleting(true);
     try {
       await api.removeAccount(baseUrl, t, a);
+      setDeleteConfirm(null);
       handleCloseModal();
       fetchAccounts(page);
     } catch (e: unknown) {
       setError(errMsg(e, 'Failed to delete account'));
+    } finally {
+      setDeleting(false);
     }
   }, [baseUrl, selectedAccount, page, fetchAccounts, handleCloseModal]);
 
@@ -531,46 +544,24 @@ export function Component() {
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>#</TableCell>
-                <TableCell>Tenant</TableCell>
                 <TableCell>Account</TableCell>
-                <TableCell>Disabled</TableCell>
-                <TableCell>Balance</TableCell>
-                <TableCell>Actions</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Balances</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {accounts.length > 0 ? accounts.map((acc, idx) => {
-                const [t, a] = splitAccountId(acc.ID);
+              {accounts.length > 0 ? accounts.map(acc => {
+                const [, a] = splitAccountId(acc.ID);
                 return (
-                  <TableRow key={acc.ID} hover sx={{ cursor: 'pointer' }}>
-                    <TableCell>{page * pageSize + idx + 1}</TableCell>
-                    <TableCell>{t}</TableCell>
-                    <TableCell>{a}</TableCell>
-                    <TableCell>
-                      <Chip label={acc.Disabled ? 'Yes' : 'No'} size="small"
-                        color={acc.Disabled ? 'error' : 'success'} />
-                    </TableCell>
-                    <TableCell>
-                      {acc.BalanceMap ? Object.entries(acc.BalanceMap).map(([cat, balances]) => (
-                        <Box key={cat}>
-                          {cat}: {(balances as Balance[]).map(b => b.Value).join(', ')}
-                        </Box>
-                      )) : 'N/A'}
-                    </TableCell>
-                    <TableCell>
-                      <IconButton size="small" aria-label="View account" onClick={() => handleRowClick(acc)}>
-                        <VisibilityIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton size="small" color="error" aria-label="Delete account" onClick={() => handleDelete(acc)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
+                  <TableRow key={acc.ID} hover sx={{ cursor: 'pointer' }} onClick={() => handleRowClick(acc)}>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{a}</TableCell>
+                    <TableCell>{acc.Disabled && <Chip label="Disabled" size="small" color="error" />}</TableCell>
+                    <TableCell><BalanceSummary balanceMap={acc.BalanceMap} /></TableCell>
                   </TableRow>
                 );
               }) : (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">No accounts found</TableCell>
+                  <TableCell colSpan={3} align="center">No accounts found</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -580,9 +571,24 @@ export function Component() {
 
       <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 2 }}>
         <Button disabled={page === 0} onClick={() => fetchAccounts(page - 1)}>Previous</Button>
-        <Typography sx={{ py: 1 }}>Page {page + 1}</Typography>
-        <Button disabled={accounts.length < pageSize} onClick={() => fetchAccounts(page + 1)}>Next</Button>
+        <Typography sx={{ py: 1 }}>
+          {total === null ? '' : accounts.length === 0 ? `${total} accounts`
+            : `${page * pageSize + 1}–${page * pageSize + accounts.length} of ${total.toLocaleString()} accounts`}
+        </Typography>
+        <Button disabled={total !== null ? (page + 1) * pageSize >= total : accounts.length < pageSize} onClick={() => fetchAccounts(page + 1)}>Next</Button>
       </Box>
+
+      <ConfirmDialog open={deleteConfirm !== null && !!selectedAccount} title="Delete account"
+        confirmLabel="Delete account" busy={deleting}
+        confirmDisabled={deleteConfirm !== splitAccountId(selectedAccount?.ID ?? '')[1]}
+        onConfirm={handleDeleteFromModal} onClose={() => setDeleteConfirm(null)}>
+        <Typography sx={{ mb: 2 }}>
+          This removes <strong>{selectedAccount?.ID}</strong> and all its balances from the OCS. It can't be undone.
+          Type the account name to confirm.
+        </Typography>
+        <TextField autoFocus fullWidth size="small" label="Account name" value={deleteConfirm ?? ''}
+          onChange={e => setDeleteConfirm(e.target.value)} />
+      </ConfirmDialog>
 
       {/* Account Detail Dialog */}
       <Dialog open={detailOpen} onClose={handleCloseModal} maxWidth="lg" fullWidth>
@@ -805,7 +811,7 @@ export function Component() {
               >
                 {selectedAccount.AllowNegative ? 'Disallow Negative' : 'Allow Negative'}
               </Button>
-              <Button color="error" onClick={handleDeleteFromModal}>
+              <Button color="error" onClick={() => setDeleteConfirm('')}>
                 Delete Account
               </Button>
             </>

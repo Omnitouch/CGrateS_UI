@@ -52,6 +52,10 @@ export function getAccounts(baseUrl: string, tenant: string, offset = 0, limit =
   }]);
 }
 
+export function getAccountsCount(baseUrl: string, tenant: string) {
+  return jsonRpc(baseUrl, 'APIerSv1.GetAccountsCount', [{ Tenant: tenant }]);
+}
+
 export function setAccount(baseUrl: string, params: Record<string, unknown>) {
   return jsonRpc(baseUrl, 'APIerSv2.SetAccount', [params]);
 }
