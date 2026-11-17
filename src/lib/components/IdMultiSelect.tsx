@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Autocomplete, Chip, TextField, type SxProps, type Theme } from '@mui/material';
 
 interface IdMultiSelectProps {
@@ -10,11 +11,13 @@ interface IdMultiSelectProps {
   fullWidth?: boolean;
   disabled?: boolean;
   sx?: SxProps<Theme>;
+  /** Rendered inside the input before the chips. */
+  startAdornment?: ReactNode;
 }
 
 /** Multi-select of known IDs that also accepts typed values (inline filters, *none, IDs not loaded yet). */
 export default function IdMultiSelect({
-  label, value, options, onChange, placeholder, helperText, fullWidth = true, disabled, sx,
+  label, value, options, onChange, placeholder, helperText, fullWidth = true, disabled, sx, startAdornment,
 }: IdMultiSelectProps) {
   return (
     <Autocomplete<string, true, false, true>
@@ -30,7 +33,8 @@ export default function IdMultiSelect({
         return <Chip key={key} size="small" label={v} {...rest} />;
       })}
       renderInput={params => (
-        <TextField {...params} label={label} placeholder={value.length ? undefined : placeholder} helperText={helperText} />
+        <TextField {...params} label={label} placeholder={value.length ? undefined : placeholder} helperText={helperText}
+          slotProps={startAdornment ? { inputLabel: { shrink: true }, input: { ...params.InputProps, startAdornment: <>{startAdornment}{params.InputProps.startAdornment}</> } } : undefined} />
       )}
     />
   );

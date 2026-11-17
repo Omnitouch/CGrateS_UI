@@ -22,17 +22,31 @@ export function parseBalanceId(id: string): ParsedBalanceId {
 
 export function parseCompositeId(id: string): Record<string, string> {
   const fields: Record<string, string> = {};
-  for (const part of id.split('__')) {
+  const parts = id.split('__');
+  for (let n = 0; n < parts.length; n++) {
+    const part = parts[n];
     const i = part.indexOf('_');
-    if (i >= 0) fields[part.slice(0, i)] = part.slice(i + 1);
-    else fields[part] = part;
+    if (i < 0) { fields[part] = part; continue; }
+    const key = part.slice(0, i);
+    // Free-text names can themselves contain "__" (e.g. "Friends__Family"), so a *Name key takes the rest of the ID.
+    if (key.endsWith('Name')) { fields[key] = parts.slice(n).join('__').slice(i + 1); break; }
+    fields[key] = part.slice(i + 1);
   }
   return fields;
 }
 
-function compositeTitle(fields: Record<string, string>): string | null {
-  if (fields.ProductName) return fields.ProductName.replace(/_/g, ' ');
-  if (fields.ActionPlan) return fields.ActionPlan.replace(/_/g, ' ');
+const humanize = (v: string) => v.replace(/_+/g, ' ').trim();
+
+/** ProductName field of a "Key_Value__…" ID, or null when the ID does not carry one. */
+export function compositeProductName(id: string): string | null {
+  if (!id.includes('__')) return null;
+  const name = parseCompositeId(id).ProductName;
+  return name ? humanize(name) || null : null;
+}
+
+export function compositeTitle(fields: Record<string, string>): string | null {
+  if (fields.ProductName) return humanize(fields.ProductName);
+  if (fields.ActionPlan) return humanize(fields.ActionPlan);
   return null;
 }
 
@@ -49,12 +63,23 @@ export function CompositeId({ id, compact }: { id: string; compact?: boolean }) 
       {title && <Typography variant="body2" fontWeight="bold" sx={compact ? ellipsis : undefined}>{title}</Typography>}
       {!compact && (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, my: 0.5 }}>
-          {chips.map(([k, v]) => <Chip key={k} size="small" variant="outlined" label={`${k}: ${v.replace(/_/g, ' ')}`} />)}
+          {chips.map(([k, v]) => <Chip key={k} size="small" variant="outlined" label={`${k}: ${humanize(v)}`} />)}
         </Box>
       )}
       <Typography variant="caption" color="text.secondary" title={id} sx={{ display: 'block', ...(compact ? ellipsis : { wordBreak: 'break-all' }) }}>
         {id}
       </Typography>
+    </Box>
+  );
+}
+
+/** List cell: the raw ID as the primary line, the label derived from it (when the ID parses) underneath. */
+export function IdWithLabel({ id, hideLabel }: { id: string; hideLabel?: boolean }) {
+  const label = !hideLabel && id.includes('__') ? compositeTitle(parseCompositeId(id)) : null;
+  return (
+    <Box sx={{ minWidth: 0 }}>
+      <Typography variant="body2" sx={{ fontWeight: 500, ...ellipsis }} title={id}>{id}</Typography>
+      {label && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ...ellipsis }}>{label}</Typography>}
     </Box>
   );
 }

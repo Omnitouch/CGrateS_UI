@@ -9,12 +9,15 @@ export interface OcsContextValue {
   defaultTenant: string;
   /** Optional display names keyed by tenant; tenants without one show as-is. */
   tenantLabels?: Record<string, string>;
+  /** Whether the Engineering nav group is shown */
+  showEngineering: boolean;
 }
 
 const OcsContext = createContext<OcsContextValue>({
   baseUrl: null,
   tenants: [],
   defaultTenant: '',
+  showEngineering: true,
 });
 
 export interface OcsProviderProps {
@@ -22,12 +25,14 @@ export interface OcsProviderProps {
   tenants: string[];
   defaultTenant: string;
   tenantLabels?: Record<string, string>;
+  /** Hide the Engineering nav group (sidebar only; routes stay reachable). Defaults to true. */
+  showEngineering?: boolean;
   children: ReactNode;
 }
 
-export function OcsProvider({ baseUrl, tenants, defaultTenant, tenantLabels, children }: OcsProviderProps) {
+export function OcsProvider({ baseUrl, tenants, defaultTenant, tenantLabels, showEngineering = true, children }: OcsProviderProps) {
   return (
-    <OcsContext.Provider value={{ baseUrl, tenants, defaultTenant, tenantLabels }}>
+    <OcsContext.Provider value={{ baseUrl, tenants, defaultTenant, tenantLabels, showEngineering }}>
       {children}
     </OcsContext.Provider>
   );
@@ -42,4 +47,8 @@ export function useOcsBaseUrl(): string | null {
 export function useOcsTenants(): { tenants: string[]; defaultTenant: string; tenantLabel: (t: string) => string } {
   const { tenants, defaultTenant, tenantLabels } = useContext(OcsContext);
   return { tenants, defaultTenant, tenantLabel: t => tenantLabels?.[t] || t };
+}
+
+export function useOcsShowEngineering(): boolean {
+  return useContext(OcsContext).showEngineering;
 }

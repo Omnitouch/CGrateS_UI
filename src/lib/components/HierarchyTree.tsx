@@ -30,6 +30,8 @@ export interface HNode {
   /** Dialog body for changing this object; close(true) reloads its details. */
   editor?: (close: (saved: boolean) => void) => ReactNode;
   editLabel?: string;
+  /** Binding weight, used to pick between destinations that match the same prefix. */
+  weight?: number;
 }
 
 /** Loaded state shared by the tree, diagram and details. */

@@ -1,9 +1,9 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import {
-  Box, Typography, Paper, Chip, TextField, InputAdornment, Tabs, Tab,
+  Box, Typography, Paper, Chip, TextField, InputAdornment,
   List, ListItemButton, ListItemText, CircularProgress, Alert, Breadcrumbs,
   Link, Card, CardActionArea, CardContent, Table, TableBody, TableCell,
-  TableHead, TableRow, Stack, Tooltip, } from '@mui/material';
+  TableRow, Stack, Tooltip, } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CategoryIcon from '@mui/icons-material/Category';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
@@ -13,7 +13,8 @@ import PublicIcon from '@mui/icons-material/Public';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useQuery } from '@tanstack/react-query';
-import { useOcsBaseUrl } from '../OcsContext';
+import { useOcsBaseUrl, useOcsTenants } from '../OcsContext';
+import { formatDateTime } from '../formatTime';
 import * as api from '../api';
 import SearchableSelect from '../components/SearchableSelect';
 
@@ -24,8 +25,8 @@ type EntityType = 'ratingprofile' | 'tpratingprofile' | 'ratingplan' | 'destinat
 interface ExNode { type: EntityType; id: string; }
 
 const TYPE_META: Record<EntityType, { label: string; plural: string; color: string; Icon: typeof AccountTreeIcon }> = {
-  ratingprofile: { label: 'Rating Profile (live)', plural: 'Live Rating Profiles', color: '#ec407a', Icon: CategoryIcon },
-  tpratingprofile: { label: 'TP Rating Profile', plural: 'TP Rating Profiles', color: '#8d6e63', Icon: CategoryIcon },
+  ratingprofile: { label: 'Rating Profile (live)', plural: 'Rating Profiles (live)', color: '#ec407a', Icon: CategoryIcon },
+  tpratingprofile: { label: 'Rating Profile (stored)', plural: 'Rating Profiles (stored)', color: '#8d6e63', Icon: CategoryIcon },
   ratingplan: { label: 'Rating Plan', plural: 'Rating Plans', color: '#42a5f5', Icon: AccountTreeIcon },
   destinationrate: { label: 'Destination Rate', plural: 'Destination Rates', color: '#ab47bc', Icon: CallSplitIcon },
   rate: { label: 'Rate', plural: 'Rates', color: '#ffa726', Icon: MonetizationOnIcon },
@@ -40,6 +41,12 @@ const ENTRY_ORDER: EntityType[] = ['ratingprofile', 'tpratingprofile', 'ratingpl
 function splitProfileId(id: string): { category: string; subject: string } {
   const i = id.indexOf(':');
   return i < 0 ? { category: id, subject: '' } : { category: id.slice(0, i), subject: id.slice(i + 1) };
+}
+
+/** Why a list is empty, so zero never reads as "nothing exists anywhere". */
+function emptyReason(type: EntityType, tpid: string, tenant: string) {
+  if (type === 'ratingprofile') return `No live rating profiles for tenant ${tenant}`;
+  return `No ${TYPE_META[type].plural.toLowerCase()} in tariff plan ${tpid}`;
 }
 
 // ---- Data hooks -----------------------------------------------------------
@@ -125,14 +132,14 @@ function ColumnShell({ node, children }: { node: ExNode; children: React.ReactNo
   return (
     <Paper
       variant="outlined"
-      sx={{ width: 340, minWidth: 340, height: '100%', display: 'flex', flexDirection: 'column', borderTop: `3px solid ${meta.color}` }}
+      sx={{ flex: '1 0 320px', minWidth: 320, height: '100%', display: 'flex', flexDirection: 'column', borderTop: `3px solid ${meta.color}` }}
     >
       <Box sx={{ p: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
         <Stack direction="row" spacing={1} alignItems="center">
           <meta.Icon sx={{ color: meta.color }} fontSize="small" />
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="caption" sx={{ color: meta.color, display: 'block', lineHeight: 1 }}>
-              {meta.label} · {node.type === 'ratingprofile' ? 'DataDB' : 'StorDB'}
+              {meta.label}{node.type === 'ratingprofile' ? ' · DataDB' : ' · stored, StorDB'}
             </Typography>
             <Tooltip title={node.id}><Typography variant="subtitle2" noWrap>{node.id}</Typography></Tooltip>
           </Box>
@@ -153,25 +160,31 @@ interface RatingPlanActivation { ActivationTime: string; RatingPlanId: string; F
 /** Last segment of "*out:tenant:category:subject" fallback keys. */
 const fallbackLabel = (key: string) => key.split(':').slice(3).join(':') || key;
 
-function ActivationsTable({ acts, onOpen }: { acts: RatingPlanActivation[]; onOpen: (child: ExNode) => void }) {
+function KV({ k, children }: { k: string; children: React.ReactNode }) {
   return (
-    <Table size="small">
-      <TableHead><TableRow><TableCell>Active from</TableCell><TableCell>Rating Plan</TableCell><TableCell>Fallback</TableCell></TableRow></TableHead>
-      <TableBody>
-        {acts.map((a, i) => {
-          const fbs = a.FallbackKeys ? a.FallbackKeys.map(k => ({ label: fallbackLabel(k), title: k }))
-            : (a.FallbackSubjects || '').split(';').filter(Boolean).map(x => ({ label: x, title: x }));
-          return (
-            <TableRow key={i}>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>{(a.ActivationTime || '').replace('T', ' ').replace('Z', '')}</TableCell>
-              <TableCell><RefChip type="ratingplan" id={a.RatingPlanId} onClick={() => onOpen({ type: 'ratingplan', id: a.RatingPlanId })} /></TableCell>
-              <TableCell>{fbs.length ? fbs.map(f => <Tooltip key={f.title} title={f.title}><Chip size="small" label={f.label} sx={{ mr: 0.5 }} /></Tooltip>) : '-'}</TableCell>
-            </TableRow>
-          );
-        })}
-        {acts.length === 0 && <TableRow><TableCell colSpan={3}><Typography variant="body2" color="text.secondary">No activations</Typography></TableCell></TableRow>}
-      </TableBody>
-    </Table>
+    <Box sx={{ display: 'flex', gap: 1, alignItems: 'baseline', minWidth: 0, '& + &': { mt: 0.5 } }}>
+      <Typography variant="caption" color="text.secondary" sx={{ width: 112, flexShrink: 0 }}>{k}</Typography>
+      <Box sx={{ minWidth: 0, flex: 1 }}>{children}</Box>
+    </Box>
+  );
+}
+
+function ActivationsTable({ acts, onOpen }: { acts: RatingPlanActivation[]; onOpen: (child: ExNode) => void }) {
+  if (acts.length === 0) return <Typography variant="body2" color="text.secondary">No activations</Typography>;
+  return (
+    <Stack spacing={0.75}>
+      {acts.map((a, i) => {
+        const fbs = a.FallbackKeys ? a.FallbackKeys.map(k => ({ label: fallbackLabel(k), title: k }))
+          : (a.FallbackSubjects || '').split(';').filter(Boolean).map(x => ({ label: x, title: x }));
+        return (
+          <Paper key={i} variant="outlined" sx={{ p: 1 }}>
+            <KV k="Active from"><Tooltip title={a.ActivationTime}><Typography variant="body2">{formatDateTime(a.ActivationTime)}</Typography></Tooltip></KV>
+            <KV k="Rating plan"><RefChip type="ratingplan" id={a.RatingPlanId} onClick={() => onOpen({ type: 'ratingplan', id: a.RatingPlanId })} /></KV>
+            <KV k="Fallback">{fbs.length ? fbs.map(f => <Tooltip key={f.title} title={f.title}><Chip size="small" label={f.label} sx={{ mr: 0.5 }} /></Tooltip>) : <Typography variant="body2">None</Typography>}</KV>
+          </Paper>
+        );
+      })}
+    </Stack>
   );
 }
 
@@ -219,25 +232,18 @@ function DetailBody({ node, detail, onOpen }: { node: ExNode; detail: unknown; o
   if (node.type === 'ratingplan') {
     const bindings = (d.RatingPlanBindings as RatingPlanBinding[]) || [];
     return (
-      <Table size="small">
-        <TableHead><TableRow>
-          <TableCell>Destination Rate</TableCell><TableCell>Timing</TableCell><TableCell align="right">Weight</TableCell>
-        </TableRow></TableHead>
-        <TableBody>
-          {bindings.map((b, i) => {
-            const bareTiming = b.TimingId && b.TimingId !== '*any';
-            return (
-              <TableRow key={i}>
-                <TableCell><RefChip type="destinationrate" id={b.DestinationRatesId} onClick={() => onOpen({ type: 'destinationrate', id: b.DestinationRatesId })} /></TableCell>
-                <TableCell>{bareTiming
-                  ? <RefChip type="timing" id={b.TimingId} onClick={() => onOpen({ type: 'timing', id: b.TimingId })} />
-                  : <Chip size="small" label={b.TimingId || '*any'} variant="outlined" />}</TableCell>
-                <TableCell align="right">{b.Weight}</TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+      <Stack spacing={0.75}>
+        {bindings.map((b, i) => (
+          <Paper key={i} variant="outlined" sx={{ p: 1 }}>
+            <KV k="Destination rate"><RefChip type="destinationrate" id={b.DestinationRatesId} onClick={() => onOpen({ type: 'destinationrate', id: b.DestinationRatesId })} /></KV>
+            <KV k="Timing">{b.TimingId && b.TimingId !== '*any'
+              ? <RefChip type="timing" id={b.TimingId} onClick={() => onOpen({ type: 'timing', id: b.TimingId })} />
+              : <Chip size="small" label={b.TimingId || '*any'} variant="outlined" />}</KV>
+            <KV k="Weight"><Typography variant="body2">{b.Weight}</Typography></KV>
+          </Paper>
+        ))}
+        {bindings.length === 0 && <Typography variant="body2" color="text.secondary">No bindings</Typography>}
+      </Stack>
     );
   }
 
@@ -333,11 +339,12 @@ function DestRateTable({ rows, onOpen }: { rows: DestRateRow[]; onOpen: (child: 
 
 // ---- Columns --------------------------------------------------------------
 
-function EntryColumn({ baseUrl, tpid, tenant, active, entryType, setEntryType, onOpen }: {
+function EntryColumn({ baseUrl, tpid, tenant, active, entryType, onOpen }: {
   baseUrl: string | null; tpid: string; tenant: string; active: ExNode | null;
-  entryType: EntityType; setEntryType: (t: EntityType) => void; onOpen: (n: ExNode) => void;
+  entryType: EntityType; onOpen: (n: ExNode) => void;
 }) {
   const [filter, setFilter] = useState('');
+  useEffect(() => { setFilter(''); }, [entryType]);
   const { data: ids, isLoading, error } = useEntityIds(baseUrl, tpid, tenant, entryType, true);
   const shown = useMemo(() => {
     const list = ids || [];
@@ -346,19 +353,15 @@ function EntryColumn({ baseUrl, tpid, tenant, active, entryType, setEntryType, o
   }, [ids, filter]);
 
   return (
-    <Paper variant="outlined" sx={{ width: 300, minWidth: 300, height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Tabs value={entryType} onChange={(_, v) => { setEntryType(v); setFilter(''); }} variant="scrollable" scrollButtons="auto"
-        sx={{ borderBottom: '1px solid', borderColor: 'divider', minHeight: 40, '& .MuiTab-root': { minHeight: 40, minWidth: 0, px: 1.5 } }}>
-        {ENTRY_ORDER.map(t => <Tab key={t} value={t} icon={<>{(() => { const I = TYPE_META[t].Icon; return <I fontSize="small" sx={{ color: TYPE_META[t].color }} />; })()}</>} />)}
-      </Tabs>
+    <Paper variant="outlined" sx={{ flex: '1 0 320px', minWidth: 320, maxWidth: 440, height: '100%', display: 'flex', flexDirection: 'column', borderTop: `3px solid ${TYPE_META[entryType].color}` }}>
       <Box sx={{ p: 1.5, pb: 1 }}>
         <Typography variant="caption" sx={{ color: TYPE_META[entryType].color, fontWeight: 600 }}>{TYPE_META[entryType].plural}</Typography>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
           {entryType === 'ratingprofile'
-            ? <>live DataDB, tenant {tenant || 'default'} · <code>category:subject</code></>
+            ? <>live DataDB, tenant {tenant} · <code>category:subject</code></>
             : entryType === 'tpratingprofile'
-              ? <>StorDB tariff plan · <code>loadid:tenant:category:subject</code></>
-              : 'StorDB tariff plan'}
+              ? <>stored tariff plan {tpid}, every tenant · <code>loadid:tenant:category:subject</code></>
+              : <>stored tariff plan {tpid}</>}
         </Typography>
         <TextField size="small" fullWidth placeholder="Filter…" value={filter} onChange={e => setFilter(e.target.value)}
           sx={{ mt: 0.5 }} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }} />
@@ -366,7 +369,7 @@ function EntryColumn({ baseUrl, tpid, tenant, active, entryType, setEntryType, o
       <Box sx={{ flex: 1, overflow: 'auto' }}>
         {isLoading ? <Box sx={{ textAlign: 'center', py: 3 }}><CircularProgress size={22} /></Box>
           : error ? <Alert severity="error" sx={{ m: 1 }}>{(error as Error).message}</Alert>
-          : shown.length === 0 ? <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>None found</Typography>
+          : shown.length === 0 ? <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>{filter.trim() ? `Nothing matches “${filter.trim()}”` : emptyReason(entryType, tpid, tenant)}</Typography>
           : (
             <List dense disablePadding>
               {shown.map(id => (
@@ -405,7 +408,8 @@ function DetailColumn({ baseUrl, tpid, tenant, node, selectedChild, onOpen }: {
 export function Component() {
   const baseUrl = useOcsBaseUrl();
   const [tpid, setTpid] = useState('');
-  const [tenant, setTenant] = useState('');
+  const { tenants, defaultTenant } = useOcsTenants();
+  const [tenant, setTenant] = useState(defaultTenant);
   const [entryType, setEntryType] = useState<EntityType>('ratingprofile');
   const [path, setPath] = useState<ExNode[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -416,8 +420,7 @@ export function Component() {
     enabled: !!baseUrl,
   });
 
-  // Reset drill path when the tariff plan changes.
-  useEffect(() => { setPath([]); }, [tpid]);
+  useEffect(() => { setPath([]); }, [tpid, tenant]);
 
   // Scroll to reveal the newest column as the user drills deeper.
   useEffect(() => {
@@ -433,32 +436,34 @@ export function Component() {
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
-          <SearchableSelect label="Loaded Tariff Plan" value={tpid} options={tpids || []} onChange={setTpid} disableClearable sx={{ minWidth: 260 }} />
-          <TextField size="small" label="Tenant (rating profiles)" placeholder="engine default" value={tenant}
-            onChange={e => setTenant(e.target.value)} sx={{ minWidth: 240 }}
-            helperText="Rating profiles are keyed by tenant:category:subject" />
+          <SearchableSelect label="Stored tariff plan" value={tpid} options={tpids || []} onChange={setTpid} disableClearable sx={{ minWidth: 280 }} />
+          <SearchableSelect label="Tenant (live rating profiles)" value={tenant} options={tenants} onChange={setTenant} disableClearable sx={{ minWidth: 280 }} />
           {tpidsLoading && <CircularProgress size={20} />}
           {tpidsError && <Alert severity="error">{(tpidsError as Error).message}</Alert>}
-          {!tpidsLoading && !tpidsError && <Typography variant="body2" color="text.secondary">{(tpids || []).length} tariff plan(s) loaded</Typography>}
+          {!tpidsLoading && !tpidsError && (
+            <Typography variant="body2" color="text.secondary">
+              {(tpids || []).length} tariff plan{(tpids || []).length === 1 ? '' : 's'} stored in StorDB. Rating uses what was last loaded into DataDB (live).
+            </Typography>
+          )}
         </Stack>
       </Paper>
 
+      <SummaryCards baseUrl={baseUrl} tpid={tpid} tenant={tenant} entryType={entryType} onPick={t => { setEntryType(t); setPath([]); }} />
+
       {!tpid && entryType !== 'ratingprofile' ? (
-        <Alert severity="info">Select a loaded tariff plan to explore its rating plans, destination rates, rates, destinations and timings — or start from a live <b>Rating Profile</b> (DataDB) to trace a call from tenant → category → rating plan → rate. Rating plans and below are always read from the selected StorDB tariff plan.</Alert>
+        <Alert severity="info">Pick a stored tariff plan to explore its rating plans, destination rates, rates, destinations and timings, or start from <b>Rating Profiles (live)</b> to trace tenant → category → rating plan → rate. Rating plans and below are always read from the selected stored tariff plan.</Alert>
       ) : (
         <>
-          <SummaryCards baseUrl={baseUrl} tpid={tpid} tenant={tenant} entryType={entryType} onPick={t => { setEntryType(t); }} />
-
           <Breadcrumbs sx={{ mb: 1 }}>
-            <Link component="button" underline="hover" color="inherit" onClick={() => setPath([])}>{tpid || 'tenant'}</Link>
+            <Link component="button" underline="hover" color="inherit" onClick={() => setPath([])}>{TYPE_META[entryType].plural}</Link>
             {path.map((n, i) => (
               <Link key={i} component="button" underline="hover" onClick={() => setPath(path.slice(0, i + 1))}
                 sx={{ color: TYPE_META[n.type].color }}>{n.id}</Link>
             ))}
           </Breadcrumbs>
 
-          <Box ref={scrollRef} sx={{ display: 'flex', gap: 1.5, flex: 1, overflowX: 'auto', overflowY: 'hidden', pb: 1 }}>
-            <EntryColumn baseUrl={baseUrl} tpid={tpid} tenant={tenant} active={path[0] || null} entryType={entryType} setEntryType={setEntryType} onOpen={openFromEntry} />
+          <Box ref={scrollRef} sx={{ display: 'flex', gap: 1.5, flex: 1, minHeight: 0, overflowX: 'auto', overflowY: 'hidden', pb: 1 }}>
+            <EntryColumn baseUrl={baseUrl} tpid={tpid} tenant={tenant} active={path[0] || null} entryType={entryType} onOpen={openFromEntry} />
             {path.map((node, depth) => (
               <DetailColumn key={`${depth}-${node.type}-${node.id}`} baseUrl={baseUrl} tpid={tpid} tenant={tenant} node={node}
                 selectedChild={path[depth + 1] || null} onOpen={child => openFromDepth(depth, child)} />
@@ -484,18 +489,30 @@ function SummaryCard({ baseUrl, tpid, tenant, type, active, onPick }: {
   baseUrl: string | null; tpid: string; tenant: string; type: EntityType; active: boolean; onPick: () => void;
 }) {
   const meta = TYPE_META[type];
-  const { data, isLoading } = useEntityIds(baseUrl, tpid, tenant, type, true);
+  const { data, isLoading, error } = useEntityIds(baseUrl, tpid, tenant, type, true);
+  const needsPlan = type !== 'ratingprofile' && !tpid;
+  const n = (data || []).length;
+  const note = needsPlan ? 'Pick a tariff plan' : error ? 'Failed to load' : !isLoading && n === 0
+    ? (type === 'ratingprofile' ? 'None for this tenant' : 'None in this plan') : null;
   return (
-    <Card variant="outlined" sx={{ minWidth: 150, flex: '1 1 0', borderBottom: `3px solid ${meta.color}`, bgcolor: active ? 'action.selected' : undefined }}>
-      <CardActionArea onClick={onPick} sx={{ p: 1.5 }}>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <meta.Icon sx={{ color: meta.color }} />
-          <Box>
-            <Typography variant="h6" lineHeight={1}>{isLoading ? '…' : (data || []).length}</Typography>
-            <Typography variant="caption" color="text.secondary">{meta.plural}</Typography>
-          </Box>
-        </Stack>
-      </CardActionArea>
+    <Card variant="outlined" sx={{
+      minWidth: 170, flex: '1 1 0', borderBottom: `3px solid ${meta.color}`,
+      bgcolor: active ? 'action.selected' : undefined, outline: active ? `2px solid ${meta.color}` : 'none',
+    }}>
+      <Tooltip title={error ? (error as Error).message : n === 0 && !needsPlan && !isLoading ? emptyReason(type, tpid, tenant) : ''}>
+        <CardActionArea onClick={onPick} aria-pressed={active} sx={{ p: 1.5, height: '100%' }}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <meta.Icon sx={{ color: meta.color }} />
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="h6" lineHeight={1} color={needsPlan || n === 0 ? 'text.secondary' : undefined}>
+                {needsPlan ? '–' : isLoading ? '…' : error ? '!' : n}
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: active ? 700 : 500 }}>{meta.plural}</Typography>
+              {note && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{note}</Typography>}
+            </Box>
+          </Stack>
+        </CardActionArea>
+      </Tooltip>
     </Card>
   );
 }
