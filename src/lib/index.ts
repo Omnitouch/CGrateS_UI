@@ -16,7 +16,7 @@ export interface OcsNavItem {
   path: string;
 }
 
-export type OcsNavGroupKey = 'subscribers' | 'products' | 'automation' | 'status' | 'engineering';
+export type OcsNavGroupKey = 'core' | 'rating' | 'actions' | 'profiles' | 'routes' | 'tools';
 
 export interface OcsNavGroup {
   key: OcsNavGroupKey;
@@ -24,25 +24,25 @@ export interface OcsNavGroup {
   items: OcsNavItem[];
 }
 
-/** Engine-level pages; hosts without admin roles can drop this group (see filterOcsNavGroups). */
-export const OCS_ENGINEERING_GROUP: OcsNavGroupKey = 'engineering';
+/** Engine-level groups; hosts without admin roles can drop these (see filterOcsNavGroups). */
+export const OCS_ENGINEERING_GROUPS: OcsNavGroupKey[] = ['profiles', 'routes', 'tools'];
 
 /** Sidebar groups for embedding; hosts should render these rather than pick pages themselves, so new pages show up. */
 export const ocsNavGroups: OcsNavGroup[] = [
   {
-    key: 'subscribers',
-    label: 'Subscribers',
+    key: 'core',
+    label: 'Core',
     items: [
       { label: 'Accounts', path: '' },
       { label: 'Subscriber', path: 'subscriber' },
-      { label: 'Sessions', path: 'sessions' },
       { label: 'CDRs', path: 'cdrs' },
       { label: 'Exported CDRs', path: 'exported-cdrs' },
+      { label: 'Sessions', path: 'sessions' },
     ],
   },
   {
-    key: 'products',
-    label: 'Products & Rates',
+    key: 'rating',
+    label: 'Rating',
     items: [
       { label: 'Rating map', path: 'rating-map' },
       { label: 'Destinations', path: 'destinations' },
@@ -55,35 +55,39 @@ export const ocsNavGroups: OcsNavGroup[] = [
     ],
   },
   {
-    key: 'automation',
-    label: 'Automation',
+    key: 'actions',
+    label: 'Actions',
     items: [
       { label: 'Actions', path: 'actions' },
       { label: 'Action Plans', path: 'action-plans' },
       { label: 'Action Triggers', path: 'action-triggers' },
       { label: 'Upcoming Actions', path: 'upcoming-action-plans' },
-      { label: 'Thresholds', path: 'thresholds' },
     ],
   },
   {
-    key: 'status',
-    label: 'Status',
-    items: [
-      { label: 'System status', path: 'core' },
-      { label: 'Cache', path: 'cache' },
-    ],
-  },
-  {
-    key: 'engineering',
-    label: 'Engineering',
+    key: 'profiles',
+    label: 'Profiles',
     items: [
       { label: 'Chargers', path: 'chargers' },
       { label: 'Attributes', path: 'attributes' },
       { label: 'Filters', path: 'filters' },
       { label: 'Resources', path: 'resources' },
       { label: 'Stats', path: 'stats' },
+      { label: 'Thresholds', path: 'thresholds' },
+    ],
+  },
+  {
+    key: 'routes',
+    label: 'Routes',
+    items: [
       { label: 'Route Lookup', path: 'routes' },
       { label: 'Route Profiles', path: 'route-profiles' },
+    ],
+  },
+  {
+    key: 'tools',
+    label: 'Tools',
+    items: [
       { label: 'Get Cost', path: 'get-cost' },
       { label: 'Event Tester', path: 'charge-tester' },
       { label: 'Analyzer', path: 'analyzer' },
@@ -91,13 +95,15 @@ export const ocsNavGroups: OcsNavGroup[] = [
       { label: 'Event Exporter', path: 'event-exporter' },
       { label: 'Execute JSON', path: 'execute-json' },
       { label: 'Config', path: 'config' },
+      { label: 'Cache', path: 'cache' },
+      { label: 'System status', path: 'core' },
     ],
   },
 ];
 
-/** Hides the Engineering group from the sidebar only; its routes stay registered, so access control is the host's job. */
+/** Hides the engineering groups from the sidebar only; their routes stay registered, so access control is the host's job. */
 export function filterOcsNavGroups(groups: OcsNavGroup[], { showEngineering = true }: { showEngineering?: boolean } = {}) {
-  return showEngineering ? groups : groups.filter(g => g.key !== OCS_ENGINEERING_GROUP);
+  return showEngineering ? groups : groups.filter(g => !OCS_ENGINEERING_GROUPS.includes(g.key));
 }
 
 /** Every page, ungrouped (matches OmniWeb's ElementNavItem shape). */
