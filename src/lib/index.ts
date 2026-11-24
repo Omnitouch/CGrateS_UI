@@ -16,7 +16,7 @@ export interface OcsNavItem {
   path: string;
 }
 
-export type OcsNavGroupKey = 'subscribers' | 'products' | 'automation' | 'profiles' | 'routes' | 'tools';
+export type OcsNavGroupKey = 'core' | 'rating' | 'actions' | 'profiles' | 'routes' | 'tools';
 
 export interface OcsNavGroup {
   key: OcsNavGroupKey;
@@ -30,8 +30,8 @@ export const OCS_ENGINEERING_GROUPS: OcsNavGroupKey[] = ['profiles', 'routes', '
 /** Sidebar groups for embedding; hosts should render these rather than pick pages themselves, so new pages show up. */
 export const ocsNavGroups: OcsNavGroup[] = [
   {
-    key: 'subscribers',
-    label: 'Subscribers',
+    key: 'core',
+    label: 'Core',
     items: [
       { label: 'Accounts', path: '' },
       { label: 'Subscriber', path: 'subscriber' },
@@ -41,8 +41,8 @@ export const ocsNavGroups: OcsNavGroup[] = [
     ],
   },
   {
-    key: 'products',
-    label: 'Products & Rates',
+    key: 'rating',
+    label: 'Rating',
     items: [
       { label: 'Rating map', path: 'rating-map' },
       { label: 'Destinations', path: 'destinations' },
@@ -55,8 +55,8 @@ export const ocsNavGroups: OcsNavGroup[] = [
     ],
   },
   {
-    key: 'automation',
-    label: 'Automation',
+    key: 'actions',
+    label: 'Actions',
     items: [
       { label: 'Actions', path: 'actions' },
       { label: 'Action Plans', path: 'action-plans' },
