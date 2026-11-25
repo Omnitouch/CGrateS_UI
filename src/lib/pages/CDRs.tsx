@@ -19,6 +19,7 @@ import IdMultiSelect from '../components/IdMultiSelect';
 import { toLocalInput } from '../components/ActivationIntervalInput';
 import { TORS, REQUEST_TYPES } from '../cgrConsts';
 import JsonTree, { parseJsonString } from '../components/JsonTree';
+import CostDetailsView from '../components/CostDetailsView';
 import { formatDateTime } from '../formatTime';
 
 const pastOptions = [
@@ -125,7 +126,7 @@ function CdrValue({ field, value, cdr }: { field: string; value: unknown; cdr: C
   if ((field === 'SetupTime' || field === 'AnswerTime') && typeof value === 'string') {
     return <>{formatDateTime(value)} <Typography component="span" variant="caption" color="text.secondary">{value}</Typography></>;
   }
-  if (value !== null && typeof value === 'object') return <JsonTree value={value} open={field !== 'CostDetails'} />;
+  if (value !== null && typeof value === 'object') return <JsonTree value={value} open />;
   if (typeof value === 'string' && parseJsonString(value)) return <JsonTree value={value} />;
   if (value === null || value === '') return <Typography component="span" variant="body2" color="text.disabled">{value === null ? 'null' : '(empty)'}</Typography>;
   return <>{String(value)}</>;
@@ -151,11 +152,19 @@ function CdrDetail({ cdr }: { cdr: CDR }) {
   const keys = Object.keys(cdr);
   const summary = SUMMARY_FIELDS.filter(k => keys.includes(k));
   const tech = TECH_FIELDS.filter(k => keys.includes(k));
-  const other = keys.filter(k => !summary.includes(k) && !tech.includes(k));
+  const other = keys.filter(k => !summary.includes(k) && !tech.includes(k) && k !== 'CostDetails');
   return (
     <Box>
       <Typography variant="overline" color="text.secondary">Summary</Typography>
       <CdrFieldTable cdr={cdr} fields={summary} />
+      {keys.includes('CostDetails') && (
+        <>
+          <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mt: 2 }}>Cost details</Typography>
+          {cdr.CostDetails == null
+            ? <Typography variant="body2" color="text.disabled">null</Typography>
+            : <CostDetailsView value={cdr.CostDetails} tor={cdr.ToR} />}
+        </>
+      )}
       <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mt: 2 }}>Network and other fields</Typography>
       <CdrFieldTable cdr={cdr} fields={other} />
       <Accordion disableGutters variant="outlined" sx={{ mt: 2 }}>
